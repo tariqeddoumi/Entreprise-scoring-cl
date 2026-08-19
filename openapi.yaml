@@ -1,0 +1,530 @@
+openapi: 3.1.0
+info:
+  title: API de notation interne des entreprises — Maroc (TPE/PME/GE)
+  version: 1.0.0
+  description: |
+    API bidirectionnelle de la plateforme de scoring des contreparties entreprises
+    non financières au Maroc.
+
+    Principes contractuels :
+      * l'identité et le rôle proviennent **toujours** du jeton, jamais du corps ;
+      * le client ne fournit jamais un poids, une formule ni un score final :
+        le serveur recalcule tout depuis la version de modèle publiée ;
+      * `Idempotency-Key` sur les créations et les calculs persistés ;
+      * erreurs au format RFC 9457 (`application/problem+json`), sans stack trace ;
+      * aucune PD n'est renvoyée tant que `pdStatus != CALIBRATED`.
+  contact:
+    name: Direction des Risques — Modèles de crédit entreprises
+servers:
+  - url: /api/v1
+    description: Version 1 de l'API
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Santé
+  - name: Modèles
+  - name: Contreparties
+  - name: Notation
+  - name: Overrides
+  - name: Webhooks
+
+paths:
+  /health:
+    get:
+      tags: [Santé]
+      summary: Sonde de disponibilité
+      security: []
+      responses:
+        "200":
+          description: Service disponible
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: UP }
+                  engineVersion: { type: string, example: "1.0.0" }
+                  models:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        modelId: { type: string }
+                        version: { type: string }
+                        status: { type: string }
+
+  /models:
+    get:
+      tags: [Modèles]
+      summary: Liste des versions de modèle publiées
+      responses:
+        "200":
+          description: Liste des modèles
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /models/{modelId}:
+    get:
+      tags: [Modèles]
+      summary: Configuration complète d'une version de modèle
+      parameters:
+        - $ref: "#/components/parameters/ModelId"
+      responses:
+        "200":
+          description: Configuration du modèle (domaines, critères, barèmes, caps, red flags)
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /counterparties:
+    get:
+      tags: [Contreparties]
+      summary: Liste paginée des contreparties
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Recherche sur nom, ICE ou registre de commerce
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Page de contreparties avec curseur stable
+    post:
+      tags: [Contreparties]
+      summary: Création d'une contrepartie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CounterpartyInput" }
+      responses:
+        "201": { description: Contrepartie créée }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { description: ICE déjà enregistré }
+
+  /counterparties/{id}:
+    get:
+      tags: [Contreparties]
+      summary: Détail d'une contrepartie
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Contrepartie }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Contreparties]
+      summary: Mise à jour partielle
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CounterpartyInput" }
+      responses:
+        "200": { description: Contrepartie mise à jour }
+
+  /counterparties/{id}/rating-runs:
+    get:
+      tags: [Notation]
+      summary: Historique des notations d'une contrepartie
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Runs de notation (résumés) }
+
+  /rating-runs:
+    post:
+      tags: [Notation]
+      summary: Exécute et persiste une notation
+      description: |
+        Le serveur applique les poids, barèmes et règles de la version de modèle
+        publiée. Une relance avec la même `Idempotency-Key` renvoie le run existant
+        (`replayed: true`) sans créer de résultat contradictoire.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema: { type: string }
+        - name: X-Correlation-ID
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RatingRequest" }
+      responses:
+        "201":
+          description: Notation calculée et enregistrée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runId: { type: string }
+                  replayed: { type: boolean }
+                  result: { $ref: "#/components/schemas/RatingResult" }
+        "200": { description: Run déjà existant (idempotence) }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    get:
+      tags: [Notation]
+      summary: Derniers runs de notation
+      responses:
+        "200": { description: Liste des runs }
+
+  /rating-runs/simulate:
+    post:
+      tags: [Notation]
+      summary: Calcule une notation sans persistance (what-if)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RatingRequest" }
+      responses:
+        "200":
+          description: Résultat de simulation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  simulation: { type: boolean }
+                  result: { $ref: "#/components/schemas/RatingResult" }
+
+  /rating-runs/{id}:
+    get:
+      tags: [Notation]
+      summary: Détail complet d'un run (snapshots d'entrée et de résultat)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Run complet }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /overrides:
+    post:
+      tags: [Overrides]
+      summary: Proposition d'override (maker)
+      description: |
+        Le résultat moteur n'est jamais écrasé. L'override ordinaire est limité à
+        ±2 crans ; l'amélioration d'un grade défaut est refusée.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OverrideRequest" }
+      responses:
+        "201": { description: Override en attente de décision }
+        "422": { description: Nombre de crans supérieur à la limite }
+
+  /overrides/{id}/decision:
+    post:
+      tags: [Overrides]
+      summary: Approbation ou rejet d'un override (checker)
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APPROVED, REJECTED] }
+                comment: { type: string }
+      responses:
+        "200": { description: Décision enregistrée }
+        "403": { description: Auto-approbation interdite (maker-checker) }
+
+  /webhook-subscriptions:
+    get:
+      tags: [Webhooks]
+      summary: Liste des souscriptions (secret jamais renvoyé)
+      responses:
+        "200": { description: Souscriptions }
+    post:
+      tags: [Webhooks]
+      summary: Création d'une souscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, secret, events]
+              properties:
+                url: { type: string, format: uri }
+                secret: { type: string, minLength: 32 }
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - rating.completed
+                      - rating.blocked
+                      - rating.overridden
+                      - counterparty.updated
+                      - "*"
+      responses:
+        "201": { description: Souscription créée }
+
+  /webhook-subscriptions/{id}:
+    delete:
+      tags: [Webhooks]
+      summary: Désactivation d'une souscription
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: Souscription désactivée }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Clé API en `Authorization: Bearer <clé>`. En déploiement bancaire, remplacée
+        par OAuth 2.1 / OIDC (client credentials M2M, SSO utilisateur), mTLS optionnel.
+        Rôles : READONLY < ANALYST < RISK_MANAGER < ADMIN.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    ModelId:
+      name: modelId
+      in: path
+      required: true
+      schema: { type: string, example: CORP_STD_V1 }
+
+  responses:
+    Unauthorized:
+      description: Jeton absent ou invalide
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Rôle insuffisant
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Ressource inconnue
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    BadRequest:
+      description: Payload invalide
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      description: Modèle d'erreur RFC 9457
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+
+    CounterpartyInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 300 }
+        ice: { type: string, description: Identifiant Commun de l'Entreprise }
+        rc: { type: string, description: Registre de commerce }
+        fiscalId: { type: string }
+        legalForm: { type: string }
+        sectorCode: { type: string, description: Code du référentiel sectoriel interne }
+        city: { type: string }
+
+    CriterionInput:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [AVAILABLE, MISSING, NOT_APPLICABLE, INVALID, STALE, ESTIMATED]
+        value:
+          type: number
+          description: Valeur mesurée (critère quantitatif)
+        score:
+          type: integer
+          enum: [0, 25, 50, 75, 100]
+          description: Score ancré par preuves (critère qualitatif uniquement)
+        specialCase:
+          type: string
+          description: Cas spécial documenté (ex. EBITDA_LTE_0) — score 0 explicite
+        evidence: { type: string }
+
+    RatingRequest:
+      type: object
+      required: [modelId, criteria, confidence, asOfDate]
+      properties:
+        counterpartyId:
+          type: string
+          description: Requis pour /rating-runs, ignoré pour /rating-runs/simulate
+        modelId: { type: string, example: CORP_STD_V1 }
+        segment:
+          type: string
+          enum: [TPE, PME, GE]
+          description: Si absent, calculé par le moteur de segmentation
+        segmentationData:
+          type: object
+          properties:
+            annualTurnover: { type: number, description: CA HT en MAD }
+            groupAnnualTurnover: { type: number }
+            globalBankExposure: { type: number }
+        criteria:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/CriterionInput" }
+        confidence:
+          type: object
+          required: [completeness, freshness, reliability, provenance]
+          properties:
+            completeness: { type: number, minimum: 0, maximum: 100 }
+            freshness: { type: number, minimum: 0, maximum: 100 }
+            reliability: { type: number, minimum: 0, maximum: 100 }
+            provenance: { type: number, minimum: 0, maximum: 100 }
+        structuralFlags:
+          type: object
+          description: Déclencheurs de caps structurels (politique interne)
+          properties:
+            companyAgeYears: { type: number }
+            hasStrongGroupSupport: { type: boolean }
+            negativeTangibleEquity: { type: boolean }
+            firmRecapitalizationDone: { type: boolean }
+            goingConcernMaterialUncertainty: { type: boolean }
+            accountsTooOld: { type: boolean }
+            ebitdaNegativeTwoOfThreeYears: { type: boolean }
+            baseDscrBelow1: { type: boolean }
+            stressDscrBelow1: { type: boolean }
+            singleClientDependencyUnmitigated: { type: boolean }
+            activeRestructuringForbearance: { type: boolean }
+            materialGroupFileIncomplete: { type: boolean }
+        redFlags:
+          type: array
+          items: { type: string, example: RF07 }
+        defaultTriggered:
+          type: boolean
+          description: Définition de défaut déclenchée — force un grade défaut
+        asOfDate:
+          type: string
+          format: date
+          description: Date d'arrêté (temps métier)
+
+    RatingResult:
+      type: object
+      properties:
+        outcome:
+          type: string
+          enum:
+            - SCORED
+            - BLOCKED_RED_FLAG
+            - BLOCKED_DATA
+            - BLOCKED_SEGMENTATION
+            - DEFAULT_GRADE
+            - NO_GRADE_CONFIDENCE
+        modelId: { type: string }
+        modelVersion: { type: string }
+        engineVersion: { type: string }
+        segment: { type: string, nullable: true }
+        segmentSource: { type: string, enum: [PROVIDED, COMPUTED, UNDETERMINED] }
+        asOfDate: { type: string, format: date }
+        rawScore:
+          type: number
+          nullable: true
+          description: Score brut 0–100, conservé même lorsqu'un cap s'applique
+        confidenceScore: { type: number }
+        confidenceLevelFr: { type: string }
+        engineGrade: { type: string, nullable: true }
+        cappedGrade: { type: string, nullable: true }
+        finalGrade: { type: string, nullable: true }
+        domainResults:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              score: { type: number, nullable: true }
+              weightBps: { type: integer }
+              applicableWeightBps: { type: integer }
+              globalContribution: { type: number, nullable: true }
+              criteria: { type: array, items: { type: object } }
+        appliedCaps: { type: array, items: { type: object } }
+        triggeredRedFlags: { type: array, items: { type: object } }
+        blockingReasonsFr: { type: array, items: { type: string } }
+        warningsFr: { type: array, items: { type: string } }
+        pdStatus:
+          type: string
+          enum: [UNCALIBRATED, CALIBRATED, TECHNICAL_ONLY_DISABLED]
+        pd12m:
+          type: number
+          nullable: true
+          description: Toujours null tant que pdStatus n'est pas CALIBRATED
+        explanationFr: { type: string }
+        computedAt: { type: string, format: date-time }
+
+    OverrideRequest:
+      type: object
+      required: [ratingRunId, toGrade, reasonCode, comment]
+      properties:
+        ratingRunId: { type: string }
+        toGrade: { type: string, example: G6 }
+        reasonCode:
+          type: string
+          enum:
+            - DATA_NOT_CAPTURED
+            - RECENT_EVENT_NEGATIVE
+            - RECENT_EVENT_POSITIVE
+            - GROUP_SUPPORT
+            - MODEL_LIMITATION
+            - SECTOR_SPECIFICITY
+            - MANAGEMENT_CHANGE
+            - TEMPORARY_SHOCK
+            - POLICY_EXCEPTION
+        comment: { type: string, minLength: 10 }
+        evidence: { type: string }
+        expiresAt: { type: string, format: date-time }
+
+webhooks:
+  ratingCompleted:
+    post:
+      summary: Événement sortant `rating.completed`
+      description: |
+        En-têtes de sécurité :
+          * `X-Webhook-Id` — identifiant unique (anti-rejeu) ;
+          * `X-Webhook-Timestamp` — horodatage ISO 8601 ;
+          * `X-Webhook-Signature` — `sha256=<hmac_hex>` calculé sur
+            `<timestamp>.<corps brut>` avec le secret de la souscription.
+
+        Le consommateur doit vérifier la signature, rejeter au-delà d'une fenêtre
+        de 300 secondes, mémoriser l'identifiant (livraison au moins une fois) et
+        rester idempotent.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: string }
+                type: { type: string, example: rating.completed }
+                timestamp: { type: string, format: date-time }
+                data:
+                  type: object
+                  properties:
+                    runId: { type: string }
+                    counterpartyId: { type: string }
+                    modelId: { type: string }
+                    outcome: { type: string }
+                    rawScore: { type: number, nullable: true }
+                    finalGrade: { type: string, nullable: true }
+                    pdStatus: { type: string }
+      responses:
+        "2XX": { description: Événement accepté }
