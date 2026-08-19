@@ -1,0 +1,169 @@
+// FICHIER GÉNÉRÉ par scripts/set-db-provider.mjs (provider: postgresql).
+// Modifier prisma/schema.template.prisma, puis relancer `npm run db:provider`.
+
+// ---------------------------------------------------------------------------
+// SOURCE CANONIQUE DU SCHÉMA — NE PAS ÉDITER prisma/schema.prisma DIRECTEMENT.
+//
+// `npm run db:provider` génère prisma/schema.prisma depuis ce template, en
+// fonction de DATABASE_PROVIDER (postgresql | mysql | sqlserver | sqlite).
+// La génération est idempotente : elle repart toujours de ce fichier, ce qui
+// évite toute perte d'annotation entre deux dialectes.
+//
+// Schéma volontairement portable multi-SGBD :
+//  - identifiants String (cuid), jamais de séquence métier par count + 1 ;
+//  - aucun enum natif (compatibilité SQL Server / SQLite) — les valeurs sont
+//    validées applicativement par Zod ;
+//  - payloads JSON stockés en texte, sans dépendance à JSONB ;
+//  - montants, scores et taux en Decimal, jamais en flottant binaire.
+//
+// Substitutions appliquées par le script :
+//   @db.Text        -> @db.LongText (MySQL) | @db.NVarChar(Max) (SQL Server) | supprimé (SQLite)
+//   @db.Decimal(...)-> conservé | supprimé (SQLite, qui ne gère pas la précision)
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Référentiel contreparties ---------------------------------------------
+
+model Counterparty {
+  id         String   @id @default(cuid())
+  name       String
+  // Identifiants marocains — alimentés depuis le référentiel autoritatif.
+  ice        String?  @unique // Identifiant Commun de l'Entreprise
+  rc         String? // Registre de commerce
+  fiscalId   String? // Identifiant fiscal
+  legalForm  String?
+  sectorCode String? // code du référentiel sectoriel interne
+  city       String?
+  segment    String? // TPE | PME | GE — dernier segment calculé (indicatif)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ratingRuns RatingRun[]
+
+  @@index([name])
+  @@map("counterparties")
+}
+
+// --- Runs de notation -------------------------------------------------------
+
+model RatingRun {
+  id             String       @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id])
+
+  modelId       String
+  modelVersion  String
+  engineVersion String
+  asOfDate      String // date d'arrêté ISO (temps métier, distinct du temps système)
+  segment       String?
+  outcome       String // SCORED | BLOCKED_* | DEFAULT_GRADE | NO_GRADE_CONFIDENCE
+
+  rawScore        Decimal? @db.Decimal(9, 4)
+  confidenceScore Decimal? @db.Decimal(9, 4)
+  engineGrade     String?
+  cappedGrade     String?
+  finalGrade      String? // après override approuvé le cas échéant
+
+  // Snapshots immuables (reproductibilité) — JSON sérialisé de façon stable.
+  inputSnapshot  String @db.Text
+  resultSnapshot String @db.Text
+
+  requestedBy    String // identité dérivée du jeton, jamais du corps de requête
+  idempotencyKey String?  @unique
+  createdAt      DateTime @default(now())
+
+  overrides Override[]
+
+  @@index([counterpartyId, createdAt])
+  @@index([modelId, asOfDate])
+  @@map("rating_runs")
+}
+
+// --- Overrides (maker-checker) ----------------------------------------------
+
+model Override {
+  id          String    @id @default(cuid())
+  ratingRunId String
+  ratingRun   RatingRun @relation(fields: [ratingRunId], references: [id])
+
+  fromGrade  String // grade moteur/capé conservé, jamais écrasé
+  toGrade    String
+  reasonCode String // motif codifié (DATA_NOT_CAPTURED, GROUP_SUPPORT, ...)
+  comment    String  @db.Text
+  evidence   String? @db.Text
+
+  requestedBy     String // maker — dérivé du jeton
+  decidedBy       String? // checker — doit différer du maker
+  status          String  @default("PENDING") // PENDING | APPROVED | REJECTED
+  decisionComment String? @db.Text
+
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+  expiresAt DateTime?
+
+  @@index([ratingRunId])
+  @@map("overrides")
+}
+
+// --- Webhooks ----------------------------------------------------------------
+
+model WebhookSubscription {
+  id        String   @id @default(cuid())
+  url       String
+  secret    String // secret HMAC — jamais renvoyé en clair après création
+  events    String   @db.Text // JSON array : ["rating.completed", ...]
+  isActive  Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+
+  deliveries WebhookDelivery[]
+
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id             String              @id @default(cuid())
+  subscriptionId String
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id])
+
+  eventId   String
+  eventType String
+  payload   String  @db.Text
+  status    String  @default("PENDING") // PENDING | DELIVERED | FAILED
+  attempts  Int     @default(0)
+  lastError String? @db.Text
+
+  createdAt   DateTime  @default(now())
+  deliveredAt DateTime?
+
+  @@index([subscriptionId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+// --- Audit (append-only applicatif) ------------------------------------------
+
+model AuditEvent {
+  id            String   @id @default(cuid())
+  actor         String // identité issue du contexte de sécurité
+  actorRole     String?
+  action        String // ex. RATING_RUN_CREATED, OVERRIDE_APPROVED
+  resourceType  String
+  resourceId    String
+  detail        String?  @db.Text // JSON : valeurs avant/après, motif
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_events")
+}

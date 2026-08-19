@@ -1,0 +1,59 @@
+# Déploiement local en une commande :
+#   docker compose up --build
+# Puis http://localhost:3000
+#
+# Aucune dépendance à un service SaaS : PostgreSQL est auto-hébergé ici, et
+# l'application peut cibler Oracle, SQL Server ou MySQL via DATABASE_PROVIDER.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scoring
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scoring_local_dev}
+      POSTGRES_DB: scoring
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scoring -d scoring"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      args:
+        DATABASE_PROVIDER: postgresql
+    environment:
+      DATABASE_URL: postgresql://scoring:${POSTGRES_PASSWORD:-scoring_local_dev}@db:5432/scoring
+      DATABASE_PROVIDER: postgresql
+    depends_on:
+      db:
+        condition: service_healthy
+    # Job de migration contrôlé, séparé du service applicatif.
+    command: ["npx", "prisma", "db", "push", "--skip-generate", "--accept-data-loss"]
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      args:
+        DATABASE_PROVIDER: postgresql
+    environment:
+      DATABASE_URL: postgresql://scoring:${POSTGRES_PASSWORD:-scoring_local_dev}@db:5432/scoring
+      DATABASE_PROVIDER: postgresql
+      # Clés API de démonstration locale UNIQUEMENT.
+      # En production : secret manager / KMS, jamais dans un fichier compose.
+      API_KEYS: ${API_KEYS:-local_dev_key_readonly_0001:READONLY:lecteur;local_dev_key_analyst_00001:ANALYST:analyste;local_dev_key_risk_000001:RISK_MANAGER:risk;local_dev_key_admin_00001:ADMIN:admin}
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  db-data:

@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  quality:
+    name: Qualité et tests
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DATABASE_PROVIDER: postgresql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Génération du client Prisma
+        run: npx prisma generate
+      - name: Contrôle de types
+        run: npm run type-check
+      - name: Lint
+        run: npm run lint
+      - name: Tests du moteur (golden vectors)
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  multi-db:
+    name: Matrice multi-SGBD (schéma)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [postgresql, mysql, sqlserver, sqlite]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Adaptation du schéma au dialecte
+        run: DATABASE_PROVIDER=${{ matrix.provider }} node scripts/set-db-provider.mjs
+      - name: Validation du schéma Prisma
+        # L'URL doit utiliser le protocole du dialecte : Prisma refuse un
+        # postgresql:// sur un datasource sqlserver.
+        run: |
+          case "${{ matrix.provider }}" in
+            postgresql) export DATABASE_URL="postgresql://ci:ci@localhost:5432/ci" ;;
+            mysql)      export DATABASE_URL="mysql://ci:ci@localhost:3306/ci" ;;
+            sqlserver)  export DATABASE_URL="sqlserver://localhost:1433;database=ci;user=ci;password=ci" ;;
+            sqlite)     export DATABASE_URL="file:./ci.db" ;;
+          esac
+          npx prisma validate
+      # Les tests d'intégration exécutés contre des instances réelles
+      # (PostgreSQL, MySQL, SQL Server, Oracle) sont requis avant de déclarer
+      # un dialecte CERTIFIED — voir la matrice du README.
