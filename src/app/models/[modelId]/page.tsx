@@ -2,12 +2,16 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getModel } from "@/models";
 import type { Segment } from "@/core/types";
+import { requireSession } from "@/lib/session";
 
 export default async function ModelDetailPage({
   params,
 }: {
   params: Promise<{ modelId: string }>;
 }) {
+  // Toute page porteuse de données exige une session authentifiée.
+  await requireSession();
+
   const { modelId } = await params;
   const model = getModel(modelId);
   if (!model) notFound();

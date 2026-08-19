@@ -1,20 +1,23 @@
 import type { NextRequest } from "next/server";
-import { authenticate } from "@/lib/auth";
 import { ok, problem } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
+import { guard } from "@/lib/route-guard";
 
 export const dynamic = "force-dynamic";
 
-/** Historique des notations d'une contrepartie (résumés, plus récents d'abord). */
+/** Historique des notations d'une contrepartie, plus récentes d'abord. */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticate(req, "READONLY");
-  if (!auth.ok) return problem(auth.status, auth.message);
+  const g = guard(req, "READONLY");
+  if (!g.ok) return g.response;
 
   const { id } = await params;
-  const counterparty = await prisma.counterparty.findUnique({ where: { id } });
+  const counterparty = await prisma.counterparty.findUnique({
+    where: { id },
+    select: { id: true },
+  });
   if (!counterparty) return problem(404, "Contrepartie inconnue.");
 
   const runs = await prisma.ratingRun.findMany({

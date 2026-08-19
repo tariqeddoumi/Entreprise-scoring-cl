@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { listModels } from "@/models";
+import { requireSession } from "@/lib/session";
 
-export default function ModelsPage() {
+export default async function ModelsPage() {
+  // Toute page porteuse de données exige une session authentifiée.
+  await requireSession();
+
   const models = listModels();
   return (
     <div style={{ display: "grid", gap: 18 }}>

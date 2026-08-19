@@ -7,6 +7,9 @@ import { z } from "zod";
  * sont acceptés ; le serveur recalcule tout depuis la version de modèle publiée.
  */
 
+/** Borne haute du nombre de critères acceptés dans une requête de notation. */
+const MAX_CRITERIA = 200;
+
 export const criterionInputSchema = z
   .object({
     status: z.enum(["AVAILABLE", "MISSING", "NOT_APPLICABLE", "INVALID", "STALE", "ESTIMATED"]),
@@ -58,10 +61,19 @@ export const ratingRequestSchema = z
       })
       .strict()
       .optional(),
-    criteria: z.record(z.string(), criterionInputSchema),
+    // Le nombre de critères est borné : un objet non borné permettrait
+    // d'envoyer des dizaines de milliers de clés et de saturer la validation.
+    criteria: z
+      .record(z.string().max(32), criterionInputSchema)
+      .refine((c) => Object.keys(c).length <= MAX_CRITERIA, {
+        message: `Au plus ${MAX_CRITERIA} critères par requête.`,
+      }),
     confidence: confidenceSchema,
     structuralFlags: structuralFlagsSchema.optional(),
-    redFlags: z.array(z.string().max(16)).max(50).optional(),
+    redFlags: z
+      .array(z.string().regex(/^RF\d{2}$/, "Code de red flag attendu au format RFnn"))
+      .max(50)
+      .optional(),
     defaultTriggered: z.boolean().optional(),
     asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date d'arrêté au format YYYY-MM-DD"),
   })
@@ -85,11 +97,23 @@ export const counterpartyPatchSchema = counterpartySchema.partial().extend({
 
 export const webhookSubscriptionSchema = z
   .object({
-    url: z.string().url().refine((u) => u.startsWith("https://") || process.env.NODE_ENV !== "production", {
-      message: "URL https:// requise en production",
-    }),
-    secret: z.string().min(32, "Secret HMAC d'au moins 32 caractères requis"),
-    events: z.array(z.string().max(64)).min(1),
+    // La forme est validée ici ; le protocole, les adresses privées et les
+    // identifiants dans l'URL sont contrôlés par `checkOutboundUrl` avant
+    // enregistrement (protection contre les requêtes forgées côté serveur).
+    url: z.string().url().max(2000),
+    secret: z.string().min(32, "Secret HMAC d'au moins 32 caractères requis").max(256),
+    events: z
+      .array(
+        z.enum([
+          "rating.completed",
+          "rating.blocked",
+          "rating.overridden",
+          "counterparty.updated",
+          "*",
+        ])
+      )
+      .min(1)
+      .max(20),
   })
   .strict();
 

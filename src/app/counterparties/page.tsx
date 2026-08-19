@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { prisma, safeQuery } from "@/lib/safe-db";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function CounterpartiesPage() {
+  // Toute page porteuse de données exige une session authentifiée.
+  await requireSession();
+
   const { data: items, dbAvailable } = await safeQuery(
     () =>
       prisma.counterparty.findMany({

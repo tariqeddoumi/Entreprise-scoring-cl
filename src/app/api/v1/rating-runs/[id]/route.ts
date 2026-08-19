@@ -1,17 +1,17 @@
 import type { NextRequest } from "next/server";
-import { authenticate } from "@/lib/auth";
 import { ok, problem } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
+import { guard } from "@/lib/route-guard";
 
 export const dynamic = "force-dynamic";
 
-/** Détail complet d'un run : snapshots d'entrée et de résultat inclus. */
+/** Détail complet d'un run : instantanés d'entrée et de résultat inclus. */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticate(req, "READONLY");
-  if (!auth.ok) return problem(auth.status, auth.message);
+  const g = guard(req, "READONLY");
+  if (!g.ok) return g.response;
 
   const { id } = await params;
   const run = await prisma.ratingRun.findUnique({

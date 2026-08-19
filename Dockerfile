@@ -13,6 +13,7 @@ ENV DATABASE_PROVIDER=$DATABASE_PROVIDER
 ENV DOCKER_BUILD=1
 # URL factice : nécessaire à `prisma generate`, jamais utilisée au build.
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+ENV DIRECT_URL=postgresql://build:build@localhost:5432/build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN node scripts/set-db-provider.mjs \

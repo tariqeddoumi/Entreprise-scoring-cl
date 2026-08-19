@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getSessionIdentity } from "@/lib/session";
+import { logoutAction } from "./login/actions";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,9 +18,11 @@ const NAV = [
   { href: "/methodology", label: "Méthodologie" },
 ];
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await getSessionIdentity("READONLY");
+
   return (
     <html lang="fr">
       <body>
@@ -52,6 +56,34 @@ export default function RootLayout({
                 </Link>
               ))}
             </nav>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+              {session.ok ? (
+                <>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {session.identity.name} · {session.identity.role}
+                  </span>
+                  <form action={logoutAction}>
+                    <button
+                      type="submit"
+                      style={{
+                        background: "none",
+                        border: "1px solid var(--border)",
+                        borderRadius: 6,
+                        padding: "4px 10px",
+                        color: "var(--muted)",
+                        fontSize: 12,
+                      }}
+                    >
+                      Déconnexion
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <Link href="/login" style={{ color: "var(--brand)", fontSize: 13 }}>
+                  Se connecter
+                </Link>
+              )}
+            </div>
           </div>
         </header>
         <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px" }}>

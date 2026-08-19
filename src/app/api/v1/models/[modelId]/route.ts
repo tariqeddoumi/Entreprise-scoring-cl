@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
-import { authenticate } from "@/lib/auth";
 import { ok, problem } from "@/lib/api-utils";
+import { guard } from "@/lib/route-guard";
 import { getModel } from "@/models";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ modelId: string }> }
 ) {
-  const auth = authenticate(req, "READONLY");
-  if (!auth.ok) return problem(auth.status, auth.message);
+  const g = guard(req, "READONLY");
+  if (!g.ok) return g.response;
 
   const { modelId } = await params;
   const model = getModel(modelId);

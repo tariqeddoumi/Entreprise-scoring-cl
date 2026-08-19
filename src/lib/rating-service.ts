@@ -62,72 +62,88 @@ export async function executeRatingRun(
   }
 
   if (idempotencyKey) {
-    const existing = await prisma.ratingRun.findUnique({
-      where: { idempotencyKey },
-    });
-    if (existing) {
-      return {
-        runId: existing.id,
-        result: JSON.parse(existing.resultSnapshot) as RatingResult,
-        replayed: true,
-      };
-    }
+    const replay = await findReplay(idempotencyKey);
+    if (replay) return replay;
   }
 
   const result = computeRating(model, input);
 
-  const run = await prisma.$transaction(async (tx) => {
-    const created = await tx.ratingRun.create({
-      data: {
-        counterpartyId,
-        modelId: result.modelId,
-        modelVersion: result.modelVersion,
-        engineVersion: result.engineVersion,
-        asOfDate: result.asOfDate,
-        segment: result.segment,
-        outcome: result.outcome,
-        rawScore: result.rawScore,
-        confidenceScore: result.confidenceScore,
-        engineGrade: result.engineGrade,
-        cappedGrade: result.cappedGrade,
-        finalGrade: result.finalGrade,
-        inputSnapshot: stableStringify(input),
-        resultSnapshot: stableStringify(result),
-        requestedBy: identity.name,
-        idempotencyKey,
-      },
-    });
-    if (result.segment && result.segment !== counterparty.segment) {
-      await tx.counterparty.update({
-        where: { id: counterpartyId },
-        data: { segment: result.segment },
+  const persist = () =>
+    prisma.$transaction(async (tx) => {
+      const created = await tx.ratingRun.create({
+        data: {
+          counterpartyId,
+          modelId: result.modelId,
+          modelVersion: result.modelVersion,
+          engineVersion: result.engineVersion,
+          asOfDate: result.asOfDate,
+          segment: result.segment,
+          outcome: result.outcome,
+          rawScore: result.rawScore,
+          confidenceScore: result.confidenceScore,
+          engineGrade: result.engineGrade,
+          cappedGrade: result.cappedGrade,
+          finalGrade: result.finalGrade,
+          inputSnapshot: stableStringify(input),
+          resultSnapshot: stableStringify(result),
+          requestedBy: identity.name,
+          idempotencyKey,
+        },
       });
-    }
-    await auditWithin(tx, {
-      actor: identity.name,
-      actorRole: identity.role,
-      action: "RATING_RUN_CREATED",
-      resourceType: "RatingRun",
-      resourceId: created.id,
-      detail: {
-        counterpartyId,
-        modelId: result.modelId,
-        modelVersion: result.modelVersion,
-        outcome: result.outcome,
-        rawScore: result.rawScore,
-        finalGrade: result.finalGrade,
-        asOfDate: result.asOfDate,
-      },
-      correlationId,
-    });
-    return created;
-  });
 
-  // Publication post-commit (best-effort, journalisée).
+      if (result.segment && result.segment !== counterparty.segment) {
+        await tx.counterparty.update({
+          where: { id: counterpartyId },
+          data: { segment: result.segment },
+        });
+      }
+
+      // L'audit est inscrit dans la même transaction que le run : si l'audit
+      // échoue, le run n'existe pas. Aucune opération critique sans trace.
+      await auditWithin(tx, {
+        actor: identity.name,
+        actorRole: identity.role,
+        action: "RATING_RUN_CREATED",
+        resourceType: "RatingRun",
+        resourceId: created.id,
+        detail: {
+          counterpartyId,
+          modelId: result.modelId,
+          modelVersion: result.modelVersion,
+          outcome: result.outcome,
+          rawScore: result.rawScore,
+          finalGrade: result.finalGrade,
+          asOfDate: result.asOfDate,
+        },
+        correlationId,
+      });
+
+      return created;
+    });
+
+  let run;
+  try {
+    run = await persist();
+  } catch (e) {
+    // Course d'idempotence : deux requêtes concurrentes portant la même clé
+    // franchissent toutes deux le contrôle d'existence, et la seconde viole la
+    // contrainte d'unicité. Le comportement attendu est de rejouer le résultat
+    // déjà enregistré, jamais de renvoyer une erreur.
+    if (idempotencyKey && isUniqueViolation(e)) {
+      const replay = await findReplay(idempotencyKey);
+      if (replay) return replay;
+    }
+    throw e;
+  }
+
+  // Publication après validation de la transaction. Au mieux : un échec de
+  // livraison est journalisé dans webhook_deliveries et rejouable, il ne
+  // remet jamais en cause le résultat métier déjà persisté et audité.
   void publishEvent({
-    type: result.outcome === "SCORED" || result.outcome === "DEFAULT_GRADE"
-      ? "rating.completed"
-      : "rating.blocked",
+    type:
+      result.outcome === "SCORED" || result.outcome === "DEFAULT_GRADE"
+        ? "rating.completed"
+        : "rating.blocked",
     data: {
       runId: run.id,
       counterpartyId,
@@ -143,4 +159,25 @@ export async function executeRatingRun(
   }).catch(() => undefined);
 
   return { runId: run.id, result, replayed: false };
+}
+
+/** Relit un run déjà enregistré sous une clé d'idempotence donnée. */
+async function findReplay(idempotencyKey: string): Promise<PersistedRun | null> {
+  const existing = await prisma.ratingRun.findUnique({ where: { idempotencyKey } });
+  if (!existing) return null;
+  return {
+    runId: existing.id,
+    result: JSON.parse(existing.resultSnapshot) as RatingResult,
+    replayed: true,
+  };
+}
+
+/** Violation de contrainte d'unicité (code Prisma P2002). */
+function isUniqueViolation(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code: unknown }).code === "P2002"
+  );
 }
