@@ -74,7 +74,7 @@ describe("Bornes des barèmes (tests de frontière §24.4)", () => {
     }
   });
 
-  it("cas spécial EBITDA <= 0 : D1.5 => score 0 explicite", () => {
+  it("cas spécial EBITDA <= 0 : D1.5 => score 0 explicite et code de raison", () => {
     const input = tpeGoldenInput();
     input.criteria["D1.5"] = { status: "AVAILABLE", specialCase: "EBITDA_LTE_0" };
     const result = computeRating(CORP_STD_V1, input);
@@ -82,7 +82,43 @@ describe("Bornes des barèmes (tests de frontière §24.4)", () => {
       .find((d) => d.code === "D1")!
       .criteria.find((c) => c.code === "D1.5")!;
     expect(c.score).toBe(0);
-    expect(c.explanationFr).toContain("EBITDA_LTE_0");
+    // Le code reste stable et exploitable ; l'explication porte le libellé.
+    expect(c.reasonCode).toBe("D1.D1_5.NEG.SPECIAL_EBITDA_LTE_0");
+    expect(c.explanationFr).toContain("EBITDA");
+  });
+
+  it("refuse un cas spécial non déclaré par le critère", () => {
+    const input = tpeGoldenInput();
+    // D4.2 ne déclare aucun cas spécial : un code inventé ne doit pas pouvoir
+    // imposer un score.
+    input.criteria["D4.2"] = { status: "AVAILABLE", specialCase: "CODE_INVENTE" };
+    const result = computeRating(CORP_STD_V1, input);
+    const c = result.domainResults
+      .find((d) => d.code === "D4")!
+      .criteria.find((c) => c.code === "D4.2")!;
+    expect(c.score).toBeNull();
+    expect(c.status).toBe("INVALID");
+    expect(result.warningsFr.join(" ")).toContain("CODE_INVENTE");
+  });
+
+  it("refuse un cas spécial déclaré sur un autre critère", () => {
+    const input = tpeGoldenInput();
+    // EBITDA_LTE_0 existe, mais pas pour D1.6.
+    input.criteria["D1.6"] = { status: "AVAILABLE", specialCase: "EBITDA_LTE_0" };
+    const result = computeRating(CORP_STD_V1, input);
+    const c = result.domainResults
+      .find((d) => d.code === "D1")!
+      .criteria.find((c) => c.code === "D1.6")!;
+    expect(c.score).toBeNull();
+    expect(c.status).toBe("INVALID");
+  });
+
+  it("un cas spécial peut imposer un score autre que zéro", async () => {
+    const { CORP_TPE_BEHAV_V1 } = await import("@/models");
+    const sc = CORP_TPE_BEHAV_V1.criteria
+      .find((c) => c.code === "B2.2")!
+      .specialCases!.find((s) => s.code === "FLOWS_DOWN_OVER_15PCT")!;
+    expect(sc.score).toBe(25);
   });
 });
 
@@ -332,5 +368,111 @@ describe("Modèle TPE comportemental", () => {
     expect(r.outcome).toBe("SCORED");
     expect(r.rawScore).toBeGreaterThan(60);
     expect(r.finalGrade).not.toBeNull();
+  });
+});
+
+describe("Codes de raison et corroboration des signaux", () => {
+  it("produit des codes de raison stables et normalisés", () => {
+    const result = computeRating(CORP_STD_V1, tpeGoldenInput());
+    const all = result.domainResults.flatMap((d) => d.criteria);
+    // Tout critère évalué porte un code non vide.
+    for (const c of all.filter((c) => c.score !== null)) {
+      expect(c.reasonCode, `${c.code} sans code de raison`).not.toBe("");
+      expect(c.reasonCode).toMatch(/^D\d\.D\d_\d\.(POS|NEU|NEG)\.[A-Z_]+$/);
+    }
+    // Le résultat expose les contributions décisives.
+    expect(result.reasonCodes.length).toBeGreaterThan(0);
+    expect(result.reasonCodes.every((c) => typeof c === "string" && c.length > 0)).toBe(true);
+  });
+
+  it("le sens du code suit le score du critère", () => {
+    const input = tpeGoldenInput();
+    input.criteria["D1.4"] = { status: "AVAILABLE", value: 40 }; // ≥ 35 % → 100
+    const good = computeRating(CORP_STD_V1, input);
+    expect(
+      good.domainResults.flatMap((d) => d.criteria).find((c) => c.code === "D1.4")!.reasonCode
+    ).toContain(".POS.");
+
+    input.criteria["D1.4"] = { status: "AVAILABLE", value: 2 }; // < 5 % → 0
+    const bad = computeRating(CORP_STD_V1, input);
+    expect(
+      bad.domainResults.flatMap((d) => d.criteria).find((c) => c.code === "D1.4")!.reasonCode
+    ).toContain(".NEG.");
+  });
+
+  it("signale un red flag de défaut contredit par les données de retard", () => {
+    const input = tpeGoldenInput();
+    input.criteria["D3.1"] = { status: "AVAILABLE", value: 0 }; // aucun retard
+    input.redFlags = ["RF06"]; // « DPD ≥ seuil de défaut »
+    const result = computeRating(CORP_STD_V1, input);
+    expect(result.inconsistenciesFr.length).toBeGreaterThan(0);
+    expect(result.inconsistenciesFr.join(" ")).toContain("RF06");
+  });
+
+  it("ne signale rien lorsque le signal est cohérent avec les données", () => {
+    const input = tpeGoldenInput();
+    input.criteria["D3.1"] = { status: "AVAILABLE", value: 75 }; // retard matériel
+    input.redFlags = ["RF06"];
+    const result = computeRating(CORP_STD_V1, input);
+    expect(result.inconsistenciesFr).toEqual([]);
+  });
+
+  it("signale des fonds propres négatifs déclarés mais démentis par la mesure", () => {
+    const input = tpeGoldenInput();
+    input.criteria["D1.4"] = { status: "AVAILABLE", value: 40 }; // très confortable
+    input.redFlags = ["RF09"];
+    const result = computeRating(CORP_STD_V1, input);
+    expect(result.inconsistenciesFr.join(" ")).toContain("RF09");
+  });
+});
+
+describe("Concentrations mesurées (D4.3 / D4.4)", () => {
+  it("applique le barème segmenté sur la part du premier client", () => {
+    const cases: Array<[number, number]> = [
+      [10, 100], // ≤ 15 % (TPE)
+      [15, 100],
+      [15.001, 75],
+      [25, 75],
+      [25.001, 50],
+      [35, 50],
+      [35.001, 25],
+      [50, 25],
+      [50.001, 0],
+    ];
+    for (const [value, expected] of cases) {
+      const input = tpeGoldenInput();
+      input.criteria["D4.3"] = { status: "AVAILABLE", value };
+      const c = computeRating(CORP_STD_V1, input)
+        .domainResults.find((d) => d.code === "D4")!
+        .criteria.find((c) => c.code === "D4.3")!;
+      expect(c.score, `Top 1 = ${value} %`).toBe(expected);
+    }
+  });
+
+  it("le seuil de concentration critique se durcit du TPE vers la GE", () => {
+    const scoreFor = (segment: "TPE" | "PME" | "GE", value: number) => {
+      const input = tpeGoldenInput();
+      input.segment = segment;
+      input.criteria["D4.3"] = { status: "AVAILABLE", value };
+      return computeRating(CORP_STD_V1, input)
+        .domainResults.find((d) => d.code === "D4")!
+        .criteria.find((c) => c.code === "D4.3")!.score;
+    };
+    // Une part de 42 % du premier client est tolérée en TPE, critique en GE.
+    expect(scoreFor("TPE", 42)).toBe(25);
+    expect(scoreFor("PME", 42)).toBe(25);
+    expect(scoreFor("GE", 42)).toBe(0);
+  });
+
+  it("la perte probable du client principal impose un score nul", () => {
+    const input = tpeGoldenInput();
+    input.criteria["D4.3"] = {
+      status: "AVAILABLE",
+      specialCase: "MAIN_CLIENT_LOSS_LIKELY",
+    };
+    const c = computeRating(CORP_STD_V1, input)
+      .domainResults.find((d) => d.code === "D4")!
+      .criteria.find((c) => c.code === "D4.3")!;
+    expect(c.score).toBe(0);
   });
 });

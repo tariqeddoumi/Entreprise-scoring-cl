@@ -188,7 +188,7 @@ Les variables qui échouent sur la disponibilité sur un segment donné y reçoi
 
 ### 8.4 Approche de pondération
 
-Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global, afin qu'aucune variable isolée ne détermine la note ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
+Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global dans le modèle standard, afin qu'aucune variable isolée ne détermine la note — le modèle TPE comportemental admet un plafond de 8 %, la mesure des retards de paiement y étant la variable la plus discriminante disponible ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
 
 Ces poids sont des hypothèses documentées, destinées à être challengées sur le portefeuille de la banque, puis remplacées par des coefficients estimés lors du passage au modèle challenger.
 

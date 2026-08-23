@@ -9,16 +9,50 @@ import type { ModelConfig, Segment } from "./types";
  *  - barèmes quantitatifs exhaustifs, sans trou ni chevauchement ;
  *  - master scale exhaustive sur [0, 100] ;
  *  - pondérations de confiance = 100 ; bandes de confiance exhaustives ;
- *  - références domaine/critère cohérentes.
+ *  - références domaine/critère cohérentes ;
+ *  - aucun critère ne dépasse le plafond de poids du modèle ;
+ *  - codes de cas spéciaux uniques et scores admissibles.
  */
 export function validateModel(model: ModelConfig): string[] {
   const issues: string[] = [];
+
+  // Plafond de concentration : aucune variable isolée ne doit déterminer la
+  // note. Le seuil est plus élevé sur le modèle comportemental, où les
+  // retards de paiement sont la variable la plus discriminante disponible.
+  const maxWeightBps = model.modelId === "CORP_TPE_BEHAV_V1" ? 800 : 600;
+  for (const c of model.criteria) {
+    for (const seg of model.segments) {
+      const w = c.weightsBps[seg] ?? 0;
+      if (w > maxWeightBps) {
+        issues.push(
+          `${c.code} [${seg}] : poids ${(w / 100).toFixed(2)} % au-delà du plafond de ${(maxWeightBps / 100).toFixed(2)} %`
+        );
+      }
+    }
+  }
 
   const domainCodes = new Set(model.domains.map((d) => d.code));
   for (const c of model.criteria) {
     if (!domainCodes.has(c.domainCode)) {
       issues.push(`${c.code} : domaine inconnu ${c.domainCode}`);
     }
+    if (c.specialCases) {
+      const codes = c.specialCases.map((sc) => sc.code);
+      if (new Set(codes).size !== codes.length) {
+        issues.push(`${c.code} : codes de cas spéciaux dupliqués`);
+      }
+      for (const sc of c.specialCases) {
+        if (![0, 25, 50, 75, 100].includes(sc.score)) {
+          issues.push(`${c.code} : cas spécial ${sc.code} avec un score invalide (${sc.score})`);
+        }
+        if (!/^[A-Z][A-Z0-9_]*$/.test(sc.code)) {
+          issues.push(
+            `${c.code} : code de cas spécial « ${sc.code} » non conforme (majuscules et tirets bas attendus)`
+          );
+        }
+      }
+    }
+
     if (c.type === "QUANTITATIVE") {
       if (!c.binsBySegment) {
         issues.push(`${c.code} : critère quantitatif sans barème`);

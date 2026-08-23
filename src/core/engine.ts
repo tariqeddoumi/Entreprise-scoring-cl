@@ -60,6 +60,8 @@ export function computeRating(
     asOfDate: input.asOfDate,
     blockingReasonsFr: blocking,
     warningsFr: warnings,
+    inconsistenciesFr: [],
+    reasonCodes: [],
     topStrengthsFr: [],
     topWeaknessesFr: [],
     pdStatus: model.pdStatus,
@@ -300,6 +302,7 @@ export function computeRating(
   }
 
   const { strengths, weaknesses } = topFactors(domainResults);
+  const inconsistencies = detectInconsistencies(triggeredRedFlags, domainResults);
 
   const result: RatingResult = {
     ...base,
@@ -317,6 +320,15 @@ export function computeRating(
   };
   result.topStrengthsFr = strengths;
   result.topWeaknessesFr = weaknesses;
+  result.inconsistenciesFr = inconsistencies;
+  // Codes des contributions décisives : extrêmes favorables et défavorables.
+  result.reasonCodes = domainResults
+    .flatMap((d) => d.criteria)
+    .filter((c) => c.score !== null && (c.score >= 75 || c.score <= 25))
+    .sort((a, b) => b.weightBps - a.weightBps)
+    .slice(0, 15)
+    .map((c) => c.reasonCode)
+    .filter(Boolean);
   result.explanationFr = buildExplanation(
     "SCORED",
     rawScore,
@@ -344,6 +356,7 @@ function resolveCriterion(
     domainCode: criterion.domainCode,
     labelFr: criterion.labelFr,
     domainContribution: null as number | null,
+    reasonCode: "",
   };
 
   if (!ci) {
@@ -356,6 +369,7 @@ function resolveCriterion(
       ...baseRes,
       status: "NOT_APPLICABLE",
       score: null,
+      reasonCode: `${criterion.domainCode}.${key(criterion.code)}.NA.NOT_APPLICABLE`,
       explanationFr:
         "Non applicable : poids redistribué à l'intérieur du domaine (règle versionnée).",
     };
@@ -371,14 +385,24 @@ function resolveCriterion(
     );
   }
 
-  // Cas spécial documenté (ex. EBITDA <= 0 pour le levier) => score 0 explicite.
+  // Cas spécial : uniquement ceux que la version de modèle déclare pour ce
+  // critère. Un code inconnu ne peut pas imposer un score — sans ce contrôle,
+  // un appelant forcerait la note de n'importe quel critère.
   if (ci.specialCase) {
+    const declared = criterion.specialCases?.find((sc) => sc.code === ci.specialCase);
+    if (!declared) {
+      warnings.push(
+        `${criterion.code} : cas spécial « ${ci.specialCase} » non déclaré par le modèle — donnée traitée comme invalide.`
+      );
+      return handleUnavailable(criterion, "INVALID", baseRes, warnings, blocking);
+    }
     return {
       ...baseRes,
       status: ci.status,
       inputValue: ci.value,
-      score: 0,
-      explanationFr: `Cas spécial « ${ci.specialCase} » : traitement économique défini par la grille — score 0.`,
+      score: declared.score,
+      reasonCode: reasonCode(criterion, declared.score, `SPECIAL_${declared.code}`),
+      explanationFr: `Cas spécial « ${declared.labelFr} » : score ${declared.score} imposé par la grille.`,
     };
   }
 
@@ -405,6 +429,7 @@ function resolveCriterion(
       inputValue: ci.value,
       score: match.score,
       binLabel: binLabel(match.bin, criterion.unit),
+      reasonCode: reasonCode(criterion, match.score, "BIN"),
       explanationFr: `${criterion.labelFr} = ${ci.value}${criterion.unit ?? ""} → bande ${binLabel(match.bin, criterion.unit)} → score ${match.score}.`,
     };
   }
@@ -424,6 +449,7 @@ function resolveCriterion(
     status: ci.status,
     selectedScore: ci.score,
     score: ci.score,
+    reasonCode: reasonCode(criterion, ci.score, "ANCHOR"),
     explanationFr: anchor
       ? `Ancrage retenu (${ci.score}) : ${anchor.labelFr}`
       : `Score qualitatif ${ci.score} retenu.`,
@@ -447,6 +473,7 @@ function handleUnavailable(
       ...baseRes,
       status,
       score: null,
+      reasonCode: `${criterion.domainCode}.${key(criterion.code)}.BLOCK.CRITICAL_DATA_${status}`,
       explanationFr: `Donnée ${statusFr} sur critère critique : blocage.`,
     };
   }
@@ -459,6 +486,7 @@ function handleUnavailable(
       ...baseRes,
       status,
       score: 0,
+      reasonCode: `${criterion.domainCode}.${key(criterion.code)}.NEG.DATA_${status}_SCORED_ZERO`,
       explanationFr: `Donnée ${statusFr} : score 0 par politique conservatrice explicite.`,
     };
   }
@@ -472,6 +500,7 @@ function handleUnavailable(
     ...baseRes,
     status,
     score: null,
+    reasonCode: `${criterion.domainCode}.${key(criterion.code)}.EXCL.DATA_${status}`,
     explanationFr: `Donnée ${statusFr} : critère exclu, impact porté par le niveau de confiance.`,
   };
 }
@@ -506,6 +535,73 @@ function evaluateCapTrigger(trigger: string, f: StructuralFlagsInput): boolean {
     default:
       throw new Error(`Trigger de cap inconnu : ${trigger}`);
   }
+}
+
+/** Normalise un code de critère pour l'intégrer à un code de raison. */
+function key(criterionCode: string): string {
+  return criterionCode.replace(/\./g, "_");
+}
+
+/**
+ * Construit un code d'explication stable : <DOMAINE>.<CRITERE>.<SENS>.<MOTIF>.
+ * Le sens découle du score, de sorte que le code reste comparable d'un
+ * dossier à l'autre et exploitable en surveillance.
+ */
+function reasonCode(
+  criterion: CriterionConfig,
+  score: number,
+  motif: string
+): string {
+  const sens = score >= 75 ? "POS" : score <= 25 ? "NEG" : "NEU";
+  return `${criterion.domainCode}.${key(criterion.code)}.${sens}.${motif}`;
+}
+
+/**
+ * Confronte les signaux déclarés par l'appelant aux données observées.
+ *
+ * Un red flag est déclaré par un système amont ; il n'est pas dérivé du
+ * score. Lorsqu'il contredit frontalement une donnée du dossier, la
+ * contradiction doit être visible plutôt que silencieuse : elle révèle soit
+ * une donnée périmée, soit une déclaration erronée.
+ */
+function detectInconsistencies(
+  flags: TriggeredRedFlag[],
+  domains: DomainResult[]
+): string[] {
+  const out: string[] = [];
+  const scoreOf = (code: string) =>
+    domains.flatMap((d) => d.criteria).find((c) => c.code === code)?.score ?? null;
+
+  const dpd = scoreOf("D3.1");
+  const codes = new Set(flags.map((f) => f.code));
+
+  // RF06 : DPD au-delà du seuil de défaut, ou incapacité probable de payer.
+  if (codes.has("RF06") && dpd !== null && dpd >= 75) {
+    out.push(
+      "RF06 « DPD ≥ seuil de défaut » est déclaré alors que le critère D3.1 ne relève aucun retard matériel : vérifier la fraîcheur des données de retard ou la déclaration du signal."
+    );
+  }
+  // RF07 : retards de 31 à 89 jours ou incidents récurrents.
+  if (codes.has("RF07") && dpd !== null && dpd === 100) {
+    out.push(
+      "RF07 « DPD 31–89 jours ou incident récurrent » est déclaré alors que D3.1 ne relève aucun retard : signaux contradictoires."
+    );
+  }
+  // RF08 : échec de restructuration, contradictoire avec D3.6 au maximum.
+  const forbearance = scoreOf("D3.6");
+  if (codes.has("RF08") && forbearance !== null && forbearance === 100) {
+    out.push(
+      "RF08 « échec de restructuration » est déclaré alors que D3.6 indique l'absence de toute restructuration."
+    );
+  }
+  // RF09 : fonds propres négatifs, contradictoire avec un D1.4 favorable.
+  const equity = scoreOf("D1.4");
+  if (codes.has("RF09") && equity !== null && equity >= 75) {
+    out.push(
+      "RF09 « fonds propres négatifs » est déclaré alors que D1.4 mesure des fonds propres tangibles confortables."
+    );
+  }
+  return out;
 }
 
 function topFactors(domains: DomainResult[]): {

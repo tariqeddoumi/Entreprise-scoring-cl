@@ -91,8 +91,17 @@ function renderCriterion(model: ModelConfig, c: CriterionConfig, segments: Segme
     w();
   }
 
-  if (c.specialCasesFr && c.specialCasesFr.length > 0) {
-    w(`**Cas particuliers :** ${c.specialCasesFr.join(" ; ")}.`);
+  if (c.specialCases && c.specialCases.length > 0) {
+    // Les cas spéciaux sont typés : le document reprend le code exact attendu
+    // en entrée, son libellé et le score imposé. Le lecteur du comité modèles
+    // voit donc la même clé que celle acceptée par l'API.
+    w(`**Cas particuliers :**`);
+    w();
+    w(`| Code | Cas | Score imposé |`);
+    w(`|---|---|---:|`);
+    for (const sc of c.specialCases) {
+      w(`| \`${sc.code}\` | ${sc.labelFr} | ${sc.score} |`);
+    }
     w();
   }
   if (c.evidenceRequiredFr && c.evidenceRequiredFr.length > 0) {

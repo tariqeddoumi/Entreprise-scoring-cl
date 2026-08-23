@@ -56,6 +56,20 @@ export interface QualitativeAnchor {
   labelFr: string;
 }
 
+/**
+ * Cas spécial d'un critère : situation économique où le barème ordinaire ne
+ * s'applique pas et où la grille impose un score.
+ *
+ * Le code est déclaré par la version de modèle. Un cas spécial inconnu est
+ * refusé par le moteur : sans cela, un appelant pourrait imposer un score
+ * arbitraire sur n'importe quel critère.
+ */
+export interface SpecialCaseConfig {
+  code: string;
+  labelFr: string;
+  score: CriterionScore;
+}
+
 export interface CriterionConfig {
   code: string; // ex. "D1.5"
   domainCode: string; // ex. "D1"
@@ -70,8 +84,11 @@ export interface CriterionConfig {
   binsBySegment?: Partial<Record<Segment | "ALL", Bin[]>>;
   /** Ancrages (qualitatif). */
   anchors?: QualitativeAnchor[];
-  /** Cas spéciaux : ex. EBITDA <= 0 => score 0. Documenté, jamais silencieux. */
-  specialCasesFr?: string[];
+  /**
+   * Cas spéciaux admis pour ce critère. Seuls ces codes peuvent être invoqués
+   * par un appelant ; tout autre code rend la donnée invalide.
+   */
+  specialCases?: SpecialCaseConfig[];
   missingPolicy: MissingPolicy;
   /** true si la donnée est critique : MISSING/INVALID => blocage du scoring. */
   critical: boolean;
@@ -170,7 +187,11 @@ export interface CriterionInput {
   value?: number;
   /** Score sélectionné 0/25/50/75/100 (critère qualitatif, ancré par preuves). */
   score?: CriterionScore;
-  /** Cas spécial déclaré (ex. "EBITDA_LTE_0", "NEGATIVE_TANGIBLE_EQUITY"). */
+  /**
+   * Cas spécial invoqué (ex. « EBITDA_LTE_0 »). Doit figurer parmi les cas
+   * déclarés par le critère dans la version de modèle, sinon la donnée est
+   * traitée comme invalide.
+   */
   specialCase?: string;
   /** Justification / preuve (référence GED, commentaire analyste). */
   evidence?: string;
@@ -227,6 +248,11 @@ export interface CriterionResult {
   code: string;
   domainCode: string;
   labelFr: string;
+  /**
+   * Code d'explication stable et versionné, exploitable en surveillance et en
+   * contestation client. Forme : <DOMAINE>.<CRITERE>.<SENS>.<MOTIF>.
+   */
+  reasonCode: string;
   status: DataStatus;
   inputValue?: number;
   selectedScore?: CriterionScore;
@@ -289,6 +315,10 @@ export interface RatingResult {
   triggeredRedFlags: TriggeredRedFlag[];
   blockingReasonsFr: string[];
   warningsFr: string[];
+  /** Incohérences entre les signaux déclarés et les données observées. */
+  inconsistenciesFr: string[];
+  /** Codes d'explication des contributions les plus significatives. */
+  reasonCodes: string[];
   topStrengthsFr: string[];
   topWeaknessesFr: string[];
   pdStatus: PdStatus;

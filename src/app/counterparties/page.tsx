@@ -71,7 +71,11 @@ export default async function CounterpartiesPage() {
                 const last = c.ratingRuns[0];
                 return (
                   <tr key={c.id}>
-                    <td>{c.name}</td>
+                    <td>
+                      <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }}>
+                        {c.name}
+                      </Link>
+                    </td>
                     <td className="muted">{c.ice ?? "—"}</td>
                     <td>{c.segment ?? "—"}</td>
                     <td className="muted">{c.sectorCode ?? "—"}</td>

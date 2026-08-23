@@ -194,6 +194,52 @@ paths:
                   simulation: { type: boolean }
                   result: { $ref: "#/components/schemas/RatingResult" }
 
+  /rating-runs/compare:
+    post:
+      tags: [Notation]
+      summary: Attribue l'écart entre deux notations d'une même contrepartie
+      description: |
+        Répond à « pourquoi la note a-t-elle changé ? » en décomposant l'écart
+        par domaine puis par critère, et en signalant les caps et red flags
+        apparus ou levés.
+
+        La comparaison s'appuie sur les instantanés persistés : elle reste
+        valable même si la version de modèle a évolué depuis. Deux runs de
+        modèles ou de segments différents sont déclarés non comparables plutôt
+        que rapprochés à tort.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [previousRunId, currentRunId]
+              properties:
+                previousRunId: { type: string }
+                currentRunId: { type: string }
+      responses:
+        "200":
+          description: Attribution de l'écart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comparison:
+                    type: object
+                    properties:
+                      comparable: { type: boolean }
+                      incomparableReasonFr: { type: string }
+                      scoreDelta: { type: number, nullable: true }
+                      gradeChanged: { type: boolean }
+                      domainDeltas: { type: array, items: { type: object } }
+                      criterionDeltas: { type: array, items: { type: object } }
+                      capChangesFr: { type: array, items: { type: string } }
+                      redFlagChangesFr: { type: array, items: { type: string } }
+                      summaryFr: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Runs de contreparties différentes }
+
   /rating-runs/{id}:
     get:
       tags: [Notation]

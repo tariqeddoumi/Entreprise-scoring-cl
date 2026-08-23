@@ -43,6 +43,14 @@ export function ResultPanel({
           label="Score brut"
           value={result.rawScore !== null ? result.rawScore.toFixed(2) : "—"}
         />
+        <Metric
+          label="Segment"
+          value={
+            result.segment
+              ? `${result.segment} (${result.segmentSource === "COMPUTED" ? "calculé" : result.segmentSource === "PROVIDED" ? "fourni" : "indéterminé"})`
+              : "indéterminé"
+          }
+        />
         <Metric label="Grade moteur" value={result.engineGrade ?? "—"} />
         <Metric label="Grade après caps" value={result.cappedGrade ?? "—"} />
         <Metric
@@ -82,8 +90,55 @@ export function ResultPanel({
           )}
         />
       )}
+      {result.inconsistenciesFr.length > 0 && (
+        <Block
+          title="Incohérences entre signaux déclarés et données observées"
+          color="var(--bad)"
+          items={result.inconsistenciesFr}
+        />
+      )}
       {result.warningsFr.length > 0 && (
         <Block title="Avertissements" color="var(--warn)" items={result.warningsFr} />
+      )}
+
+      {(result.topStrengthsFr.length > 0 || result.topWeaknessesFr.length > 0) && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 20,
+            marginTop: 16,
+          }}
+        >
+          <div>
+            <h3 style={{ fontWeight: 600, color: "var(--good)", marginBottom: 6 }}>
+              Facteurs favorables déterminants
+            </h3>
+            {result.topStrengthsFr.length === 0 ? (
+              <p className="muted" style={{ fontSize: 13 }}>Aucun facteur nettement favorable.</p>
+            ) : (
+              <ul style={{ paddingLeft: 18, listStyle: "disc" }}>
+                {result.topStrengthsFr.map((s, i) => (
+                  <li key={i} style={{ fontSize: 13, marginBottom: 3 }}>{s}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h3 style={{ fontWeight: 600, color: "var(--bad)", marginBottom: 6 }}>
+              Facteurs défavorables déterminants
+            </h3>
+            {result.topWeaknessesFr.length === 0 ? (
+              <p className="muted" style={{ fontSize: 13 }}>Aucun facteur nettement défavorable.</p>
+            ) : (
+              <ul style={{ paddingLeft: 18, listStyle: "disc" }}>
+                {result.topWeaknessesFr.map((s, i) => (
+                  <li key={i} style={{ fontSize: 13, marginBottom: 3 }}>{s}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
 
       {result.domainResults.length > 0 && (
@@ -131,6 +186,7 @@ export function ResultPanel({
                 <th>Valeur</th>
                 <th>Score</th>
                 <th>Poids</th>
+                <th>Code</th>
                 <th>Explication</th>
               </tr>
             </thead>
@@ -151,6 +207,9 @@ export function ResultPanel({
                     </td>
                     <td>{c.score !== null ? c.score : "n/a"}</td>
                     <td>{(c.weightBps / 100).toFixed(2)} %</td>
+                    <td className="muted" style={{ fontSize: 11, fontFamily: "ui-monospace, monospace" }}>
+                      {c.reasonCode || "—"}
+                    </td>
                     <td className="muted" style={{ fontSize: 12 }}>
                       {c.explanationFr}
                     </td>

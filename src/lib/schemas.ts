@@ -144,3 +144,10 @@ export const overrideDecisionSchema = z
     comment: z.string().max(4000).optional(),
   })
   .strict();
+
+export const compareRequestSchema = z
+  .object({
+    previousRunId: z.string().min(1).max(64),
+    currentRunId: z.string().min(1).max(64),
+  })
+  .strict();
