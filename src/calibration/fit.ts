@@ -37,6 +37,7 @@ import {
   goodnessOfFitFromGroups,
   hosmerLemeshow,
   ksStatistic,
+  normalCdf,
   pava,
   psi,
 } from "./stats";
@@ -147,6 +148,17 @@ export interface MonotonicityBreach {
   toRate: number;
   fromN: number;
   toN: number;
+  fromDefaults: number;
+  toDefaults: number;
+  /**
+   * Valeur-p bilatérale du test de comparaison des deux proportions.
+   *
+   * Sans elle, le lecteur ne peut pas distinguer une inversion de quelques
+   * défauts sur un grade peu peuplé — du bruit — d'une inversion portée par
+   * plusieurs centaines de défauts, qui traduit un vrai défaut d'ordonnancement
+   * de l'échelle. Les deux se ressemblent dans un tableau de taux.
+   */
+  pValue: number;
 }
 
 export interface SampleValidation {
@@ -240,13 +252,21 @@ function validateSample(
   const breaches: MonotonicityBreach[] = [];
   for (let i = 1; i < grades.length; i += 1) {
     if (grades[i].observedRate < grades[i - 1].observedRate) {
+      const a = grades[i - 1];
+      const b = grades[i];
+      const pool = (a.observedDefaults + b.observedDefaults) / (a.n + b.n);
+      const se = Math.sqrt(pool * (1 - pool) * (1 / a.n + 1 / b.n));
+      const z = se > 0 ? (a.observedRate - b.observedRate) / se : 0;
       breaches.push({
-        from: grades[i - 1].grade,
-        to: grades[i].grade,
-        fromRate: grades[i - 1].observedRate,
-        toRate: grades[i].observedRate,
-        fromN: grades[i - 1].n,
-        toN: grades[i].n,
+        from: a.grade,
+        to: b.grade,
+        fromRate: a.observedRate,
+        toRate: b.observedRate,
+        fromN: a.n,
+        toN: b.n,
+        fromDefaults: a.observedDefaults,
+        toDefaults: b.observedDefaults,
+        pValue: 2 * (1 - normalCdf(Math.abs(z))),
       });
     }
   }

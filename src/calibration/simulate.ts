@@ -45,7 +45,9 @@ import type {
   Segment,
   StructuralFlagsInput,
 } from "../core/types";
+import { CAP_TRIGGER_TO_FLAG } from "../core/structural-flags";
 import { Rng } from "./rng";
+import { wiringFor, type SimulationWiring } from "./wiring";
 import { normalCdf, normalInv } from "./stats";
 
 // ---------------------------------------------------------------------------
@@ -53,8 +55,6 @@ import { normalCdf, normalInv } from "./stats";
 // ---------------------------------------------------------------------------
 
 export interface SimulationAssumptions {
-  /** Répartition du portefeuille par segment. */
-  segmentMix: Record<Segment, number>;
   /** Tendance centrale de long terme du taux de défaut à 12 mois, par segment. */
   centralDefaultRate: Record<Segment, number>;
   /** Dispersion de la PD vraie autour de la tendance centrale (k_s). */
@@ -82,9 +82,6 @@ export interface SimulationAssumptions {
 }
 
 export const DEFAULT_ASSUMPTIONS: SimulationAssumptions = {
-  // Portefeuille bancaire marocain typique : le nombre est chez les TPE,
-  // l'encours chez les PME et GE.
-  segmentMix: { TPE: 0.55, PME: 0.35, GE: 0.1 },
   // Ordres de grandeur plausibles pour un portefeuille entreprises marocain.
   // À REMPLACER par les taux observés de la banque avant tout usage réel.
   centralDefaultRate: { TPE: 0.06, PME: 0.035, GE: 0.012 },
@@ -132,8 +129,17 @@ export interface SimulatedObligor {
   input: RatingInput;
   outcome: string;
   rawScore: number | null;
+  /** Grade issu du seul barème, avant application des caps. */
+  engineGrade: string | null;
   finalGrade: string | null;
   confidenceScore: number;
+  /**
+   * Code du cap réellement MORDANT, c'est-à-dire celui qui a déplacé le grade.
+   * Nul quand aucun cap n'a modifié le grade moteur : un cap déclaré mais moins
+   * contraignant que le grade obtenu n'a rien changé, et le compter fausserait
+   * toute lecture de l'origine des grades.
+   */
+  bindingCap: string | null;
 }
 
 export interface SimulationResult {
@@ -219,8 +225,14 @@ export function simulatePortfolio(opts: SimulationOptions): SimulationResult {
   }
   const idioWeight = Math.sqrt(varianceLeft);
 
-  const segments = Object.keys(a.segmentMix) as Segment[];
-  const segWeights = segments.map((s) => a.segmentMix[s]);
+  // La répartition effective vient du câblage : un modèle mono-segment ne doit
+  // pas se voir attribuer des contreparties qu'il ne sait pas noter.
+  const wiring = wiringFor(model.modelId);
+  const segments = (Object.keys(wiring.segmentMix) as Segment[]).filter(
+    (x) => (wiring.segmentMix[x] ?? 0) > 0
+  );
+  const segWeights = segments.map((x) => wiring.segmentMix[x] as number);
+  if (segments.length === 0) throw new Error(`Câblage de ${model.modelId} : aucun segment couvert.`);
 
   const obligors: SimulatedObligor[] = [];
   const systematicFactors: number[] = [];
@@ -253,7 +265,7 @@ export function simulatePortfolio(opts: SimulationOptions): SimulationResult {
       );
 
       // --- Données d'entrée -----------------------------------------------
-      const input = buildInput(model, segment, Q, B, a, idioWeight, rng, asOfDate, alreadyInDefault);
+      const input = buildInput(model, wiring, segment, Q, B, a, idioWeight, rng, asOfDate, alreadyInDefault);
 
       const result = computeRating(model, input, `${asOfDate}T12:00:00.000Z`);
 
@@ -268,13 +280,41 @@ export function simulatePortfolio(opts: SimulationOptions): SimulationResult {
         input,
         outcome: result.outcome,
         rawScore: result.rawScore,
+        engineGrade: result.engineGrade,
         finalGrade: result.finalGrade,
         confidenceScore: result.confidenceScore,
+        bindingCap: bindingCapCode(model, result.engineGrade, result.finalGrade, result.appliedCaps),
       });
     }
   }
 
   return { obligors, systematicFactors, assumptions: a, seed: opts.seed };
+}
+
+/**
+ * Identifie le cap qui a effectivement déplacé le grade.
+ *
+ * Un cap est déclaré dès que sa condition est remplie, mais il n'agit que si son
+ * plafond est plus sévère que le grade obtenu au barème. Attribuer un grade à un
+ * cap non mordant surestimerait massivement le rôle des caps dans le bas de
+ * l'échelle, où le barème suffit déjà à dégrader.
+ */
+function bindingCapCode(
+  model: ModelConfig,
+  engineGrade: string | null,
+  finalGrade: string | null,
+  appliedCaps: readonly { code: string; maxGrade: string }[]
+): string | null {
+  if (!engineGrade || !finalGrade || engineGrade === finalGrade) return null;
+  const rank = (g: string) => model.masterScale.findIndex((b) => b.grade === g);
+  // Le cap mordant est celui dont le plafond correspond au grade final retenu.
+  const mordants = appliedCaps.filter((c) => c.maxGrade !== "NO_GRADE" && rank(c.maxGrade) === rank(finalGrade));
+  if (mordants.length > 0) return mordants[0].code;
+  // Repli : le plus sévère des caps appliqués.
+  const trie = [...appliedCaps]
+    .filter((c) => c.maxGrade !== "NO_GRADE")
+    .sort((a, b) => rank(b.maxGrade) - rank(a.maxGrade));
+  return trie.length > 0 ? trie[0].code : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +323,7 @@ export function simulatePortfolio(opts: SimulationOptions): SimulationResult {
 
 function buildInput(
   model: ModelConfig,
+  wiring: SimulationWiring,
   segment: Segment,
   Q: number,
   B: number,
@@ -323,54 +364,82 @@ function buildInput(
     }
   }
 
-  // --- Cas spéciaux : uniquement ceux que le modèle déclare -----------------
-  // Ils traduisent une situation économique extrême : on ne les déclenche donc
-  // que dans le bas de la distribution de qualité.
+  // --- Cas spéciaux ---------------------------------------------------------
+  // Uniquement ceux que le modèle DÉCLARE, et seulement dans le bas de la
+  // distribution de qualité : ce sont des situations économiques extrêmes.
+  // Le premier cas déclenché sur un critère l'emporte — deux cas spéciaux
+  // simultanés sur le même critère n'auraient pas de sens.
   const flags: StructuralFlagsInput = {};
-  const fpTangibles = model.criteria.find((c) => c.code === "D1.4");
-  if (fpTangibles?.specialCases?.some((s) => s.code === "NEGATIVE_TANGIBLE_EQUITY")) {
-    if (Q < -1.2 && rng.bernoulli(0.35)) {
-      criteria["D1.4"] = { status: "AVAILABLE", specialCase: "NEGATIVE_TANGIBLE_EQUITY" };
-      levels["D1.4"] = 0;
+  const dejaTraites = new Set<string>();
+  for (const sc of wiring.specialCases) {
+    if (dejaTraites.has(sc.criterion)) continue;
+    const critere = model.criteria.find((c) => c.code === sc.criterion);
+    if (!critere?.specialCases?.some((x) => x.code === sc.code)) {
+      throw new Error(
+        `Câblage incohérent : ${model.modelId} ne déclare pas le cas spécial ${sc.code} sur ${sc.criterion}.`
+      );
+    }
+    if (Q < sc.qBelow && rng.bernoulli(sc.probability)) {
+      criteria[sc.criterion] = { status: "AVAILABLE", specialCase: sc.code };
+      levels[sc.criterion] = critere.specialCases.find((x) => x.code === sc.code)!.score;
       // Le flag structurel accompagne le cas spécial : sans cela on fabriquerait
       // une incohérence que le moteur signalerait à juste titre.
-      flags.negativeTangibleEquity = true;
-    }
-  }
-  const levier = model.criteria.find((c) => c.code === "D1.5");
-  if (levier?.specialCases?.some((s) => s.code === "EBITDA_LTE_0")) {
-    if (Q < -1.4 && rng.bernoulli(0.3)) {
-      criteria["D1.5"] = { status: "AVAILABLE", specialCase: "EBITDA_LTE_0" };
-      levels["D1.5"] = 0;
-      flags.ebitdaNegativeTwoOfThreeYears = true;
+      if (sc.flag) (flags as Record<string, unknown>)[sc.flag] = true;
+      dejaTraites.add(sc.criterion);
     }
   }
 
   // --- Flags structurels ----------------------------------------------------
-  // L'âge est indépendant de la qualité : une entreprise jeune n'est pas
+  // L'ancienneté est indépendante de la qualité : une entreprise jeune n'est pas
   // mauvaise, elle est mal observée — c'est précisément ce que CAP01 traduit.
-  // Loi log-normale d'ancienneté : médiane ≈ 8 ans, environ 3 % sous 2 ans, ce
-  // qui correspond à un encours bancaire établi et non à la démographie des
-  // créations d'entreprises.
-  flags.companyAgeYears = Math.round(Math.exp(2.1 + 0.75 * rng.normal()) * 10) / 10;
+  flags.companyAgeYears =
+    Math.round(Math.exp(wiring.age.logMean + wiring.age.logSd * rng.normal()) * 10) / 10;
   if ((flags.companyAgeYears ?? 99) < 2) flags.hasStrongGroupSupport = rng.bernoulli(0.25);
 
-  // Les caps liés au service de la dette découlent du critère mesuré, pas d'un
-  // tirage indépendant : cohérence entre le flag et la donnée.
-  if (levels["D2.2"] === 0) flags.baseDscrBelow1 = true;
-  else if (levels["D2.5"] === 0) flags.stressDscrBelow1 = true;
-  if (levels["D3.6"] === 0) flags.activeRestructuringForbearance = true;
-  if (levels["D4.3"] === 0 && rng.bernoulli(0.4)) flags.singleClientDependencyUnmitigated = true;
-  if (Q < -1.8 && rng.bernoulli(0.15)) flags.goingConcernMaterialUncertainty = true;
+  // Les autres flags découlent du niveau atteint par le critère qui mesure la
+  // même chose, jamais d'un tirage indépendant.
+  for (const f of wiring.flags) {
+    const niveau = levels[f.criterion];
+    if (niveau === undefined || !f.whenLevelIn.includes(niveau)) continue;
+    // Une probabilité certaine ne consomme pas d'aléa : le flux aléatoire ne
+    // doit dépendre que des tirages réellement incertains, sans quoi ajouter
+    // une règle déterministe déplacerait toute la simulation en aval.
+    if (f.probability >= 1 || rng.bernoulli(f.probability)) {
+      (flags as Record<string, unknown>)[f.flag] = true;
+    }
+  }
+  if (wiring.goingConcern && Q < wiring.goingConcern.qBelow && rng.bernoulli(wiring.goingConcern.probability)) {
+    flags.goingConcernMaterialUncertainty = true;
+  }
+
+  // Un flag que le modèle ne sait pas exploiter est retiré : il ne déclencherait
+  // aucun cap et brouillerait la lecture du dossier.
+  const flagsExploitables = new Set(
+    model.structuralCaps.map((c) => CAP_TRIGGER_TO_FLAG[c.trigger]).filter(Boolean)
+  );
+  for (const k of Object.keys(flags) as (keyof StructuralFlagsInput)[]) {
+    if (k === "companyAgeYears" || k === "hasStrongGroupSupport") continue;
+    if (!flagsExploitables.has(k)) delete flags[k];
+  }
 
   // --- Red flags dérivés du dossier ----------------------------------------
-  const redFlags: string[] = [];
-  if (levels["D3.1"] === 0 && rng.bernoulli(0.55)) redFlags.push("RF06");
-  else if (levels["D3.1"] === 25 && rng.bernoulli(0.5)) redFlags.push("RF07");
-  if (levels["D3.6"] === 0 && rng.bernoulli(0.35)) redFlags.push("RF08");
-  if (flags.negativeTangibleEquity && rng.bernoulli(0.5)) redFlags.push("RF09");
-  // Signaux de conformité : rares et sans lien avec la qualité financière.
-  if (rng.bernoulli(0.0015)) redFlags.push("RF01");
+  const redFlags = new Set<string>();
+  for (const rf of wiring.redFlags) {
+    if (!model.redFlags.some((x) => x.code === rf.code)) {
+      throw new Error(`Câblage incohérent : ${model.modelId} ne déclare pas le red flag ${rf.code}.`);
+    }
+    const declenche =
+      rf.whenFlag !== undefined
+        ? flags[rf.whenFlag] === true
+        : rf.criterion !== undefined &&
+          levels[rf.criterion] !== undefined &&
+          (rf.whenLevelIn as CriterionScore[]).includes(levels[rf.criterion]);
+    if (!declenche) continue;
+    if (rf.probability >= 1 || rng.bernoulli(rf.probability)) redFlags.add(rf.code);
+  }
+  for (const rf of wiring.independentRedFlags) {
+    if (rng.bernoulli(rf.probability)) redFlags.add(rf.code);
+  }
 
   // --- Qualité de l'information --------------------------------------------
   // La complétude est DÉDUITE du dossier : c'est la part de critères
@@ -405,7 +474,7 @@ function buildInput(
     asOfDate,
     criteria,
     structuralFlags: flags,
-    redFlags: redFlags.length > 0 ? redFlags : undefined,
+    redFlags: redFlags.size > 0 ? [...redFlags].sort() : undefined,
     defaultTriggered: alreadyInDefault ? true : undefined,
     confidence: {
       completeness,

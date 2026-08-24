@@ -13,10 +13,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateCalibration } from "../../src/core/calibration.js";
-import { CORP_STD_V1 } from "../../src/models/index.js";
+import { tiedGrades, validateCalibration } from "../../src/core/calibration.js";
+import { getModel, listModels } from "../../src/models/index.js";
 import { buildSamples, fitCalibration, type SampleValidation } from "../../src/calibration/fit.js";
+import type { Segment } from "../../src/core/types.js";
 import { DEFAULT_ASSUMPTIONS, simulatePortfolio } from "../../src/calibration/simulate.js";
+import { wiringFor } from "../../src/calibration/wiring.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -28,12 +30,25 @@ function arg(name: string, fallback: number): number {
   return v;
 }
 
+function strArg(name: string, fallback: string): string {
+  const i = process.argv.indexOf(`--${name}`);
+  return i === -1 ? fallback : (process.argv[i + 1] ?? fallback);
+}
+
+const modelId = strArg("model", "CORP_STD_V1");
+const model = getModel(modelId);
+if (!model) {
+  console.error(
+    `Modèle inconnu : ${modelId}. Disponibles : ${listModels().map((m) => m.modelId).join(", ")}`
+  );
+  process.exit(1);
+}
+
 const seed = arg("seed", 20260823);
 const cohorts = arg("cohorts", 8);
 const perCohort = arg("per-cohort", 6000);
 const moc = arg("moc", 0.1);
 const developmentCohorts = Math.max(1, cohorts - 3);
-const model = CORP_STD_V1;
 const calibrationId = `${model.modelId}-SYNTH-${seed}`;
 
 console.log(`Calibration ${calibrationId}`);
@@ -103,10 +118,18 @@ function sampleBlock(v: SampleValidation): string {
   if (v.breaches.length === 0) {
     l.push("Taux de défaut observés strictement croissants sur toute l'échelle.");
   } else {
-    l.push("Ruptures d'ordre observées (effectifs indiqués — sur un grade peu peuplé, une inversion relève du bruit d'échantillonnage) :");
+    l.push("Ruptures d'ordre observées. La valeur-p compare les deux proportions : elle");
+    l.push("sépare l'inversion de quelques défauts sur un grade peu peuplé — du bruit — de");
+    l.push("celle portée par des centaines de défauts, qui traduit un vrai défaut");
+    l.push("d'ordonnancement.");
     l.push("");
+    l.push("| Grades | Taux | Effectifs | Défauts | p | Lecture |");
+    l.push("|---|---|---|---|---:|---|");
     for (const b of v.breaches) {
-      l.push(`- ${b.from} ${pct(b.fromRate, 2)} (n = ${b.fromN}) puis ${b.to} ${pct(b.toRate, 2)} (n = ${b.toN})`);
+      const lecture = b.pValue < 0.05 ? "**écart significatif**" : "compatible avec le bruit";
+      l.push(
+        `| ${b.from} → ${b.to} | ${pct(b.fromRate, 2)} → ${pct(b.toRate, 2)} | ${b.fromN} / ${b.toN} | ${b.fromDefaults} / ${b.toDefaults} | ${b.pValue < 0.0001 ? "< 0,0001" : num(b.pValue)} | ${lecture} |`
+      );
     }
   }
   l.push("");
@@ -114,6 +137,10 @@ function sampleBlock(v: SampleValidation): string {
 }
 
 const a = DEFAULT_ASSUMPTIONS;
+const wiring = wiringFor(model.modelId);
+const segmentsCouverts = (Object.keys(wiring.segmentMix) as Segment[]).filter(
+  (x) => (wiring.segmentMix[x] ?? 0) > 0
+);
 const cohortRates = Array.from({ length: cohorts }, (_, c) => {
   const sub = sim.obligors.filter((o) => o.cohort === c && !o.alreadyInDefault && o.finalGrade !== null);
   return { c, f: sim.systematicFactors[c], rate: sub.reduce((x, o) => x + o.defaulted, 0) / Math.max(1, sub.length) };
@@ -122,8 +149,46 @@ const truePdMean =
   sim.obligors.filter((o) => !o.alreadyInDefault && o.finalGrade !== null).reduce((x, o) => x + o.truePd, 0) /
   Math.max(1, sim.obligors.filter((o) => !o.alreadyInDefault && o.finalGrade !== null).length);
 
+// Constats calculés sur le portefeuille plutôt qu'affirmés : ils dépendent du
+// modèle et du tirage, et doivent donc être relus à chaque exécution.
+const notes = sim.obligors.filter((o) => !o.alreadyInDefault && o.finalGrade !== null && o.rawScore !== null);
+const ordreGrades = model.masterScale.map((b) => b.grade);
+const parGrade = ordreGrades
+  .map((grade) => {
+    const sub = notes.filter((o) => o.finalGrade === grade);
+    return {
+      grade,
+      n: sub.length,
+      part: sub.length / Math.max(1, notes.length),
+      scoreMoyen: sub.length ? sub.reduce((x, o) => x + (o.rawScore as number), 0) / sub.length : NaN,
+      // Seuls comptent les caps MORDANTS : ceux qui ont effectivement déplacé
+      // le grade. Un cap déclaré mais moins sévère que le grade obtenu n'a rien
+      // changé.
+      partCap: sub.length ? sub.filter((o) => o.bindingCap !== null).length / sub.length : 0,
+      partCapConfiance: sub.length
+        ? sub.filter((o) => o.bindingCap === "CAP_CONFIDENCE").length / sub.length
+        : 0,
+    };
+  })
+  .filter((r) => r.n > 0);
+const origineGrades = parGrade;
+const inversionsScore: { from: string; to: string; fromScore: number; toScore: number }[] = [];
+for (let i = 1; i < parGrade.length; i += 1) {
+  if (parGrade[i].scoreMoyen > parGrade[i - 1].scoreMoyen) {
+    inversionsScore.push({
+      from: parGrade[i - 1].grade,
+      to: parGrade[i].grade,
+      fromScore: parGrade[i - 1].scoreMoyen,
+      toScore: parGrade[i].scoreMoyen,
+    });
+  }
+}
+const concentrationMax = parGrade.reduce((best, r) => (r.part > best.part ? r : best), parGrade[0]);
+
 const md: string[] = [];
-md.push("# Rapport de calibration — modèle de scoring entreprises");
+md.push(`# Rapport de calibration — ${model.modelId}`);
+md.push("");
+md.push(`*${model.labelFr ?? model.modelId}*`);
 md.push("");
 md.push("> **Calibration sur données SIMULÉES.** Elle établit que la chaîne de calibration");
 md.push("> fonctionne et que l'échelle de notation ordonne correctement le risque. Elle");
@@ -174,13 +239,17 @@ md.push("### Hypothèses posées");
 md.push("");
 md.push("| Hypothèse | Valeur | Statut |");
 md.push("|---|---:|---|");
-md.push(`| Tendance centrale du taux de défaut TPE | ${pct(a.centralDefaultRate.TPE)} | **posée** — à remplacer par l'observé de la banque |`);
-md.push(`| Tendance centrale PME | ${pct(a.centralDefaultRate.PME)} | **posée** |`);
-md.push(`| Tendance centrale GE | ${pct(a.centralDefaultRate.GE)} | **posée** |`);
+for (const seg of segmentsCouverts) {
+  md.push(
+    `| Tendance centrale du taux de défaut ${seg} | ${pct(a.centralDefaultRate[seg])} | **posée** — à remplacer par l'observé de la banque |`
+  );
+}
 md.push(`| Corrélation d'actifs ρ | ${a.assetCorrelation} | ordre de grandeur du dispositif de Bâle pour les entreprises |`);
 md.push(`| Part du signal portée par la qualité latente (a) | ${a.signalOnQuality} | **posée** — détermine le pouvoir discriminant |`);
 md.push(`| Part portée par le biais de dossier (b) | ${a.signalOnFileBias} | **posée** — borne le pouvoir discriminant |`);
-md.push(`| Répartition du portefeuille TPE/PME/GE | ${pct(a.segmentMix.TPE, 0)} / ${pct(a.segmentMix.PME, 0)} / ${pct(a.segmentMix.GE, 0)} | **posée** |`);
+md.push(
+  `| Répartition du portefeuille | ${segmentsCouverts.map((x) => `${x} ${pct(wiring.segmentMix[x] ?? 0, 0)}`).join(" · ")} | **posée** |`
+);
 md.push("");
 md.push("## 3. Portefeuille simulé");
 md.push("");
@@ -217,11 +286,39 @@ md.push("");
 md.push("**Pourquoi calibrer sur le grade et non sur le score.** Le grade final intègre les");
 md.push("caps — qualité de l'information, situations structurelles — qui déplacent une");
 md.push("contrepartie vers le bas sans toucher à son score brut. Le score moyen n'est donc");
-md.push("pas monotone dans l'échelle : dans ce portefeuille, le score moyen de G4 dépasse");
-md.push("celui de G3, et celui de G7 dépasse celui de G6, parce que ces grades rassemblent");
-md.push("des dossiers bien notés mais plafonnés. Le risque, lui, reste monotone. Dériver la");
-md.push("PD d'une courbe du score réaffecterait à ces dossiers la PD de leur score et");
-md.push("annulerait l'effet du cap.");
+md.push("pas monotone dans l'échelle : un grade plafonné rassemble des dossiers bien notés.");
+md.push("Dériver la PD d'une courbe du score réaffecterait à ces dossiers la PD de leur");
+md.push("score et annulerait l'effet du cap.");
+md.push("");
+if (inversionsScore.length === 0) {
+  md.push("Sur ce portefeuille, le score moyen reste néanmoins ordonné sur toute l'échelle.");
+} else {
+  md.push("Inversions constatées du score moyen sur ce portefeuille :");
+  md.push("");
+  for (const inv of inversionsScore) {
+    md.push(
+      `- ${inv.from} score moyen ${inv.fromScore.toFixed(1)} puis ${inv.to} score moyen ${inv.toScore.toFixed(1)} — soit ${inv.toScore > inv.fromScore ? "une remontée" : "une baisse"} de ${Math.abs(inv.toScore - inv.fromScore).toFixed(1)} point(s) en descendant d'un grade`
+    );
+  }
+}
+md.push("");
+md.push("### Origine des grades : barème ou cap de qualité d'information ?");
+md.push("");
+md.push("| Grade | Effectif | Part | Score moyen | Déplacé par un cap | dont cap de confiance |");
+md.push("|---|---:|---:|---:|---:|---:|");
+for (const r of origineGrades) {
+  md.push(
+    `| ${r.grade} | ${r.n.toLocaleString("fr-FR")} | ${pct(r.part, 1)} | ${r.scoreMoyen.toFixed(1)} | ${pct(r.partCap, 0)} | ${pct(r.partCapConfiance, 0)} |`
+  );
+}
+md.push("");
+md.push(`Concentration de l'échelle (Herfindahl) : **${num(validation.gradeHerfindahl)}**.`);
+if (concentrationMax.part > 0.25) {
+  md.push("");
+  md.push(
+    `Le grade ${concentrationMax.grade} rassemble à lui seul ${pct(concentrationMax.part, 1)} du portefeuille, et ${pct(concentrationMax.partCapConfiance, 0)} de ces dossiers y ont été déplacés par le cap de qualité d'information — pas par l'analyse du risque. C'est le comportement voulu du modèle, mais il a une conséquence opérationnelle directe : améliorer la collecte d'information déplacerait davantage de dossiers que réviser les pondérations.`
+  );
+}
 md.push("");
 md.push(`Marge de prudence appliquée : **+${(moc * 100).toFixed(0)} % en relatif**. Plancher : ${pct(calibration.floor, 2)}.`);
 md.push("");
@@ -237,6 +334,21 @@ for (const g of calibration.gradePd) {
   );
 }
 md.push("| DEF1 (défaut constaté) | — | 100,00 % | — | — | par définition |");
+md.push("");
+const fusions = tiedGrades(calibration);
+if (fusions.length > 0) {
+  md.push("**Grades fusionnés par la régression isotone.**");
+  md.push("");
+  for (const f of fusions) {
+    md.push(`- ${f.grades.join(" et ")} portent la même PD (${pct(f.pd, 3)}).`);
+  }
+  md.push("");
+  md.push("Ce n'est pas un défaut de la calibration : c'est le résultat correct lorsque deux");
+  md.push("grades ne se distinguent pas sur les données. C'est en revanche un constat de");
+  md.push("premier ordre — une distinction de grade qui ne porte aucune différence de risque");
+  md.push("n'apporte rien à la décision. Deux issues possibles : revoir ce qui alimente ces");
+  md.push("grades, ou les fusionner dans l'échelle maîtresse.");
+}
 md.push("");
 md.push("La colonne « PD vraie » n'existe que parce que les données sont simulées : sur");
 md.push("données réelles, la PD du processus générateur est inconnaissable. C'est le seul");
@@ -287,7 +399,11 @@ md.push("   passage en comité modèles.");
 md.push("5. **Un suivi de performance** périodique : dérive du pouvoir discriminant, stabilité");
 md.push("   de la population, adéquation des PD par grade.");
 md.push("");
-const reportPath = join(root, "docs", "06-rapport-calibration.md");
+const reportPath = join(
+  root,
+  "docs",
+  `06-rapport-calibration-${model.modelId.toLowerCase().replace(/_/g, "-")}.md`
+);
 writeFileSync(reportPath, `${md.join("\n")}\n`, "utf8");
 console.log(`  rapport  : ${reportPath}\n`);
 

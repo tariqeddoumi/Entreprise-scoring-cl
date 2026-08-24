@@ -9,7 +9,8 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { validateCalibration } from "../src/core/calibration.js";
+import { tiedGrades, validateCalibration } from "../src/core/calibration.js";
+import { CAP_TRIGGER_TO_FLAG, unmappedTriggers } from "../src/core/structural-flags.js";
 import { CORP_STD_V1, listModels } from "../src/models/index.js";
 
 let failures = 0;
@@ -171,21 +172,9 @@ if (hardcoded.length > 0) {
 // formulaire, pas seulement dans la liste des cases.
 const capFlags = [...form.matchAll(/\b(\w+)\b/g)].map((m) => m[1]);
 const engineFlags = CORP_STD_V1.structuralCaps.map((c) => c.trigger);
-const uncovered = engineFlags.filter((t) => {
-  const map: Record<string, string> = {
-    YOUNG_COMPANY_NO_SUPPORT: "companyAgeYears",
-    NEGATIVE_TANGIBLE_EQUITY: "negativeTangibleEquity",
-    GOING_CONCERN_UNCERTAINTY: "goingConcernMaterialUncertainty",
-    ACCOUNTS_TOO_OLD: "accountsTooOld",
-    EBITDA_NEGATIVE_2_OF_3: "ebitdaNegativeTwoOfThreeYears",
-    BASE_DSCR_BELOW_1: "baseDscrBelow1",
-    STRESS_DSCR_BELOW_1: "stressDscrBelow1",
-    SINGLE_CLIENT_DEPENDENCY: "singleClientDependencyUnmitigated",
-    ACTIVE_RESTRUCTURING: "activeRestructuringForbearance",
-    GROUP_FILE_INCOMPLETE: "materialGroupFileIncomplete",
-  };
-  return !capFlags.includes(map[t]);
-});
+const orphelins = unmappedTriggers(engineFlags);
+if (orphelins.length > 0) fail(`déclencheurs sans champ d'entrée : ${orphelins.join(", ")}`);
+const uncovered = engineFlags.filter((t) => !capFlags.includes(CAP_TRIGGER_TO_FLAG[t]));
 if (uncovered.length) {
   fail(`caps non proposés dans le formulaire : ${uncovered.join(", ")}`);
 } else {
@@ -291,6 +280,17 @@ console.log("\n6. Calibration : artefact vs modèle et contrat\n");
     if (manquants.length > 0) fail(`${model.modelId} — grades sans PD : ${manquants.join(", ")}`);
     else if (orphelins.length > 0) fail(`${model.modelId} — PD sur des grades hors échelle : ${orphelins.join(", ")}`);
     else ok(`${model.modelId} — les ${echelle.length} grades de l'échelle portent une PD`);
+
+    // Une fusion de grades n'est pas une erreur, mais elle ne doit pas passer
+    // inaperçue : c'est une distinction de grade qui ne porte plus de risque.
+    const fusions = tiedGrades(cal);
+    if (fusions.length > 0) {
+      ok(
+        `${model.modelId} — grades indistinguables sur les données : ${fusions.map((f) => f.grades.join("=")).join(", ")} (à porter au comité modèles)`
+      );
+    } else {
+      ok(`${model.modelId} — les ${cal.gradePd.length} grades se distinguent par leur PD`);
+    }
 
     if (cal.dataSource === "SYNTHETIC" && !/simul/i.test(model.disclaimerFr ?? "")) {
       fail(`${model.modelId} — calibration simulée mais l'avertissement du modèle ne le dit pas`);

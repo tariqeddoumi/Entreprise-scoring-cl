@@ -97,3 +97,22 @@ export function validateCalibration(c: CalibrationConfig): string[] {
   if (c.horizonMonths !== 12) errors.push("horizon attendu : 12 mois");
   return errors;
 }
+
+/**
+ * Grades consécutifs portant la même PD.
+ *
+ * Ce n'est pas une erreur — c'est le résultat correct de la régression isotone
+ * quand deux grades ne se distinguent pas sur les données. Mais c'est un constat
+ * de premier ordre pour le comité modèles : une distinction de grade qui ne
+ * porte aucune différence de risque ne sert à rien, et doit conduire soit à
+ * revoir ce qui alimente ces grades, soit à les fusionner dans l'échelle.
+ */
+export function tiedGrades(c: CalibrationConfig): { grades: string[]; pd: number }[] {
+  const groupes: { grades: string[]; pd: number }[] = [];
+  for (const g of c.gradePd) {
+    const dernier = groupes[groupes.length - 1];
+    if (dernier && Math.abs(dernier.pd - g.pd) < 1e-12) dernier.grades.push(g.grade);
+    else groupes.push({ grades: [g.grade], pd: g.pd });
+  }
+  return groupes.filter((x) => x.grades.length > 1);
+}

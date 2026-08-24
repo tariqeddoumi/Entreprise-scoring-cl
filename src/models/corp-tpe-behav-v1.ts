@@ -1,6 +1,8 @@
+import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
 import { CORP_STD_V1 } from "./corp-std-v1";
+import calibrationJson from "./calibrations/CORP_TPE_BEHAV_V1-SYNTH-20260824.json";
 
 /**
  * CORP_TPE_BEHAV_V1 — Variante TPE comportementale (seed séparé).
@@ -433,6 +435,17 @@ const criteria: CriterionConfig[] = [
   },
 ];
 
+/**
+ * Calibration attachée : DONNÉES SIMULÉES, propre à ce modèle.
+ *
+ * Elle n'est PAS transposable depuis le modèle standard : les deux grilles
+ * n'observent pas la même chose — flux bancaires ici, états financiers là — et
+ * ne produisent pas la même distribution de grades. Les scores des deux modèles
+ * ne sont pas comparables sans table de correspondance validée ; leurs PD non
+ * plus.
+ */
+const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
+
 export const CORP_TPE_BEHAV_V1: ModelConfig = {
   modelId: "CORP_TPE_BEHAV_V1",
   version: "1.0.0",
@@ -460,5 +473,6 @@ export const CORP_TPE_BEHAV_V1: ModelConfig = {
   confidenceCaps: CORP_STD_V1.confidenceCaps,
   segmentation: CORP_STD_V1.segmentation,
   pdStatus: "UNCALIBRATED",
+  calibration: SYNTHETIC_CALIBRATION,
   disclaimerFr: CORP_STD_V1.disclaimerFr,
 };

@@ -1,4 +1,6 @@
-# Rapport de calibration — modèle de scoring entreprises
+# Rapport de calibration — CORP_STD_V1
+
+*Modèle expert de notation interne — Entreprises non financières Maroc (TPE/PME/GE)*
 
 > **Calibration sur données SIMULÉES.** Elle établit que la chaîne de calibration
 > fonctionne et que l'échelle de notation ordonne correctement le risque. Elle
@@ -50,12 +52,12 @@ pouvoir discriminant irréaliste.
 | Hypothèse | Valeur | Statut |
 |---|---:|---|
 | Tendance centrale du taux de défaut TPE | 6.00 % | **posée** — à remplacer par l'observé de la banque |
-| Tendance centrale PME | 3.50 % | **posée** |
-| Tendance centrale GE | 1.20 % | **posée** |
+| Tendance centrale du taux de défaut PME | 3.50 % | **posée** — à remplacer par l'observé de la banque |
+| Tendance centrale du taux de défaut GE | 1.20 % | **posée** — à remplacer par l'observé de la banque |
 | Corrélation d'actifs ρ | 0.12 | ordre de grandeur du dispositif de Bâle pour les entreprises |
 | Part du signal portée par la qualité latente (a) | 0.5 | **posée** — détermine le pouvoir discriminant |
 | Part portée par le biais de dossier (b) | 0.42 | **posée** — borne le pouvoir discriminant |
-| Répartition du portefeuille TPE/PME/GE | 55 % / 35 % / 10 % | **posée** |
+| Répartition du portefeuille | TPE 55 % · PME 35 % · GE 10 % | **posée** |
 
 ## 3. Portefeuille simulé
 
@@ -96,11 +98,31 @@ PD à 12 mois calibrée par grade : taux de défaut observé avec correction de 
 **Pourquoi calibrer sur le grade et non sur le score.** Le grade final intègre les
 caps — qualité de l'information, situations structurelles — qui déplacent une
 contrepartie vers le bas sans toucher à son score brut. Le score moyen n'est donc
-pas monotone dans l'échelle : dans ce portefeuille, le score moyen de G4 dépasse
-celui de G3, et celui de G7 dépasse celui de G6, parce que ces grades rassemblent
-des dossiers bien notés mais plafonnés. Le risque, lui, reste monotone. Dériver la
-PD d'une courbe du score réaffecterait à ces dossiers la PD de leur score et
-annulerait l'effet du cap.
+pas monotone dans l'échelle : un grade plafonné rassemble des dossiers bien notés.
+Dériver la PD d'une courbe du score réaffecterait à ces dossiers la PD de leur
+score et annulerait l'effet du cap.
+
+Inversions constatées du score moyen sur ce portefeuille :
+
+- G3 score moyen 82.4 puis G4 score moyen 83.5 — soit une remontée de 1.1 point(s) en descendant d'un grade
+- G6 score moyen 67.6 puis G7 score moyen 71.7 — soit une remontée de 4.1 point(s) en descendant d'un grade
+
+### Origine des grades : barème ou cap de qualité d'information ?
+
+| Grade | Effectif | Part | Score moyen | Déplacé par un cap | dont cap de confiance |
+|---|---:|---:|---:|---:|---:|
+| G1 | 1 131 | 2.6 % | 93.8 | 0 % | 0 % |
+| G2 | 1 010 | 2.3 % | 87.4 | 0 % | 0 % |
+| G3 | 1 154 | 2.6 % | 82.4 | 0 % | 0 % |
+| G4 | 10 945 | 24.7 % | 83.5 | 61 % | 61 % |
+| G5 | 4 053 | 9.2 % | 72.5 | 0 % | 0 % |
+| G6 | 3 581 | 8.1 % | 67.6 | 0 % | 0 % |
+| G7 | 10 734 | 24.3 % | 71.7 | 61 % | 55 % |
+| G8 | 3 401 | 7.7 % | 58.0 | 4 % | 0 % |
+| G9 | 5 213 | 11.8 % | 52.2 | 14 % | 0 % |
+| G10 | 3 003 | 6.8 % | 36.8 | 0 % | 0 % |
+
+Concentration de l'échelle (Herfindahl) : **0.1618**.
 
 Marge de prudence appliquée : **+10 % en relatif**. Plancher : 0.03 %.
 
@@ -119,6 +141,7 @@ Marge de prudence appliquée : **+10 % en relatif**. Plancher : 0.03 %.
 | G9 | 2 215 | 14.773 % | 13.454 % | 10.873 % | × 1.36 |
 | G10 | 1 315 | 23.726 % | 21.597 % | 19.691 % | × 1.20 |
 | DEF1 (défaut constaté) | — | 100,00 % | — | — | par définition |
+
 
 La colonne « PD vraie » n'existe que parce que les données sont simulées : sur
 données réelles, la PD du processus générateur est inconnaissable. C'est le seul
@@ -153,9 +176,14 @@ Effectif 19 345 · 953 défauts · taux observé 4.93 % · PD moyenne affecté
 | G9 | 2 215 | 14.773 % | 13.454 % | 298 | 0.9637 |
 | G10 | 1 315 | 23.726 % | 21.597 % | 284 | 0.9687 |
 
-Ruptures d'ordre observées (effectifs indiqués — sur un grade peu peuplé, une inversion relève du bruit d'échantillonnage) :
+Ruptures d'ordre observées. La valeur-p compare les deux proportions : elle
+sépare l'inversion de quelques défauts sur un grade peu peuplé — du bruit — de
+celle portée par des centaines de défauts, qui traduit un vrai défaut
+d'ordonnancement.
 
-- G3 1.13 % (n = 530) puis G4 0.97 % (n = 4742)
+| Grades | Taux | Effectifs | Défauts | p | Lecture |
+|---|---|---|---|---:|---|
+| G3 → G4 | 1.13 % → 0.97 % | 530 / 4742 | 6 / 46 | 0.7204 | compatible avec le bruit |
 
 #### Échantillon hors-échantillon
 
@@ -183,9 +211,14 @@ Effectif 8 309 · 429 défauts · taux observé 5.16 % · PD moyenne affectée
 | G9 | 1 009 | 14.773 % | 12.488 % | 126 | 0.9834 |
 | G10 | 538 | 23.726 % | 22.491 % | 121 | 0.7642 |
 
-Ruptures d'ordre observées (effectifs indiqués — sur un grade peu peuplé, une inversion relève du bruit d'échantillonnage) :
+Ruptures d'ordre observées. La valeur-p compare les deux proportions : elle
+sépare l'inversion de quelques défauts sur un grade peu peuplé — du bruit — de
+celle portée par des centaines de défauts, qui traduit un vrai défaut
+d'ordonnancement.
 
-- G2 0.51 % (n = 198) puis G3 0.00 % (n = 186)
+| Grades | Taux | Effectifs | Défauts | p | Lecture |
+|---|---|---|---|---:|---|
+| G2 → G3 | 0.51 % → 0.00 % | 198 / 186 | 1 / 0 | 0.3318 | compatible avec le bruit |
 
 #### Échantillon hors-période
 
@@ -213,9 +246,14 @@ Effectif 16 571 · 723 défauts · taux observé 4.36 % · PD moyenne affecté
 | G9 | 1 989 | 14.773 % | 11.463 % | 228 | 1.0000 |
 | G10 | 1 150 | 23.726 % | 18.870 % | 217 | 1.0000 |
 
-Ruptures d'ordre observées (effectifs indiqués — sur un grade peu peuplé, une inversion relève du bruit d'échantillonnage) :
+Ruptures d'ordre observées. La valeur-p compare les deux proportions : elle
+sépare l'inversion de quelques défauts sur un grade peu peuplé — du bruit — de
+celle portée par des centaines de défauts, qui traduit un vrai défaut
+d'ordonnancement.
 
-- G2 0.27 % (n = 377) puis G3 0.00 % (n = 438)
+| Grades | Taux | Effectifs | Défauts | p | Lecture |
+|---|---|---|---|---:|---|
+| G2 → G3 | 0.27 % → 0.00 % | 377 / 438 | 1 / 0 | 0.2808 | compatible avec le bruit |
 
 ### Stabilité et concentration
 

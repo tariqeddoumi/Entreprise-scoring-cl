@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { computeRating } from "../src/core/engine";
 import { hashCalibration } from "../src/calibration/fit";
-import { pdForGrade, validateCalibration, type CalibrationConfig } from "../src/core/calibration";
+import { pdForGrade, tiedGrades, validateCalibration, type CalibrationConfig } from "../src/core/calibration";
 import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "../src/models";
 import type { ModelConfig, RatingInput } from "../src/core/types";
 import { buildSamples, fitCalibration } from "../src/calibration/fit";
 import { simulatePortfolio } from "../src/calibration/simulate";
 
 const CAL = CORP_STD_V1.calibration as CalibrationConfig;
+const CAL_TPE = CORP_TPE_BEHAV_V1.calibration as CalibrationConfig;
 
 function dossier(overrides: Partial<RatingInput> = {}): RatingInput {
   const criteria: RatingInput["criteria"] = {};
@@ -51,13 +52,78 @@ describe("artefact de calibration attaché au modèle", () => {
   });
 
   it("produit des PD strictement croissantes du meilleur au pire grade", () => {
+    // Sur ce modèle, aucun grade n'est fusionné : l'échelle est strictement
+    // ordonnée. La contrainte générale, elle, est la croissance large.
     for (let i = 1; i < CAL.gradePd.length; i += 1) {
       expect(CAL.gradePd[i].pd).toBeGreaterThan(CAL.gradePd[i - 1].pd);
     }
+    expect(tiedGrades(CAL)).toEqual([]);
   });
 
   it("respecte le plancher réglementaire annoncé", () => {
     for (const g of CAL.gradePd) expect(g.pd).toBeGreaterThanOrEqual(CAL.floor);
+  });
+});
+
+describe("calibration du modèle TPE comportemental", () => {
+  it("passe les contrôles d'intégrité et porte une empreinte cohérente", () => {
+    expect(validateCalibration(CAL_TPE)).toEqual([]);
+    expect(hashCalibration(CAL_TPE)).toBe(CAL_TPE.contentHash);
+    expect(CAL_TPE.dataSource).toBe("SYNTHETIC");
+  });
+
+  it("vise bien le modèle TPE et non le modèle standard", () => {
+    // Les deux grilles n'observent pas la même chose : une calibration
+    // transposée d'un modèle à l'autre serait indéfendable.
+    expect(CAL_TPE.modelId).toBe("CORP_TPE_BEHAV_V1");
+    expect(CAL_TPE.calibrationId).not.toBe(CAL.calibrationId);
+    expect(CAL_TPE.contentHash).not.toBe(CAL.contentHash);
+  });
+
+  it("produit des PD croissantes au sens large, fusions comprises", () => {
+    for (let i = 1; i < CAL_TPE.gradePd.length; i += 1) {
+      expect(CAL_TPE.gradePd[i].pd).toBeGreaterThanOrEqual(CAL_TPE.gradePd[i - 1].pd);
+    }
+  });
+
+  it("signale la fusion de G6 et G7, que la régression isotone a rendus indistinguables", () => {
+    // Constat de premier ordre, pas un défaut : sur ce portefeuille le cap de
+    // confiance déverse dans G7 des dossiers mieux notés que ceux de G6, au
+    // point que les deux grades ne se distinguent plus par le risque.
+    const fusions = tiedGrades(CAL_TPE);
+    expect(fusions).toHaveLength(1);
+    expect(fusions[0].grades).toEqual(["G6", "G7"]);
+  });
+
+  it("restitue une PD via le moteur sur un dossier TPE", () => {
+    const criteria: RatingInput["criteria"] = {};
+    for (const c of CORP_TPE_BEHAV_V1.criteria) {
+      if (c.type === "QUANTITATIVE") {
+        const bins = c.binsBySegment?.TPE ?? c.binsBySegment?.ALL;
+        const b = bins!.find((x) => x.score === 75) ?? bins![0];
+        const v =
+          b.min !== null && b.max !== null ? (b.min + b.max) / 2 : b.min !== null ? b.min + 1 : (b.max ?? 1) - 1;
+        criteria[c.code] = { status: "AVAILABLE", value: v };
+      } else {
+        criteria[c.code] = { status: "AVAILABLE", score: 75 };
+      }
+    }
+    const r = computeRating(
+      CORP_TPE_BEHAV_V1,
+      {
+        modelId: "CORP_TPE_BEHAV_V1",
+        segment: "TPE",
+        asOfDate: "2025-12-31",
+        criteria,
+        structuralFlags: { companyAgeYears: 9 },
+        confidence: { completeness: 100, freshness: 100, provenance: 100, reliability: 100 },
+      },
+      "2025-12-31T12:00:00.000Z"
+    );
+    expect(r.outcome).toBe("SCORED");
+    expect(r.pdStatus).toBe("CALIBRATED_SYNTHETIC");
+    expect(r.calibrationId).toBe(CAL_TPE.calibrationId);
+    expect(r.pd12m).toBe(CAL_TPE.gradePd.find((g) => g.grade === r.finalGrade)!.pd);
   });
 });
 
@@ -149,7 +215,6 @@ describe("moteur : restitution de la PD", () => {
   });
 
   it("laisse UNCALIBRATED et aucune PD sur un modèle sans calibration", () => {
-    expect(CORP_TPE_BEHAV_V1.calibration).toBeUndefined();
     const sansCal: ModelConfig = { ...CORP_STD_V1, calibration: undefined };
     const r = computeRating(sansCal, dossier(), "2025-12-31T12:00:00.000Z");
     expect(r.pdStatus).toBe("UNCALIBRATED");

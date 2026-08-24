@@ -4,7 +4,7 @@
   "modelId": "CORP_STD_V1",
   "modelVersion": "1.0.0",
   "dataSource": "SYNTHETIC",
-  "createdAt": "2026-08-24T05:05:10.775Z",
+  "createdAt": "2026-08-24T06:01:54.683Z",
   "horizonMonths": 12,
   "methodFr": "PD à 12 mois calibrée par grade : taux de défaut observé avec correction de continuité, rétréci vers une tendance log-linéaire sur le rang du grade proportionnellement au nombre de défauts, monotonie imposée par régression isotone pondérée, marge de prudence relative puis plancher. La calibration porte sur le grade final et non sur le score brut, afin de conserver l'effet des caps.",
   "seed": 20260823,
