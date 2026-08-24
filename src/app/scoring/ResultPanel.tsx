@@ -57,7 +57,14 @@ export function ResultPanel({
           label="Confiance"
           value={`${result.confidenceScore.toFixed(1)} (${result.confidenceLevelFr})`}
         />
-        <Metric label="Statut PD" value={result.pdStatus} />
+        <Metric
+          label="PD 12 mois"
+          value={
+            result.pd12m !== null
+              ? `${(result.pd12m * 100).toFixed(2)} %`
+              : "non produite"
+          }
+        />
       </div>
 
       {gradeBand && (
@@ -67,6 +74,29 @@ export function ResultPanel({
           remplace pas le moteur de politique de crédit (limites, produit, garanties,
           délégation).
         </p>
+      )}
+
+      {result.pdStatus === "CALIBRATED_SYNTHETIC" && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: "10px 14px",
+            borderRadius: 6,
+            border: "1px solid var(--warn)",
+            background: "color-mix(in srgb, var(--warn) 8%, transparent)",
+          }}
+        >
+          <strong style={{ color: "var(--warn)" }}>
+            Probabilité de défaut issue d&apos;une calibration sur données simulées.
+          </strong>{" "}
+          <span style={{ fontSize: 13 }}>
+            Elle atteste que la chaîne de calibration fonctionne et que
+            l&apos;échelle ordonne le risque ; elle n&apos;établit pas le niveau
+            réel des probabilités. À n&apos;utiliser ni pour une provision
+            IFRS&nbsp;9, ni pour une exigence en fonds propres, ni pour une
+            décision d&apos;octroi. Calibration {result.calibrationId}.
+          </span>
+        </div>
       )}
 
       {result.blockingReasonsFr.length > 0 && (
@@ -224,8 +254,9 @@ export function ResultPanel({
       <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
         Modèle {result.modelId} v{result.modelVersion} · moteur v{result.engineVersion} ·
         date d&apos;arrêté {result.asOfDate} · calculé le {result.computedAt}.{" "}
-        {result.pdStatus === "UNCALIBRATED" &&
-          "Aucune PD n'est produite : le modèle n'est pas calibré."}
+        {result.pdStatus === "UNCALIBRATED"
+          ? "Aucune PD n'est produite : le modèle n'est pas calibré."
+          : `statut PD ${result.pdStatus}${result.calibrationId ? ` · calibration ${result.calibrationId}` : ""}.`}
       </p>
     </section>
   );

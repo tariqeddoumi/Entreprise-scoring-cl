@@ -1,3 +1,4 @@
+import type { CalibrationConfig } from "./calibration";
 /**
  * Types du domaine — moteur de notation interne entreprises (TPE/PME/GE).
  *
@@ -33,8 +34,20 @@ export type RedFlagLevel = "BLOCK" | "DEFAULT_CHECK" | "REFER" | "WARNING" | "IN
 /** Source d'une règle : un red flag interne ne doit jamais être présenté comme une exigence BAM. */
 export type RuleSource = "REGULATORY" | "IFRS9" | "CREDIT_POLICY" | "COMPLIANCE" | "MODEL";
 
-/** Statut de calibration de la PD. Tant que UNCALIBRATED, aucune PD n'est exposée. */
-export type PdStatus = "UNCALIBRATED" | "CALIBRATED" | "TECHNICAL_ONLY_DISABLED";
+/**
+ * Statut de calibration de la PD. Tant que UNCALIBRATED, aucune PD n'est exposée.
+ *
+ * CALIBRATED_SYNTHETIC est délibérément distinct de CALIBRATED : une PD issue de
+ * données simulées valide la chaîne de traitement, jamais le niveau du risque.
+ * La distinction doit rester visible partout où la PD circule — API, interface,
+ * instantané persisté — pour qu'aucun aval ne puisse la confondre avec une
+ * calibration établie sur des défauts observés.
+ */
+export type PdStatus =
+  | "UNCALIBRATED"
+  | "CALIBRATED"
+  | "CALIBRATED_SYNTHETIC"
+  | "TECHNICAL_ONLY_DISABLED";
 
 // ---------------------------------------------------------------------------
 // Configuration de modèle (version immuable, publiée)
@@ -168,6 +181,11 @@ export interface ModelConfig {
   domains: DomainConfig[];
   criteria: CriterionConfig[];
   masterScale: GradeBand[];
+  /**
+   * Calibration attachée à cette version de modèle. Absente = aucune PD n'est
+   * produite. Versionnée séparément : on recalibre sans republier le barème.
+   */
+  calibration?: CalibrationConfig;
   structuralCaps: StructuralCapConfig[];
   redFlags: RedFlagConfig[];
   confidenceWeights: ConfidenceWeights;
@@ -322,7 +340,10 @@ export interface RatingResult {
   topStrengthsFr: string[];
   topWeaknessesFr: string[];
   pdStatus: PdStatus;
-  pd12m: number | null; // toujours null tant que pdStatus != CALIBRATED
+  /** PD à 12 mois du grade final. Nulle tant qu'aucune calibration n'est attachée. */
+  pd12m: number | null;
+  /** Identifiant de la calibration appliquée — la notation doit rester rejouable. */
+  calibrationId: string | null;
   explanationFr: string;
   computedAt: string;
   engineVersion: string;

@@ -9,6 +9,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { validateCalibration } from "../src/core/calibration.js";
 import { CORP_STD_V1, listModels } from "../src/models/index.js";
 
 let failures = 0;
@@ -246,6 +247,56 @@ if (!existsSync(noteePath)) {
     fail(`red flags non documentés : ${[...new Set(missingFlags)].join(", ")}`);
   } else {
     ok("tous les red flags sont documentés");
+  }
+}
+
+// --- Calibration -------------------------------------------------------------
+// Une calibration désalignée du modèle est silencieuse : elle produit des PD
+// crédibles sur des grades qui n'existent plus, ou perd la trace de son origine.
+console.log("\n6. Calibration : artefact vs modèle et contrat\n");
+{
+  const statutsMoteur = enumFrom(types, /export type PdStatus =\s*([\s\S]*?);/);
+  const statutsSpec = [
+    ...openapi.matchAll(/enum: \[(UNCALIBRATED[^\]]*)\]/g),
+  ].flatMap((m) => m[1].split(",").map((x) => x.trim()));
+  compare("PdStatus (moteur vs OpenAPI)", statutsMoteur, statutsSpec);
+
+  for (const model of listModels()) {
+    const cal = model.calibration;
+    if (!cal) {
+      ok(`${model.modelId} — aucune calibration attachée, aucune PD produite`);
+      continue;
+    }
+    const erreurs = validateCalibration(cal);
+    if (erreurs.length > 0) {
+      fail(`${model.modelId} — calibration invalide : ${erreurs.join(" ; ")}`);
+    } else {
+      ok(`${model.modelId} — calibration ${cal.calibrationId} valide (${cal.gradePd.length} grades)`);
+    }
+
+    if (cal.modelId !== model.modelId || cal.modelVersion !== model.version) {
+      fail(
+        `${model.modelId} — la calibration vise ${cal.modelId} v${cal.modelVersion}, pas ${model.modelId} v${model.version}`
+      );
+    } else {
+      ok(`${model.modelId} — la calibration vise bien la version de modèle publiée`);
+    }
+
+    // Tout grade de l'échelle doit porter une PD, sans quoi une notation
+    // parfaitement valide se retrouverait sans PD.
+    const echelle = model.masterScale.map((b) => b.grade);
+    const calibres = cal.gradePd.map((g) => g.grade);
+    const manquants = echelle.filter((g) => !calibres.includes(g));
+    const orphelins = calibres.filter((g) => !echelle.includes(g));
+    if (manquants.length > 0) fail(`${model.modelId} — grades sans PD : ${manquants.join(", ")}`);
+    else if (orphelins.length > 0) fail(`${model.modelId} — PD sur des grades hors échelle : ${orphelins.join(", ")}`);
+    else ok(`${model.modelId} — les ${echelle.length} grades de l'échelle portent une PD`);
+
+    if (cal.dataSource === "SYNTHETIC" && !/simul/i.test(model.disclaimerFr ?? "")) {
+      fail(`${model.modelId} — calibration simulée mais l'avertissement du modèle ne le dit pas`);
+    } else if (cal.dataSource === "SYNTHETIC") {
+      ok(`${model.modelId} — l'origine simulée est portée par l'avertissement du modèle`);
+    }
   }
 }
 

@@ -12,7 +12,13 @@ info:
         le serveur recalcule tout depuis la version de modèle publiée ;
       * `Idempotency-Key` sur les créations et les calculs persistés ;
       * erreurs au format RFC 9457 (`application/problem+json`), sans stack trace ;
-      * aucune PD n'est renvoyée tant que `pdStatus != CALIBRATED`.
+      * aucune PD n'est renvoyée tant qu'aucune calibration n'est attachée à la
+        version de modèle ;
+      * `pdStatus = CALIBRATED_SYNTHETIC` signale une PD issue de données
+        **simulées** : elle valide la chaîne de traitement, jamais le niveau du
+        risque, et ne doit alimenter ni provision IFRS 9, ni exigence en fonds
+        propres, ni décision d'octroi. Tout consommateur de l'API doit traiter
+        ce statut distinctement de `CALIBRATED`.
   contact:
     name: Direction des Risques — Modèles de crédit entreprises
 servers:
@@ -509,11 +515,24 @@ components:
         warningsFr: { type: array, items: { type: string } }
         pdStatus:
           type: string
-          enum: [UNCALIBRATED, CALIBRATED, TECHNICAL_ONLY_DISABLED]
+          enum: [UNCALIBRATED, CALIBRATED, CALIBRATED_SYNTHETIC, TECHNICAL_ONLY_DISABLED]
+          description: >
+            CALIBRATED_SYNTHETIC désigne une PD calibrée sur données simulées :
+            à ne jamais confondre avec CALIBRATED, qui suppose des défauts
+            observés.
         pd12m:
           type: number
           nullable: true
-          description: Toujours null tant que pdStatus n'est pas CALIBRATED
+          description: >
+            PD à 12 mois du grade final. Nulle quand aucun grade final n'est
+            produit, ou quand la version de modèle ne porte pas de calibration.
+            Vaut 1 pour un défaut constaté.
+        calibrationId:
+          type: string
+          nullable: true
+          description: >
+            Identifiant de la calibration appliquée. Consigné dans l'instantané
+            pour que la notation reste rejouable.
         explanationFr: { type: string }
         computedAt: { type: string, format: date-time }
 

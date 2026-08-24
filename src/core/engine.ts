@@ -1,4 +1,5 @@
 import { binLabel, resolveBin } from "./binning";
+import { pdForGrade } from "./calibration";
 import { computeConfidence } from "./confidence";
 import { applyCap, DEFAULT_GRADE, gradeFromScore, gradeLabelFr } from "./grades";
 import { determineSegment } from "./segmentation";
@@ -66,6 +67,7 @@ export function computeRating(
     topWeaknessesFr: [],
     pdStatus: model.pdStatus,
     pd12m: null,
+    calibrationId: model.calibration?.calibrationId ?? null,
     explanationFr: "",
     computedAt,
     engineVersion: ENGINE_VERSION,
@@ -259,7 +261,7 @@ export function computeRating(
 
   // Défaut avéré : grade défaut forcé, indépendamment du score (grilles §18.1).
   if (input.defaultTriggered) {
-    return {
+    return assignPd(model, {
       ...base,
       outcome: "DEFAULT_GRADE",
       rawScore,
@@ -272,7 +274,7 @@ export function computeRating(
       appliedCaps,
       triggeredRedFlags,
       explanationFr: buildExplanation("DEFAULT_GRADE", rawScore, engineGrade, DEFAULT_GRADE, segment, triggeredRedFlags),
-    };
+    }, true);
   }
 
   const noGrade = appliedCaps.some((c) => c.maxGrade === "NO_GRADE");
@@ -338,7 +340,7 @@ export function computeRating(
     triggeredRedFlags,
     gradeLabelFr(model.masterScale, cappedGrade)
   );
-  return result;
+  return assignPd(model, result, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +455,33 @@ function resolveCriterion(
     explanationFr: anchor
       ? `Ancrage retenu (${ci.score}) : ${anchor.labelFr}`
       : `Score qualitatif ${ci.score} retenu.`,
+  };
+}
+
+/**
+ * Affecte la PD du grade final.
+ *
+ * La PD suit le GRADE, pas le score : c'est le grade qui porte l'information
+ * des caps. Un dossier plafonné pour qualité d'information insuffisante reçoit
+ * la PD de son grade plafonné, non celle de son score brut — sans quoi le cap
+ * n'aurait aucun effet sur la mesure du risque.
+ *
+ * Un grade de défaut porte une PD de 1 par définition : le défaut n'est pas
+ * une probabilité, c'est un état constaté.
+ */
+function assignPd(
+  model: ModelConfig,
+  result: RatingResult,
+  isDefaultGrade: boolean
+): RatingResult {
+  const cal = model.calibration;
+  if (!cal) return result;
+  const pd = pdForGrade(cal, result.finalGrade, isDefaultGrade);
+  if (pd === null) return result;
+  return {
+    ...result,
+    pd12m: pd,
+    pdStatus: cal.dataSource === "SYNTHETIC" ? "CALIBRATED_SYNTHETIC" : "CALIBRATED",
   };
 }
 

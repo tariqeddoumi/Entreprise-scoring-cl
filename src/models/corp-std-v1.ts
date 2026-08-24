@@ -1,5 +1,7 @@
+import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
+import calibrationJson from "./calibrations/CORP_STD_V1-SYNTH-20260823.json";
 
 /**
  * CORP_STD_V1 — Modèle expert initial de notation interne des entreprises
@@ -894,6 +896,16 @@ const criteria: CriterionConfig[] = [
   },
 ];
 
+/**
+ * Calibration attachée : DONNÉES SIMULÉES.
+ *
+ * L'artefact JSON est la pièce de référence — il porte son empreinte de contenu
+ * et se régénère par `npx tsx scripts/calibration/run.mts`. Il est importé tel
+ * quel plutôt que recopié, pour qu'aucune divergence ne puisse s'installer entre
+ * la calibration auditée et celle que le moteur applique.
+ */
+const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
+
 export const CORP_STD_V1: ModelConfig = {
   modelId: "CORP_STD_V1",
   version: "1.0.0",
@@ -973,7 +985,11 @@ export const CORP_STD_V1: ModelConfig = {
       "Seed inspiré de la segmentation prudentielle des entreprises (BAM) — seuils, définitions de CA/exposition et traitement du groupe À CONFIRMER dans le corpus BAM applicable avant production.",
     status: "SEED_TO_CONFIRM",
   },
+  // Le statut porté ici est le statut PAR DÉFAUT, appliqué quand aucune
+  // calibration n'est attachée. Dès qu'une calibration l'est, le moteur le
+  // remplace par CALIBRATED ou CALIBRATED_SYNTHETIC selon l'origine des données.
   pdStatus: "UNCALIBRATED",
+  calibration: SYNTHETIC_CALIBRATION,
   disclaimerFr:
-    "Modèle expert seed non calibré. Aucune PD n'est produite tant que la calibration empirique n'est pas réalisée et validée indépendamment (pd_status = UNCALIBRATED). Les seuils ne sont ni des règles BAM ni des paramètres IFRS 9.",
+    "Modèle expert seed. La calibration attachée est établie sur données SIMULÉES : elle valide la chaîne de traitement et l'ordonnancement de l'échelle, jamais le niveau des probabilités. Aucune PD produite par ce modèle ne doit alimenter un calcul de provision IFRS 9, une exigence en fonds propres ou une décision d'octroi tant qu'une calibration sur défauts observés n'a pas été réalisée et validée indépendamment. Les seuils ne sont ni des règles BAM ni des paramètres IFRS 9.",
 };
