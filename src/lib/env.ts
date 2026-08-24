@@ -32,7 +32,13 @@ function intFromEnv(name: string, fallback: number, min: number, max: number): n
 function loadConfig(): AppConfig {
   const isProduction = process.env.NODE_ENV === "production";
 
-  const provider = (process.env.DATABASE_PROVIDER ?? "postgresql").toLowerCase();
+  // Une variable déclarée dans l'interface Vercel mais laissée sans valeur est
+  // transmise comme chaîne vide, pas comme absente : `?? "postgresql"` ne s'y
+  // applique donc pas. Sans ce garde-fou, une case vide dans le tableau de
+  // variables d'environnement suffit à faire échouer le middleware sur
+  // absolument toutes les routes.
+  const rawProvider = process.env.DATABASE_PROVIDER?.trim();
+  const provider = (rawProvider ? rawProvider : "postgresql").toLowerCase();
   const providers: DbProvider[] = ["postgresql", "mysql", "sqlserver", "sqlite"];
   if (!providers.includes(provider as DbProvider)) {
     throw new Error(

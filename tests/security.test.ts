@@ -241,4 +241,15 @@ describe("Configuration", () => {
     resetConfigCache();
     expect(config().corsAllowedOrigins).toEqual([]);
   });
+
+  it("traite une variable Vercel déclarée mais laissée vide comme absente, pas comme invalide", () => {
+    // Une case laissée vide dans l'interface Vercel envoie une chaîne vide,
+    // jamais `undefined` : `?? "postgresql"` ne s'y applique pas. Constaté en
+    // production — le middleware refusait alors absolument toutes les routes.
+    for (const raw of ["", "   ", "\t"]) {
+      setEnv("DATABASE_PROVIDER", raw);
+      resetConfigCache();
+      expect(config().dbProvider).toBe("postgresql");
+    }
+  });
 });
