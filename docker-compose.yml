@@ -28,6 +28,8 @@ services:
         DATABASE_PROVIDER: postgresql
     environment:
       DATABASE_URL: postgresql://scoring:${POSTGRES_PASSWORD:-scoring_local_dev}@db:5432/scoring
+      # Sans pooler, DIRECT_URL vaut la même valeur que DATABASE_URL.
+      DIRECT_URL: postgresql://scoring:${POSTGRES_PASSWORD:-scoring_local_dev}@db:5432/scoring
       DATABASE_PROVIDER: postgresql
     depends_on:
       db:
@@ -43,6 +45,7 @@ services:
         DATABASE_PROVIDER: postgresql
     environment:
       DATABASE_URL: postgresql://scoring:${POSTGRES_PASSWORD:-scoring_local_dev}@db:5432/scoring
+      DIRECT_URL: postgresql://scoring:${POSTGRES_PASSWORD:-scoring_local_dev}@db:5432/scoring
       DATABASE_PROVIDER: postgresql
       # Clés API de démonstration locale UNIQUEMENT.
       # En production : secret manager / KMS, jamais dans un fichier compose.

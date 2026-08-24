@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { prisma, safeQuery } from "@/lib/safe-db";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function CounterpartiesPage() {
+  // Toute page porteuse de données exige une session authentifiée.
+  await requireSession();
+
   const { data: items, dbAvailable } = await safeQuery(
     () =>
       prisma.counterparty.findMany({
@@ -67,7 +71,11 @@ export default async function CounterpartiesPage() {
                 const last = c.ratingRuns[0];
                 return (
                   <tr key={c.id}>
-                    <td>{c.name}</td>
+                    <td>
+                      <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }}>
+                        {c.name}
+                      </Link>
+                    </td>
                     <td className="muted">{c.ice ?? "—"}</td>
                     <td>{c.segment ?? "—"}</td>
                     <td className="muted">{c.sectorCode ?? "—"}</td>

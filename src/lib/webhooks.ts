@@ -1,6 +1,7 @@
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { prisma } from "./prisma";
 import { stableStringify } from "./api-utils";
+import { checkOutboundUrl } from "./url-safety";
 
 /**
  * Dispatch des webhooks sortants.
@@ -61,6 +62,25 @@ async function deliver(
   secret: string,
   event: WebhookEvent
 ): Promise<void> {
+  // Défense en profondeur : l'URL est revalidée au moment de la livraison.
+  // Une souscription peut avoir été créée avant l'ajout de ce contrôle, ou
+  // insérée directement en base.
+  const urlCheck = checkOutboundUrl(url);
+  if (!urlCheck.ok) {
+    await prisma.webhookDelivery.create({
+      data: {
+        subscriptionId,
+        eventId: randomUUID(),
+        eventType: event.type,
+        payload: "",
+        status: "FAILED",
+        attempts: 1,
+        lastError: `URL refusée : ${urlCheck.reasonFr}`,
+      },
+    });
+    return;
+  }
+
   const eventId = randomUUID();
   const timestamp = new Date().toISOString();
   const rawBody = stableStringify({
@@ -95,6 +115,9 @@ async function deliver(
       },
       body: rawBody,
       signal: controller.signal,
+      // Une redirection permettrait de contourner le contrôle d'URL : le
+      // consommateur doit exposer une adresse finale.
+      redirect: "manual",
     });
     clearTimeout(timer);
     await prisma.webhookDelivery.update({
@@ -116,4 +139,41 @@ async function deliver(
       },
     });
   }
+}
+
+/**
+ * Vérifie la signature d'un événement reçu — fournie aux intégrateurs comme
+ * implémentation de référence, et utilisée par les tests.
+ *
+ * Le consommateur doit également rejeter les horodatages hors fenêtre et
+ * mémoriser l'identifiant d'événement (livraison au moins une fois).
+ */
+export function verifySignature(
+  secret: string,
+  timestamp: string,
+  rawBody: string,
+  receivedSignature: string,
+  now = Date.now(),
+  toleranceSeconds = 300
+): { valid: boolean; reasonFr?: string } {
+  const expected = signPayload(secret, timestamp, rawBody);
+  const received = receivedSignature.replace(/^sha256=/, "");
+
+  const a = Buffer.from(expected, "hex");
+  const b = Buffer.from(received, "hex");
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return { valid: false, reasonFr: "Signature invalide." };
+  }
+
+  const sentAt = Date.parse(timestamp);
+  if (Number.isNaN(sentAt)) {
+    return { valid: false, reasonFr: "Horodatage illisible." };
+  }
+  if (Math.abs(now - sentAt) > toleranceSeconds * 1000) {
+    return {
+      valid: false,
+      reasonFr: `Horodatage hors fenêtre de ${toleranceSeconds} secondes (rejeu probable).`,
+    };
+  }
+  return { valid: true };
 }

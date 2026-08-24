@@ -17,14 +17,32 @@ docker compose up --build
 
 PostgreSQL est démarré en local, la migration s'exécute comme tâche séparée, puis l'application démarre. Aucune dépendance à un service en ligne.
 
-### En développement
+### Sur Supabase
 
 ```bash
 npm install
-cp .env.example .env          # renseigner DATABASE_URL et API_KEYS
+cp .env.example .env          # renseigner DATABASE_URL, DIRECT_URL, API_KEYS
+npm run db:provider
+npm run db:generate
+npm run db:check              # connexion, isolation du schéma, garde-fous
+npm run dev
+```
+
+Les tables vivent dans le schéma dédié **`corp_scoring`**, jamais dans
+`public`. Deux chaînes sont nécessaires : `DATABASE_URL` via le pooler
+(port 6543, `pgbouncer=true`) pour l'application, `DIRECT_URL` en connexion
+directe (port 5432) pour les migrations. Détails et procédure de migration
+vers un PostgreSQL autonome : [`docs/03-deploiement-supabase.md`](./docs/03-deploiement-supabase.md).
+
+### En développement local
+
+```bash
+npm install
+cp .env.example .env
 npm run db:provider           # génère le schéma pour DATABASE_PROVIDER
 npm run db:generate
 npm run db:push
+psql "$DIRECT_URL" -f prisma/sql/01-postgresql-hardening.sql
 npm run dev
 ```
 
@@ -36,7 +54,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 
 | Capacité | État |
 |---|---|
-| Notation interne de contrepartie (moteur A) | Opérationnel, 46 tests |
+| Notation interne de contrepartie (moteur A) | Opérationnel, 81 tests |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
 | Score de confiance et caps de qualité | Opérationnel |
 | Caps structurels et red flags | Opérationnel |
@@ -72,10 +90,20 @@ src/core/          moteur pur et déterministe
   grades.ts        échelle interne et application des caps
   validate-model.ts validateur de configuration
 src/models/        CORP_STD_V1 (45 critères), CORP_TPE_BEHAV_V1
-src/lib/           auth, audit transactionnel, webhooks signés, schémas Zod
+src/lib/
+  auth.ts          vérification des clés, temps constant
+  session.ts       session web (cookie HttpOnly), garde de page
+  route-guard.ts   garde unique : auth + débit + taille de corps
+  rate-limit.ts    limitation de débit par identité
+  url-safety.ts    contrôle anti-SSRF des URL sortantes
+  env.ts           configuration validée, échec au démarrage
+  audit.ts         audit transactionnel
+  webhooks.ts      signature HMAC, vérification de référence
+src/middleware.ts  en-têtes de sécurité, politique d'origine croisée
 src/app/api/v1/    interface REST
 prisma/schema.template.prisma  source canonique unique du schéma
-tests/             46 tests dont vecteurs d'agrégation exacts
+prisma/sql/        durcissement PostgreSQL rejouable
+tests/             81 tests : moteur, validation de modèle, sécurité
 ```
 
 ---
@@ -179,12 +207,36 @@ Choix de portabilité : identifiants textuels non séquentiels, aucun type énum
 
 ## Sécurité et audit
 
-- identité et rôle dérivés du jeton, jamais du payload ;
-- clés stockées sous forme d'empreinte, comparaison en temps constant ;
-- audit critique inscrit **dans la même transaction** que l'opération — si l'audit échoue, l'opération est annulée ;
-- dérogations sous double validation, auto-approbation refusée techniquement, limite de deux crans, amélioration d'un grade défaut interdite ;
-- validation stricte des payloads par schéma, rejet des propriétés inconnues ;
-- webhooks signés avec protection anti-rejeu.
+**Authentification et habilitations**
+
+- identité et rôle dérivés du jeton, jamais du payload ni d'un champ de formulaire ;
+- clés stockées sous forme d'empreinte, comparaison en temps constant, parcours sans sortie anticipée ;
+- longueur minimale de 24 caractères, aucun secret par défaut ;
+- interface web protégée par session (cookie HttpOnly, SameSite=Strict) ; toute page porteuse de données exige une session valide ;
+- garde unique appliqué aux 12 routes de l'API — aucune ne peut oublier un contrôle.
+
+**Intégrité des données**
+
+- audit critique inscrit **dans la même transaction** que l'opération : si l'audit échoue, l'opération est annulée ;
+- piste d'audit en ajout seul, garantie par un déclencheur PostgreSQL : ni mise à jour ni suppression possible depuis l'application ;
+- dérogations sous double validation, auto-approbation refusée techniquement, décision protégée contre la concurrence par relecture conditionnelle ;
+- idempotence robuste aux requêtes concurrentes (rejeu sur violation d'unicité, jamais d'erreur).
+
+**Surface réseau**
+
+- en-têtes de sécurité et politique de sécurité du contenu stricte ;
+- origines croisées en liste blanche, aucune autorisée par défaut ;
+- limitation de débit par identité, plafond de taille des corps de requête ;
+- URL de webhook contrôlées contre les requêtes forgées côté serveur — adresses privées, bouclage, métadonnées cloud et identifiants dans l'URL refusés, redirections non suivies ;
+- webhooks signés en HMAC SHA-256 avec protection anti-rejeu ;
+- validation stricte des payloads, rejet des propriétés inconnues, nombre de critères borné ;
+- aucun détail technique ni trace d'exécution exposé à l'utilisateur.
+
+**Isolation en base**
+
+- schéma dédié non exposé par PostgREST : la clé anon ne peut atteindre aucune donnée ;
+- droits retirés aux rôles publics, y compris pour les tables futures ;
+- sécurité au niveau des lignes activée sans politique, en défense en profondeur.
 
 ---
 
@@ -200,12 +252,15 @@ npm run build
 | Contrôle | Résultat |
 |---|---|
 | Contrôle de types | 0 erreur |
-| Tests | 46 tests, 46 passés |
+| Tests | 81 tests, 81 passés |
 | Construction | 20 routes compilées |
 | Schéma sur 4 dialectes | valide |
 | Idempotence du générateur de schéma | annotations intégralement restaurées après cycle complet |
 
-Les tests couvrent : validation des configurations (sommes de poids, exhaustivité des barèmes, détection de trous et d'incohérences d'inclusivité), vecteurs d'agrégation exacts, bornes de barème une à une, monotonie, segmentation dans tous ses cas, caps isolés et combinés, red flags, défaut forcé, distinction entre non applicable et manquant, refus d'un score client sur critère quantitatif, reproductibilité.
+Les tests couvrent :
+
+- **moteur** — validation des configurations (sommes de poids, exhaustivité des barèmes, détection de trous et d'incohérences d'inclusivité), vecteurs d'agrégation exacts, bornes de barème une à une, monotonie, segmentation dans tous ses cas, caps isolés et combinés, red flags, défaut forcé, distinction entre non applicable et manquant, refus d'un score client sur critère quantitatif, reproductibilité ;
+- **sécurité** — 13 formes d'adresses internes refusées sur les webhooks, limitation de débit et isolation entre identités, signature HMAC avec corps altéré, secret différent et rejeu hors fenêtre, validation des entrées (propriété inconnue, score hors ancrage, critères non bornés, injection dans un code de red flag), configuration invalide.
 
 ---
 
@@ -218,6 +273,7 @@ Les tests couvrent : validation des configurations (sommes de poids, exhaustivit
 | `docs/01-note-methodologique-complete.md` | Note complète, grilles incluses (générée) |
 | `dist/Note_methodologique_scoring_entreprises_Maroc_V2.docx` | Version Word, page de garde et table des matières |
 | [`docs/02-prompt-maitre-v2.md`](./docs/02-prompt-maitre-v2.md) | Prompt maître V2 à remettre à une IA de développement |
+| [`docs/03-deploiement-supabase.md`](./docs/03-deploiement-supabase.md) | Raccordement Supabase, durcissement, migration vers PostgreSQL autonome |
 | [`openapi.yaml`](./openapi.yaml) | Contrat d'interface OpenAPI 3.1 |
 
 ### Cohérence documentation / code
@@ -244,7 +300,7 @@ Toute modification d'un poids ou d'un seuil dans `src/models/` se répercute dan
 4. Le référentiel sectoriel n'est pas alimenté ; les critères qui s'y réfèrent utilisent des ancrages qualitatifs.
 5. La méthode de support groupe est spécifiée, non implémentée.
 6. Oracle n'est pas certifié.
-7. L'authentification par clé doit être remplacée par le fournisseur d'identité de la banque.
+7. L'authentification par clé (API et session web) doit être remplacée par le fournisseur d'identité de la banque.
 8. Imports de masse, alerte précoce et multilinguisme arabe restent à construire.
 
 Le registre complet figure en annexe B de la note méthodologique.

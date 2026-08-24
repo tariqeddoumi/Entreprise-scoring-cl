@@ -12,7 +12,13 @@ info:
         le serveur recalcule tout depuis la version de modèle publiée ;
       * `Idempotency-Key` sur les créations et les calculs persistés ;
       * erreurs au format RFC 9457 (`application/problem+json`), sans stack trace ;
-      * aucune PD n'est renvoyée tant que `pdStatus != CALIBRATED`.
+      * aucune PD n'est renvoyée tant qu'aucune calibration n'est attachée à la
+        version de modèle ;
+      * `pdStatus = CALIBRATED_SYNTHETIC` signale une PD issue de données
+        **simulées** : elle valide la chaîne de traitement, jamais le niveau du
+        risque, et ne doit alimenter ni provision IFRS 9, ni exigence en fonds
+        propres, ni décision d'octroi. Tout consommateur de l'API doit traiter
+        ce statut distinctement de `CALIBRATED`.
   contact:
     name: Direction des Risques — Modèles de crédit entreprises
 servers:
@@ -193,6 +199,52 @@ paths:
                 properties:
                   simulation: { type: boolean }
                   result: { $ref: "#/components/schemas/RatingResult" }
+
+  /rating-runs/compare:
+    post:
+      tags: [Notation]
+      summary: Attribue l'écart entre deux notations d'une même contrepartie
+      description: |
+        Répond à « pourquoi la note a-t-elle changé ? » en décomposant l'écart
+        par domaine puis par critère, et en signalant les caps et red flags
+        apparus ou levés.
+
+        La comparaison s'appuie sur les instantanés persistés : elle reste
+        valable même si la version de modèle a évolué depuis. Deux runs de
+        modèles ou de segments différents sont déclarés non comparables plutôt
+        que rapprochés à tort.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [previousRunId, currentRunId]
+              properties:
+                previousRunId: { type: string }
+                currentRunId: { type: string }
+      responses:
+        "200":
+          description: Attribution de l'écart
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comparison:
+                    type: object
+                    properties:
+                      comparable: { type: boolean }
+                      incomparableReasonFr: { type: string }
+                      scoreDelta: { type: number, nullable: true }
+                      gradeChanged: { type: boolean }
+                      domainDeltas: { type: array, items: { type: object } }
+                      criterionDeltas: { type: array, items: { type: object } }
+                      capChangesFr: { type: array, items: { type: string } }
+                      redFlagChangesFr: { type: array, items: { type: string } }
+                      summaryFr: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { description: Runs de contreparties différentes }
 
   /rating-runs/{id}:
     get:
@@ -463,11 +515,24 @@ components:
         warningsFr: { type: array, items: { type: string } }
         pdStatus:
           type: string
-          enum: [UNCALIBRATED, CALIBRATED, TECHNICAL_ONLY_DISABLED]
+          enum: [UNCALIBRATED, CALIBRATED, CALIBRATED_SYNTHETIC, TECHNICAL_ONLY_DISABLED]
+          description: >
+            CALIBRATED_SYNTHETIC désigne une PD calibrée sur données simulées :
+            à ne jamais confondre avec CALIBRATED, qui suppose des défauts
+            observés.
         pd12m:
           type: number
           nullable: true
-          description: Toujours null tant que pdStatus n'est pas CALIBRATED
+          description: >
+            PD à 12 mois du grade final. Nulle quand aucun grade final n'est
+            produit, ou quand la version de modèle ne porte pas de calibration.
+            Vaut 1 pour un défaut constaté.
+        calibrationId:
+          type: string
+          nullable: true
+          description: >
+            Identifiant de la calibration appliquée. Consigné dans l'instantané
+            pour que la notation reste rejouable.
         explanationFr: { type: string }
         computedAt: { type: string, format: date-time }
 

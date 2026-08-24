@@ -1,6 +1,8 @@
+import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
 import { CORP_STD_V1 } from "./corp-std-v1";
+import calibrationJson from "./calibrations/CORP_TPE_BEHAV_V1-SYNTH-20260824.json";
 
 /**
  * CORP_TPE_BEHAV_V1 — Variante TPE comportementale (seed séparé).
@@ -29,7 +31,18 @@ const criteria: CriterionConfig[] = [
     unit: " j",
     weightsBps: { TPE: 800 },
     binsBySegment: { ALL: bins5("LOWER_IS_BETTER", [0, 7, 30, 60]) },
-    specialCasesFr: ["Impayé non régularisé ou signal UTP => score 0 et RF06/RF07"],
+    specialCases: [
+      {
+        code: "UNPAID_NOT_CURED",
+        labelFr: "Impayé non régularisé — à instruire avec RF06/RF07",
+        score: 0,
+      },
+      {
+        code: "UNLIKELY_TO_PAY",
+        labelFr: "Signal d'incapacité probable de payer — à instruire avec RF06",
+        score: 0,
+      },
+    ],
     missingPolicy: "BLOCK",
     critical: true,
   },
@@ -119,7 +132,18 @@ const criteria: CriterionConfig[] = [
     unit: " %",
     weightsBps: { TPE: 500 },
     binsBySegment: { ALL: bins5("LOWER_IS_BETTER", [15, 25, 40, 60]) },
-    specialCasesFr: ["Baisse de flux > 30 % => score 0 ; baisse > 15 % => score ≤ 25"],
+    specialCases: [
+      {
+        code: "FLOWS_DOWN_OVER_30PCT",
+        labelFr: "Encaissements en baisse de plus de 30 % sur la période",
+        score: 0,
+      },
+      {
+        code: "FLOWS_DOWN_OVER_15PCT",
+        labelFr: "Encaissements en baisse de plus de 15 % sur la période",
+        score: 25,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -179,7 +203,13 @@ const criteria: CriterionConfig[] = [
     unit: " ans",
     weightsBps: { TPE: 300 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [7, 5, 3, 2]) },
-    specialCasesFr: ["< 2 ans sans support/contrat fort => score 0 et cap CAP01"],
+    specialCases: [
+      {
+        code: "UNDER_2Y_NO_SUPPORT",
+        labelFr: "Moins de deux ans d'activité sans support ni contrat structurant — déclenche le cap CAP01",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -325,7 +355,13 @@ const criteria: CriterionConfig[] = [
     unit: " %",
     weightsBps: { TPE: 400 },
     binsBySegment: { ALL: bins5("LOWER_IS_BETTER", [5, 10, 20, 30]) },
-    specialCasesFr: ["Incohérence majeure => score 0 et RF16"],
+    specialCases: [
+      {
+        code: "MAJOR_INCONSISTENCY",
+        labelFr: "Incohérence majeure entre flux, chiffre d'affaires déclaré et données fiscales",
+        score: 0,
+      },
+    ],
     missingPolicy: "BLOCK",
     critical: true,
   },
@@ -399,6 +435,17 @@ const criteria: CriterionConfig[] = [
   },
 ];
 
+/**
+ * Calibration attachée : DONNÉES SIMULÉES, propre à ce modèle.
+ *
+ * Elle n'est PAS transposable depuis le modèle standard : les deux grilles
+ * n'observent pas la même chose — flux bancaires ici, états financiers là — et
+ * ne produisent pas la même distribution de grades. Les scores des deux modèles
+ * ne sont pas comparables sans table de correspondance validée ; leurs PD non
+ * plus.
+ */
+const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
+
 export const CORP_TPE_BEHAV_V1: ModelConfig = {
   modelId: "CORP_TPE_BEHAV_V1",
   version: "1.0.0",
@@ -426,5 +473,6 @@ export const CORP_TPE_BEHAV_V1: ModelConfig = {
   confidenceCaps: CORP_STD_V1.confidenceCaps,
   segmentation: CORP_STD_V1.segmentation,
   pdStatus: "UNCALIBRATED",
+  calibration: SYNTHETIC_CALIBRATION,
   disclaimerFr: CORP_STD_V1.disclaimerFr,
 };

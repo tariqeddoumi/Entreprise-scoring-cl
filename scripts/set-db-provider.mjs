@@ -46,6 +46,18 @@ schema = schema.replace(
   `provider = "${provider}"`
 );
 
+// PostgreSQL uniquement : `directUrl` permet aux migrations d'emprunter une
+// connexion directe alors que l'application passe par un pooler de
+// transactions (Supabase pgBouncer, PgBouncer, RDS Proxy…). Sans cela, les
+// migrations échouent sur un pooler en mode transaction.
+if (provider === "postgresql") {
+  schema = schema.replace(
+    /(datasource db \{\n(?:.*\n)*?\s*url\s*=\s*env\("DATABASE_URL"\)\n)/,
+    '$1  // Connexion directe pour les migrations (facultative hors pooler).\n' +
+      '  directUrl = env("DIRECT_URL")\n'
+  );
+}
+
 if (provider === "mysql") {
   schema = schema.replace(/@db\.Text/g, "@db.LongText");
 } else if (provider === "sqlserver") {

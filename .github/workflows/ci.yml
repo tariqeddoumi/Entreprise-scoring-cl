@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
       DATABASE_PROVIDER: postgresql
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +52,8 @@ jobs:
         # postgresql:// sur un datasource sqlserver.
         run: |
           case "${{ matrix.provider }}" in
-            postgresql) export DATABASE_URL="postgresql://ci:ci@localhost:5432/ci" ;;
+            postgresql) export DATABASE_URL="postgresql://ci:ci@localhost:5432/ci"
+                        export DIRECT_URL="$DATABASE_URL" ;;
             mysql)      export DATABASE_URL="mysql://ci:ci@localhost:3306/ci" ;;
             sqlserver)  export DATABASE_URL="sqlserver://localhost:1433;database=ci;user=ci;password=ci" ;;
             sqlite)     export DATABASE_URL="file:./ci.db" ;;

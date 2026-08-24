@@ -54,6 +54,8 @@ export function ScoringForm({ model, counterparties }: Props) {
     provenance: 75,
   });
   const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [companyAgeYears, setCompanyAgeYears] = useState("");
+  const [hasStrongGroupSupport, setHasStrongGroupSupport] = useState(false);
   const [redFlags, setRedFlags] = useState<string[]>([]);
   const [defaultTriggered, setDefaultTriggered] = useState(false);
   const [pending, setPending] = useState(false);
@@ -102,9 +104,15 @@ export function ScoringForm({ model, counterparties }: Props) {
       asOfDate,
       criteria: payloadCriteria,
       confidence,
-      structuralFlags: Object.fromEntries(
-        Object.entries(flags).filter(([, v]) => v)
-      ),
+      structuralFlags: {
+        ...Object.fromEntries(Object.entries(flags).filter(([, v]) => v)),
+        // L'ancienneté conditionne le cap CAP01 : sans elle, ce cap ne peut
+        // jamais se déclencher depuis l'interface.
+        ...(companyAgeYears !== "" && !Number.isNaN(Number(companyAgeYears))
+          ? { companyAgeYears: Number(companyAgeYears) }
+          : {}),
+        ...(hasStrongGroupSupport ? { hasStrongGroupSupport: true } : {}),
+      },
       redFlags,
       defaultTriggered,
     };
@@ -169,6 +177,41 @@ export function ScoringForm({ model, counterparties }: Props) {
                 </option>
               ))}
             </select>
+          </label>
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "220px 1fr",
+            gap: 12,
+            marginTop: 12,
+            alignItems: "end",
+          }}
+        >
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Ancienneté de l&apos;entreprise (années)
+            </div>
+            <input
+              type="number"
+              min={0}
+              step="0.5"
+              placeholder="ex. 7"
+              value={companyAgeYears}
+              onChange={(e) => setCompanyAgeYears(e.target.value)}
+            />
+          </label>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", paddingBottom: 8 }}>
+            <input
+              type="checkbox"
+              style={{ width: 16 }}
+              checked={hasStrongGroupSupport}
+              onChange={(e) => setHasStrongGroupSupport(e.target.checked)}
+            />
+            <span style={{ fontSize: 13 }}>
+              Support de groupe juridiquement robuste (lève le cap CAP01 pour une
+              entreprise de moins de deux ans)
+            </span>
           </label>
         </div>
       </section>
@@ -441,19 +484,23 @@ function CriterionRow({
                     .join(" | ")}
                 </div>
               )}
-              {criterion.specialCasesFr && criterion.specialCasesFr.length > 0 && (
-                <label style={{ display: "flex", gap: 8, marginTop: 6, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    style={{ width: 16 }}
-                    checked={state.specialCase !== ""}
-                    onChange={(e) =>
-                      onChange({ specialCase: e.target.checked ? "SPECIAL_CASE" : "" })
-                    }
-                  />
+              {criterion.specialCases && criterion.specialCases.length > 0 && (
+                <label style={{ display: "block", marginTop: 6 }}>
                   <span className="muted" style={{ fontSize: 11 }}>
-                    {criterion.specialCasesFr.join(" ; ")}
+                    Cas particulier (prime sur la valeur mesurée)
                   </span>
+                  <select
+                    value={state.specialCase}
+                    onChange={(e) => onChange({ specialCase: e.target.value })}
+                    style={{ marginTop: 3 }}
+                  >
+                    <option value="">— aucun —</option>
+                    {criterion.specialCases.map((sc) => (
+                      <option key={sc.code} value={sc.code}>
+                        {sc.labelFr} (score {sc.score})
+                      </option>
+                    ))}
+                  </select>
                 </label>
               )}
             </div>

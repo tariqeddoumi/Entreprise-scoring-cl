@@ -29,6 +29,8 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  // Connexion directe pour les migrations (facultative hors pooler).
+  directUrl = env("DIRECT_URL")
 }
 
 // --- Référentiel contreparties ---------------------------------------------

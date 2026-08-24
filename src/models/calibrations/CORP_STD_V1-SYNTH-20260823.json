@@ -1,0 +1,83 @@
+{
+  "calibrationId": "CORP_STD_V1-SYNTH-20260823",
+  "contentHash": "1bc6a5360c95e41c017c4e1f5ad75f56c5819b8dcd0ce983969402b182936e92",
+  "modelId": "CORP_STD_V1",
+  "modelVersion": "1.0.0",
+  "dataSource": "SYNTHETIC",
+  "createdAt": "2026-08-24T06:01:54.683Z",
+  "horizonMonths": 12,
+  "methodFr": "PD à 12 mois calibrée par grade : taux de défaut observé avec correction de continuité, rétréci vers une tendance log-linéaire sur le rang du grade proportionnellement au nombre de défauts, monotonie imposée par régression isotone pondérée, marge de prudence relative puis plancher. La calibration porte sur le grade final et non sur le score brut, afin de conserver l'effet des caps.",
+  "seed": 20260823,
+  "floor": 0.0003,
+  "marginOfConservatism": 0.1,
+  "centralTendency": 0.047597512719050314,
+  "curve": {
+    "intercept": 1.2479284445367007,
+    "slope": -6.737754970966973
+  },
+  "gradePd": [
+    {
+      "grade": "G1",
+      "pd": 0.001467567749361496,
+      "count": 481,
+      "observedRate": 0
+    },
+    {
+      "grade": "G2",
+      "pd": 0.0026938640263701337,
+      "count": 435,
+      "observedRate": 0.0022988505747126436
+    },
+    {
+      "grade": "G3",
+      "pd": 0.006374798297459786,
+      "count": 530,
+      "observedRate": 0.011320754716981131
+    },
+    {
+      "grade": "G4",
+      "pd": 0.010157820225047923,
+      "count": 4742,
+      "observedRate": 0.009700548291859975
+    },
+    {
+      "grade": "G5",
+      "pd": 0.016037757186712166,
+      "count": 1754,
+      "observedRate": 0.014823261117445839
+    },
+    {
+      "grade": "G6",
+      "pd": 0.028269412691690265,
+      "count": 1583,
+      "observedRate": 0.025900189513581806
+    },
+    {
+      "grade": "G7",
+      "pd": 0.03895288436139878,
+      "count": 4784,
+      "observedRate": 0.03469899665551839
+    },
+    {
+      "grade": "G8",
+      "pd": 0.06504833509179482,
+      "count": 1506,
+      "observedRate": 0.05644090305444887
+    },
+    {
+      "grade": "G9",
+      "pd": 0.14773032110582854,
+      "count": 2215,
+      "observedRate": 0.1345372460496614
+    },
+    {
+      "grade": "G10",
+      "pd": 0.23725973597820937,
+      "count": 1315,
+      "observedRate": 0.21596958174904943
+    }
+  ],
+  "defaultGradePd": 1,
+  "sampleSize": 19345,
+  "limitationsFr": "Calibration établie sur des données SIMULÉES. Elle valide la chaîne de traitement et l'ordonnancement de l'échelle, non le niveau des probabilités. Elle ne doit alimenter ni un calcul de provision IFRS 9, ni une exigence en fonds propres, ni une décision d'octroi."
+}

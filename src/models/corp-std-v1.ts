@@ -1,5 +1,7 @@
+import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
+import calibrationJson from "./calibrations/CORP_STD_V1-SYNTH-20260823.json";
 
 /**
  * CORP_STD_V1 — Modèle expert initial de notation interne des entreprises
@@ -90,7 +92,13 @@ const criteria: CriterionConfig[] = [
       PME: bins5("HIGHER_IS_BETTER", [35, 25, 15, 8]),
       GE: bins5("HIGHER_IS_BETTER", [30, 20, 12, 5]),
     },
-    specialCasesFr: ["FP tangibles négatifs => score 0 et cap structurel CAP02"],
+    specialCases: [
+      {
+        code: "NEGATIVE_TANGIBLE_EQUITY",
+        labelFr: "Fonds propres tangibles négatifs — déclenche également le cap CAP02",
+        score: 0,
+      },
+    ],
     missingPolicy: "BLOCK",
     critical: true,
     evidenceRequiredFr: ["Bilan et retraitements des incorporels/non-valeurs"],
@@ -111,7 +119,13 @@ const criteria: CriterionConfig[] = [
       PME: bins5("LOWER_IS_BETTER", [1.5, 2.5, 3.5, 5.0]),
       GE: bins5("LOWER_IS_BETTER", [1.5, 2.5, 3.5, 4.5]),
     },
-    specialCasesFr: ["EBITDA ≤ 0 => score 0 (cas EBITDA_LTE_0)"],
+    specialCases: [
+      {
+        code: "EBITDA_LTE_0",
+        labelFr: "EBITDA nul ou négatif : le levier n'est pas calculable, la situation est défavorable",
+        score: 0,
+      },
+    ],
     missingPolicy: "BLOCK",
     critical: true,
     evidenceRequiredFr: ["États financiers", "Trace des retraitements dette/trésorerie"],
@@ -131,7 +145,13 @@ const criteria: CriterionConfig[] = [
       PME: bins5("HIGHER_IS_BETTER", [1.5, 1.25, 1.0, 0.8]),
       GE: bins5("HIGHER_IS_BETTER", [1.4, 1.2, 1.0, 0.85]),
     },
-    specialCasesFr: ["Rupture de trésorerie avérée => score 0"],
+    specialCases: [
+      {
+        code: "CASH_BREAK",
+        labelFr: "Rupture de trésorerie avérée sur la période",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -165,7 +185,13 @@ const criteria: CriterionConfig[] = [
     formulaFr: "0,5×(CFO/EBITDA)_N + 0,3×(CFO/EBITDA)_N−1 + 0,2×(CFO/EBITDA)_N−2",
     weightsBps: { TPE: 200, PME: 300, GE: 500 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [90, 70, 50, 20]) },
-    specialCasesFr: ["EBITDA ≤ 0 => score 0 (cas EBITDA_LTE_0)"],
+    specialCases: [
+      {
+        code: "EBITDA_LTE_0",
+        labelFr: "EBITDA nul ou négatif : la conversion en trésorerie n'est pas mesurable",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -221,7 +247,13 @@ const criteria: CriterionConfig[] = [
     unit: " %",
     weightsBps: { TPE: 100, PME: 200, GE: 300 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [20, 12, 5, 0]) },
-    specialCasesFr: ["FCF négatif deux années sur trois => score 0"],
+    specialCases: [
+      {
+        code: "FCF_NEGATIVE_2_OF_3",
+        labelFr: "Free cash-flow négatif deux années sur trois",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -254,7 +286,13 @@ const criteria: CriterionConfig[] = [
     unit: "x",
     weightsBps: { TPE: 200, PME: 300, GE: 400 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [1.4, 1.2, 1.0, 0.8]) },
-    specialCasesFr: ["Rupture de liquidité sous stress sans mesures crédibles => score 0"],
+    specialCases: [
+      {
+        code: "STRESS_LIQUIDITY_BREAK",
+        labelFr: "Rupture de liquidité sous stress, sans mesure de redressement crédible",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -289,7 +327,18 @@ const criteria: CriterionConfig[] = [
     unit: " j",
     weightsBps: { TPE: 600, PME: 500, GE: 250 },
     binsBySegment: { ALL: bins5("LOWER_IS_BETTER", [0, 7, 30, 60]) },
-    specialCasesFr: ["Impayé non régularisé ou signal UTP => score 0 et RF06/RF07"],
+    specialCases: [
+      {
+        code: "UNPAID_NOT_CURED",
+        labelFr: "Impayé non régularisé — à instruire avec RF06/RF07",
+        score: 0,
+      },
+      {
+        code: "UNLIKELY_TO_PAY",
+        labelFr: "Signal d'incapacité probable de payer — à instruire avec RF06",
+        score: 0,
+      },
+    ],
     missingPolicy: "BLOCK",
     critical: true,
     evidenceRequiredFr: ["Système autoritatif DPD banque"],
@@ -340,7 +389,18 @@ const criteria: CriterionConfig[] = [
     unit: " %",
     weightsBps: { TPE: 400, PME: 300, GE: 150 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [110, 90, 70, 50]) },
-    specialCasesFr: ["Flux artificiels ou activité bancaire quasi arrêtée => score 0"],
+    specialCases: [
+      {
+        code: "ARTIFICIAL_FLOWS",
+        labelFr: "Mouvements créditeurs artificiels (virements circulaires, allers-retours)",
+        score: 0,
+      },
+      {
+        code: "BANKING_ACTIVITY_STOPPED",
+        labelFr: "Activité bancaire quasi arrêtée sur la période",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -438,34 +498,50 @@ const criteria: CriterionConfig[] = [
     domainCode: "D4",
     labelFr: "Concentration clients",
     descriptionFr:
-      "CA réel par client/groupe client, ventes liées éliminées. Seuils segmentés — TPE : 100 si Top1 ≤ 15 % et Top5 ≤ 50 % … 0 si Top1 > 50 % ; PME : 100 si Top1 ≤ 10 % et Top5 ≤ 40 % … 0 si Top1 > 45 % ; GE : 100 si Top1 ≤ 10 % et Top5 ≤ 35 % … 0 si Top1 > 40 %. Mitigation contractuelle documentée : +1 cran maximum.",
-    type: "QUALITATIVE",
+      "Part du premier client (ou groupe client) dans le chiffre d'affaires, en %, après élimination des ventes liées et circulaires. Le barème est appliqué par le moteur : l'analyste renseigne une mesure, il ne choisit pas un niveau. Une mitigation contractuelle documentée peut relever d'un cran au maximum, via une dérogation tracée.",
+    type: "QUANTITATIVE",
+    direction: "LOWER_IS_BETTER",
+    unit: " %",
+    formulaFr: "CA_premier_client / CA_total",
     weightsBps: { TPE: 250, PME: 200, GE: 150 },
-    anchors: anchors(
-      "Concentration très faible (Top1/Top5 sous les seuils 100 du segment)",
-      "Concentration faible (seuils 75 du segment)",
-      "Concentration moyenne (seuils 50 du segment)",
-      "Concentration élevée (seuils 25 du segment)",
-      "Concentration critique ou perte probable du client principal"
-    ),
+    binsBySegment: {
+      TPE: bins5("LOWER_IS_BETTER", [15, 25, 35, 50]),
+      PME: bins5("LOWER_IS_BETTER", [10, 20, 30, 45]),
+      GE: bins5("LOWER_IS_BETTER", [10, 15, 25, 40]),
+    },
+    specialCases: [
+      {
+        code: "MAIN_CLIENT_LOSS_LIKELY",
+        labelFr: "Perte probable du client principal (préavis reçu, appel d'offres perdu)",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
+    evidenceRequiredFr: ["Balance clients", "Élimination des ventes intragroupe"],
   },
   {
     code: "D4.4",
     domainCode: "D4",
     labelFr: "Concentration fournisseurs",
-    type: "QUALITATIVE",
+    descriptionFr:
+      "Part du premier fournisseur dans les achats, en %. La substituabilité et le délai de remplacement sont appréciés séparément en D4.7 (risque opérationnel) : le présent critère mesure la dépendance, pas sa mitigation.",
+    type: "QUANTITATIVE",
+    direction: "LOWER_IS_BETTER",
+    unit: " %",
+    formulaFr: "achats_premier_fournisseur / achats_totaux",
     weightsBps: { TPE: 200, PME: 150, GE: 150 },
-    anchors: anchors(
-      "Aucun fournisseur critique > 15 % ou alternatives qualifiées immédiates ; stocks de sécurité adaptés",
-      "Top fournisseur 15–25 %, deux alternatives crédibles, contrat sécurisé",
-      "Top fournisseur 25–40 %, remplacement possible en 1–3 mois à coût maîtrisé",
-      "Top fournisseur 40–60 %, remplacement difficile > 3 mois, dépendance import/pays non couverte",
-      "Top fournisseur > 60 %, mono-source vital, rupture/embargo probable ou fournisseur lié en difficulté"
-    ),
+    binsBySegment: { ALL: bins5("LOWER_IS_BETTER", [15, 25, 40, 60]) },
+    specialCases: [
+      {
+        code: "VITAL_SINGLE_SOURCE",
+        labelFr: "Mono-source vitale sans alternative qualifiée, ou fournisseur lié en difficulté",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
+    evidenceRequiredFr: ["Balance fournisseurs", "Cartographie des alternatives"],
   },
   {
     code: "D4.5",
@@ -687,7 +763,13 @@ const criteria: CriterionConfig[] = [
       PME: bins5("LOWER_IS_BETTER", [90, 150, 210, 300]),
       GE: bins5("LOWER_IS_BETTER", [75, 120, 180, 270]),
     },
-    specialCasesFr: ["Refus de production => score 0"],
+    specialCases: [
+      {
+        code: "PRODUCTION_REFUSED",
+        labelFr: "Refus de produire l'information financière",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -702,7 +784,13 @@ const criteria: CriterionConfig[] = [
     unit: " %",
     weightsBps: { TPE: 150, PME: 100, GE: 100 },
     binsBySegment: { ALL: bins5("LOWER_IS_BETTER", [2, 5, 10, 20]) },
-    specialCasesFr: ["Manipulation probable => score 0 et RF03/RF16 selon le cas"],
+    specialCases: [
+      {
+        code: "PROBABLE_MANIPULATION",
+        labelFr: "Manipulation probable de l'information — à instruire avec RF03/RF16",
+        score: 0,
+      },
+    ],
     missingPolicy: "WARN",
     critical: false,
   },
@@ -808,6 +896,16 @@ const criteria: CriterionConfig[] = [
   },
 ];
 
+/**
+ * Calibration attachée : DONNÉES SIMULÉES.
+ *
+ * L'artefact JSON est la pièce de référence — il porte son empreinte de contenu
+ * et se régénère par `npx tsx scripts/calibration/run.mts`. Il est importé tel
+ * quel plutôt que recopié, pour qu'aucune divergence ne puisse s'installer entre
+ * la calibration auditée et celle que le moteur applique.
+ */
+const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
+
 export const CORP_STD_V1: ModelConfig = {
   modelId: "CORP_STD_V1",
   version: "1.0.0",
@@ -887,7 +985,11 @@ export const CORP_STD_V1: ModelConfig = {
       "Seed inspiré de la segmentation prudentielle des entreprises (BAM) — seuils, définitions de CA/exposition et traitement du groupe À CONFIRMER dans le corpus BAM applicable avant production.",
     status: "SEED_TO_CONFIRM",
   },
+  // Le statut porté ici est le statut PAR DÉFAUT, appliqué quand aucune
+  // calibration n'est attachée. Dès qu'une calibration l'est, le moteur le
+  // remplace par CALIBRATED ou CALIBRATED_SYNTHETIC selon l'origine des données.
   pdStatus: "UNCALIBRATED",
+  calibration: SYNTHETIC_CALIBRATION,
   disclaimerFr:
-    "Modèle expert seed non calibré. Aucune PD n'est produite tant que la calibration empirique n'est pas réalisée et validée indépendamment (pd_status = UNCALIBRATED). Les seuils ne sont ni des règles BAM ni des paramètres IFRS 9.",
+    "Modèle expert seed. La calibration attachée est établie sur données SIMULÉES : elle valide la chaîne de traitement et l'ordonnancement de l'échelle, jamais le niveau des probabilités. Aucune PD produite par ce modèle ne doit alimenter un calcul de provision IFRS 9, une exigence en fonds propres ou une décision d'octroi tant qu'une calibration sur défauts observés n'a pas été réalisée et validée indépendamment. Les seuils ne sont ni des règles BAM ni des paramètres IFRS 9.",
 };

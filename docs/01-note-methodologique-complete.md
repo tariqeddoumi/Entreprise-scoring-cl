@@ -70,7 +70,7 @@ Le dispositif présenté répond à ces trois points. Il propose un **modèle ex
 
 Deux caractéristiques méritent l'attention de la Direction générale.
 
-**Le modèle ne prétend pas prédire une probabilité de défaut.** Il produit un classement ordinal fiable et explicable. Le statut de calibration est affiché en permanence comme non calibré, et l'outil bloque techniquement l'usage de ce score pour IFRS 9, la tarification ou le capital réglementaire. C'est une position volontairement prudente : un score expert présenté comme une probabilité de défaut exposerait l'établissement à une critique immédiate de la validation indépendante et du superviseur. La calibration viendra de l'historique que ce dispositif permettra précisément de constituer.
+**Le modèle ne prétend pas prédire une probabilité de défaut.** Il produit un classement ordinal fiable et explicable. La calibration actuellement attachée est établie sur des données **simulées** : elle porte un statut distinct, `CALIBRATED_SYNTHETIC`, et l'outil signale son origine partout où la probabilité est restituée. L'usage de ce score pour IFRS 9, la tarification ou le capital réglementaire reste exclu jusqu'à une calibration sur défauts observés, validée indépendamment. C'est une position volontairement prudente : un score expert présenté comme une probabilité de défaut exposerait l'établissement à une critique immédiate de la validation indépendante et du superviseur. La calibration viendra de l'historique que ce dispositif permettra précisément de constituer.
 
 **Les cinq finalités restent séparées.** La notation de la contrepartie, la décision de crédit, la classification réglementaire, le staging IFRS 9 et le calcul de capital sont cinq moteurs distincts. Une garantie peut réduire la perte en cas de défaut, sécuriser une décision ou modifier une pondération prudentielle ; elle ne rend jamais l'emprunteur intrinsèquement meilleur. Cette séparation, structurante pour l'architecture, est la principale différence avec des outils de place qui agrègent tout dans un score unique.
 
@@ -140,7 +140,7 @@ Le poids relatif des domaines varie selon le segment, selon une logique défenda
 |---|---|---|
 | Les seuils experts s'avèrent mal calibrés sur le portefeuille réel | Élevée | Tous les seuils sont des paramètres versionnés, modifiables sans livraison de code ; pilote en mode fantôme obligatoire avant usage contraignant |
 | Données comptables insuffisantes sur la TPE | Élevée | Modèle TPE comportemental distinct, avec identifiant, poids et calibration propres ; aucune note moyenne attribuée par défaut |
-| Le score expert est utilisé comme une probabilité de défaut | Moyenne | Blocage technique : aucune PD n'est produite ni exposée par l'API tant que le statut est non calibré |
+| Le score expert est utilisé comme une probabilité de défaut | Moyenne | Statut de calibration distinct et propagé au contrat d'interface, à l'instantané persisté et à l'écran de résultat ; toute probabilité issue de données simulées est marquée `CALIBRATED_SYNTHETIC` et accompagnée de son avertissement |
 | Dérive des pratiques de dérogation | Moyenne | Double validation, limite de crans, motifs codifiés, suivi des taux et contrôle a posteriori des grades brut et final |
 | Divergence entre la documentation et le calcul réel | Moyenne | Les grilles de la Partie III sont **générées depuis le code du moteur** ; toute modification se répercute à la régénération |
 | Dépendance à un fournisseur de base de données ou de cloud | Moyenne | Source de schéma unique générant quatre dialectes ; déploiement local en une commande ; aucune dépendance à un service en ligne |
@@ -188,7 +188,7 @@ Les variables qui échouent sur la disponibilité sur un segment donné y reçoi
 
 ### 8.4 Approche de pondération
 
-Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global, afin qu'aucune variable isolée ne détermine la note ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
+Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global dans le modèle standard, afin qu'aucune variable isolée ne détermine la note — le modèle TPE comportemental admet un plafond de 8 %, la mesure des retards de paiement y étant la variable la plus discriminante disponible ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
 
 Ces poids sont des hypothèses documentées, destinées à être challengées sur le portefeuille de la banque, puis remplacées par des coefficients estimés lors du passage au modèle challenger.
 
@@ -555,7 +555,11 @@ FP tangibles / total bilan ajusté, en %. Une réévaluation non liquide ou une 
 | PME | ≥ 35 % | [25 % ; 35 %[ | [15 % ; 25 %[ | [8 % ; 15 %[ | < 8 % |
 | GE | ≥ 30 % | [20 % ; 30 %[ | [12 % ; 20 %[ | [5 % ; 12 %[ | < 5 % |
 
-**Cas particuliers :** FP tangibles négatifs => score 0 et cap structurel CAP02.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `NEGATIVE_TANGIBLE_EQUITY` | Fonds propres tangibles négatifs — déclenche également le cap CAP02 | 0 |
 
 **Justificatifs requis :** Bilan et retraitements des incorporels/non-valeurs.
 
@@ -573,7 +577,11 @@ Dette nette négative : score 100 uniquement si trésorerie libre, durable, rapp
 | PME | ≤ 1.5x | ]1.5x ; 2.5x] | ]2.5x ; 3.5x] | ]3.5x ; 5x] | > 5x |
 | GE | ≤ 1.5x | ]1.5x ; 2.5x] | ]2.5x ; 3.5x] | ]3.5x ; 4.5x] | > 4.5x |
 
-**Cas particuliers :** EBITDA ≤ 0 => score 0 (cas EBITDA_LTE_0).
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `EBITDA_LTE_0` | EBITDA nul ou négatif : le levier n'est pas calculable, la situation est défavorable | 0 |
 
 **Justificatifs requis :** États financiers ; Trace des retraitements dette/trésorerie.
 
@@ -589,7 +597,11 @@ Actif circulant réalisable CT / passif circulant exigible, stocks obsolètes et
 | PME | ≥ 1.5x | [1.25x ; 1.5x[ | [1x ; 1.25x[ | [0.8x ; 1x[ | < 0.8x |
 | GE | ≥ 1.4x | [1.2x ; 1.4x[ | [1x ; 1.2x[ | [0.85x ; 1x[ | < 0.85x |
 
-**Cas particuliers :** Rupture de trésorerie avérée => score 0.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `CASH_BREAK` | Rupture de trésorerie avérée sur la période | 0 |
 
 #### D1.7 — BFR et cycle de conversion de trésorerie
 
@@ -621,7 +633,11 @@ Moyenne pondérée sur trois ans de CFO ajusté / EBITDA ajusté (50 % N, 30 % N
 | 25 | [20 % ; 50 %[ |
 | 0 | < 20 % |
 
-**Cas particuliers :** EBITDA ≤ 0 => score 0 (cas EBITDA_LTE_0).
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `EBITDA_LTE_0` | EBITDA nul ou négatif : la conversion en trésorerie n'est pas mesurable | 0 |
 
 ### D2 — Capacité de remboursement et stress
 
@@ -665,7 +681,11 @@ FCF récurrent / dette financière brute moyenne, en %. Un ratio élevé dû à 
 | 25 | [0 % ; 5 %[ |
 | 0 | < 0 % |
 
-**Cas particuliers :** FCF négatif deux années sur trois => score 0.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `FCF_NEGATIVE_2_OF_3` | Free cash-flow négatif deux années sur trois | 0 |
 
 #### D2.4 — Liquidité disponible et mur de dette
 
@@ -695,7 +715,11 @@ DSCR minimal sous choc combiné seed (CA −10 %, marge −2 pts, taux +200 pb, 
 | 25 | [0.8x ; 1x[ |
 | 0 | < 0.8x |
 
-**Cas particuliers :** Rupture de liquidité sous stress sans mesures crédibles => score 0.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `STRESS_LIQUIDITY_BREAK` | Rupture de liquidité sous stress, sans mesure de redressement crédible | 0 |
 
 #### D2.6 — Covenants et marge de sécurité
 
@@ -725,7 +749,12 @@ Maximum de jours de retard sur 12 mois (fréquence et 24 mois pour récidive en 
 | 25 | ]30 j ; 60 j] |
 | 0 | > 60 j |
 
-**Cas particuliers :** Impayé non régularisé ou signal UTP => score 0 et RF06/RF07.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `UNPAID_NOT_CURED` | Impayé non régularisé — à instruire avec RF06/RF07 | 0 |
+| `UNLIKELY_TO_PAY` | Signal d'incapacité probable de payer — à instruire avec RF06 | 0 |
 
 **Justificatifs requis :** Système autoritatif DPD banque.
 
@@ -771,7 +800,12 @@ Mouvements créditeurs observés / flux attendus (%), tendance 12 mois et part d
 | 25 | [50 % ; 70 %[ |
 | 0 | < 50 % |
 
-**Cas particuliers :** Flux artificiels ou activité bancaire quasi arrêtée => score 0.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `ARTIFICIAL_FLOWS` | Mouvements créditeurs artificiels (virements circulaires, allers-retours) | 0 |
+| `BANKING_ACTIVITY_STOPPED` | Activité bancaire quasi arrêtée sur la période | 0 |
 
 #### D3.5 — Incidents chèques et effets de commerce
 
@@ -845,29 +879,49 @@ Grade issu du référentiel sectoriel interne séparé, daté et approuvé (S1=1
 
 #### D4.3 — Concentration clients
 
-CA réel par client/groupe client, ventes liées éliminées. Seuils segmentés — TPE : 100 si Top1 ≤ 15 % et Top5 ≤ 50 % … 0 si Top1 > 50 % ; PME : 100 si Top1 ≤ 10 % et Top5 ≤ 40 % … 0 si Top1 > 45 % ; GE : 100 si Top1 ≤ 10 % et Top5 ≤ 35 % … 0 si Top1 > 40 %. Mitigation contractuelle documentée : +1 cran maximum.
+Part du premier client (ou groupe client) dans le chiffre d'affaires, en %, après élimination des ventes liées et circulaires. Le barème est appliqué par le moteur : l'analyste renseigne une mesure, il ne choisit pas un niveau. Une mitigation contractuelle documentée peut relever d'un cran au maximum, via une dérogation tracée.
 
-**Poids :** TPE 2.50 % · PME 2.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Formule :** `CA_premier_client / CA_total`
 
-| Score | Ancrage et preuves attendues |
-|---:|---|
-| 100 | Concentration très faible (Top1/Top5 sous les seuils 100 du segment) |
-| 75 | Concentration faible (seuils 75 du segment) |
-| 50 | Concentration moyenne (seuils 50 du segment) |
-| 25 | Concentration élevée (seuils 25 du segment) |
-| 0 | Concentration critique ou perte probable du client principal |
+**Poids :** TPE 2.50 % · PME 2.00 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+
+| Segment | 100 | 75 | 50 | 25 | 0 |
+|---|---|---|---|---|---|
+| TPE | ≤ 15 % | ]15 % ; 25 %] | ]25 % ; 35 %] | ]35 % ; 50 %] | > 50 % |
+| PME | ≤ 10 % | ]10 % ; 20 %] | ]20 % ; 30 %] | ]30 % ; 45 %] | > 45 % |
+| GE | ≤ 10 % | ]10 % ; 15 %] | ]15 % ; 25 %] | ]25 % ; 40 %] | > 40 % |
+
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `MAIN_CLIENT_LOSS_LIKELY` | Perte probable du client principal (préavis reçu, appel d'offres perdu) | 0 |
+
+**Justificatifs requis :** Balance clients ; Élimination des ventes intragroupe.
 
 #### D4.4 — Concentration fournisseurs
 
-**Poids :** TPE 2.00 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+Part du premier fournisseur dans les achats, en %. La substituabilité et le délai de remplacement sont appréciés séparément en D4.7 (risque opérationnel) : le présent critère mesure la dépendance, pas sa mitigation.
 
-| Score | Ancrage et preuves attendues |
+**Formule :** `achats_premier_fournisseur / achats_totaux`
+
+**Poids :** TPE 2.00 % · PME 1.50 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+
+| Score | Bande |
 |---:|---|
-| 100 | Aucun fournisseur critique > 15 % ou alternatives qualifiées immédiates ; stocks de sécurité adaptés |
-| 75 | Top fournisseur 15–25 %, deux alternatives crédibles, contrat sécurisé |
-| 50 | Top fournisseur 25–40 %, remplacement possible en 1–3 mois à coût maîtrisé |
-| 25 | Top fournisseur 40–60 %, remplacement difficile > 3 mois, dépendance import/pays non couverte |
-| 0 | Top fournisseur > 60 %, mono-source vital, rupture/embargo probable ou fournisseur lié en difficulté |
+| 100 | ≤ 15 % |
+| 75 | ]15 % ; 25 %] |
+| 50 | ]25 % ; 40 %] |
+| 25 | ]40 % ; 60 %] |
+| 0 | > 60 % |
+
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `VITAL_SINGLE_SOURCE` | Mono-source vitale sans alternative qualifiée, ou fournisseur lié en difficulté | 0 |
+
+**Justificatifs requis :** Balance fournisseurs ; Cartographie des alternatives.
 
 #### D4.5 — Visibilité des revenus / carnet de commandes
 
@@ -1035,7 +1089,11 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 | PME | ≤ 90 j | ]90 j ; 150 j] | ]150 j ; 210 j] | ]210 j ; 300 j] | > 300 j |
 | GE | ≤ 75 j | ]75 j ; 120 j] | ]120 j ; 180 j] | ]180 j ; 270 j] | > 270 j |
 
-**Cas particuliers :** Refus de production => score 0.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `PRODUCTION_REFUSED` | Refus de produire l'information financière | 0 |
 
 #### D6.3 — Cohérence et rapprochements
 
@@ -1051,7 +1109,11 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 | 25 | ]10 % ; 20 %] |
 | 0 | > 20 % |
 
-**Cas particuliers :** Manipulation probable => score 0 et RF03/RF16 selon le cas.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `PROBABLE_MANIPULATION` | Manipulation probable de l'information — à instruire avec RF03/RF16 | 0 |
 
 #### D6.4 — Situation juridique, fiscale et sociale
 
@@ -1254,7 +1316,12 @@ Score 100 = risque le plus faible ; score 0 = risque le plus élevé.
 | 25 | ]30 j ; 60 j] |
 | 0 | > 60 j |
 
-**Cas particuliers :** Impayé non régularisé ou signal UTP => score 0 et RF06/RF07.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `UNPAID_NOT_CURED` | Impayé non régularisé — à instruire avec RF06/RF07 | 0 |
+| `UNLIKELY_TO_PAY` | Signal d'incapacité probable de payer — à instruire avec RF06 | 0 |
 
 #### B1.2 — Dépassements et irrégularités
 
@@ -1334,7 +1401,12 @@ Coefficient de variation mensuel des encaissements (%), tendance ≥ 0.
 | 25 | ]40 % ; 60 %] |
 | 0 | > 60 % |
 
-**Cas particuliers :** Baisse de flux > 30 % => score 0 ; baisse > 15 % => score ≤ 25.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `FLOWS_DOWN_OVER_30PCT` | Encaissements en baisse de plus de 30 % sur la période | 0 |
+| `FLOWS_DOWN_OVER_15PCT` | Encaissements en baisse de plus de 15 % sur la période | 25 |
 
 #### B2.3 — Solde minimum, jours débiteurs et liquidité
 
@@ -1388,7 +1460,11 @@ Couverture du service de dette après choc de flux −20 %.
 | 25 | [2 ans ; 3 ans[ |
 | 0 | < 2 ans |
 
-**Cas particuliers :** < 2 ans sans support/contrat fort => score 0 et cap CAP01.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `UNDER_2Y_NO_SUPPORT` | Moins de deux ans d'activité sans support ni contrat structurant — déclenche le cap CAP01 | 0 |
 
 #### B3.3 — Concentration clients/fournisseurs
 
@@ -1504,7 +1580,11 @@ Couverture du service de dette après choc de flux −20 %.
 | 25 | ]20 % ; 30 %] |
 | 0 | > 30 % |
 
-**Cas particuliers :** Incohérence majeure => score 0 et RF16.
+**Cas particuliers :**
+
+| Code | Cas | Score imposé |
+|---|---|---:|
+| `MAJOR_INCONSISTENCY` | Incohérence majeure entre flux, chiffre d'affaires déclaré et données fiscales | 0 |
 
 #### B5.3 — Situation fiscale et sociale
 
@@ -1853,6 +1933,26 @@ Analyser séparément les segments TPE, PME et GE, puis tester si un regroupemen
 Le segment GE produit structurellement trop peu de défauts pour une estimation classique. Traiter explicitement ce cas par regroupement avec test d'homogénéité, information externe validée avec justification de transposabilité, approche hiérarchique ou bayésienne, estimation par intervalle avec borne haute prudente, et marge de prudence croissante avec l'incertitude.
 
 Documenter le nombre de défauts par grade et par génération : **un tableau de calibration sans effectifs est irrecevable.** Ne jamais extrapoler une probabilité sur un grade sans défaut observé sans marge documentée.
+
+### 25.4 Répétition à blanc sur portefeuille simulé
+
+La chaîne de calibration décrite ci-dessus a été exécutée intégralement sur un portefeuille **simulé**, avant toute disponibilité de défauts observés. L'objet n'est pas d'obtenir des probabilités : il est de s'assurer que la chaîne fonctionne, que l'échelle ordonne correctement le risque, et que la batterie de validation sait détecter un défaut de calibration lorsqu'il y en a un. Elle a été exécutée sur les **deux modèles**, chacun avec sa propre calibration : les deux grilles n'observent pas la même chose — flux bancaires pour le modèle TPE comportemental, états financiers pour le modèle standard — et ne produisent pas la même distribution de grades. Une calibration transposée de l'un à l'autre serait indéfendable. Les rapports détaillés figurent en annexe (`docs/06-rapport-calibration-corp-std-v1.md` et `docs/06-rapport-calibration-corp-tpe-behav-v1.md`).
+
+Deux garde-fous méthodologiques structurent l'exercice.
+
+**Les scores ne sont pas simulés.** Le simulateur produit des données d'entrée — ratios, ancrages qualitatifs, flags structurels, qualité de l'information — et c'est le moteur réel qui en tire un score et un grade. Simuler directement un score puis lui associer une probabilité aurait rendu l'exercice circulaire : il aurait vérifié l'hypothèse posée, pas le modèle.
+
+**Le statut de calibration reste distinct.** Une probabilité issue de données simulées porte le statut `CALIBRATED_SYNTHETIC`, jamais `CALIBRATED`. La distinction est propagée jusqu'au contrat d'interface, à l'instantané persisté et à l'écran de résultat : aucun système aval ne peut confondre les deux.
+
+Trois enseignements de portée générale en sont ressortis.
+
+**La probabilité doit être calibrée sur le grade, non sur le score.** Le grade final intègre les caps, qui déplacent une contrepartie vers le bas sans toucher à son score brut. Le score moyen n'est donc pas monotone dans l'échelle : sur le portefeuille simulé, le score moyen de G4 dépasse celui de G3, et celui de G7 dépasse celui de G6, parce que ces grades rassemblent des dossiers bien notés mais plafonnés. Le risque, lui, reste monotone. Dériver la probabilité d'une courbe du score réaffecterait à ces dossiers la probabilité de leur score et annulerait l'effet du cap.
+
+**Les caps de confiance créent deux points de masse dans l'échelle.** G4 et G7 rassemblent à eux seuls la moitié du portefeuille, et la majorité des dossiers qui s'y trouvent y ont été **déplacés** par un cap de qualité d'information : 61 % en G4 et 55 % en G7 pour le modèle standard, 65 % et 61 % pour le modèle TPE. Les autres grades ne sont pratiquement pas touchés par les caps. C'est le comportement voulu, mais il a une conséquence opérationnelle : améliorer la collecte d'information déplacerait davantage de dossiers que réviser les pondérations.
+
+**Sur le modèle TPE, deux grades ne se distinguent plus.** La régression isotone fusionne G6 et G7 à une même probabilité. Le cap de confiance déverse dans G7 des dossiers dont le score moyen (73,8) dépasse celui de G6 (67,5), au point que les taux de défaut des deux grades ne diffèrent plus de façon détectable — la comparaison des deux proportions donne p = 0,27 en développement et p = 0,59 hors période. Ce n'est pas un défaut de la calibration : c'est le constat qu'une distinction de grade ne porte plus de différence de risque. Deux issues relèvent du comité modèles : revoir ce qui alimente ces grades, ou les fusionner dans l'échelle.
+
+**Le test d'adéquation usuel est inadapté à un système de notation.** Le test de Hosmer-Lemeshow découpe la population en déciles de probabilité prédite ; or celle-ci ne prend qu'une valeur par grade. Un même grade se retrouve scindé en groupes de probabilité identique dont les taux observés diffèrent par le seul hasard, et le test rejette pour une mauvaise raison. Le test retenu groupe par grade.
 
 ## 26. Validation indépendante et surveillance
 

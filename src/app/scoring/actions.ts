@@ -5,6 +5,7 @@ import type { RatingInput, RatingResult } from "@/core/types";
 import { getModel } from "@/models";
 import { executeRatingRun } from "@/lib/rating-service";
 import { ratingRequestSchema } from "@/lib/schemas";
+import { getSessionIdentity } from "@/lib/session";
 
 export interface ScoringActionResult {
   ok: boolean;
@@ -22,8 +23,9 @@ export interface ScoringActionResult {
  * modèle publiée : le navigateur n'envoie que des observations et des scores
  * qualitatifs ancrés, jamais des poids, formules ou score final.
  *
- * L'identité de l'analyste provient ici de la session applicative ; dans un
- * déploiement bancaire elle est fournie par le SSO/OIDC (voir docs/04).
+ * L'identité de l'analyste provient de la session authentifiée (cookie
+ * HttpOnly vérifié côté serveur), jamais d'une valeur codée en dur ni d'un
+ * champ de formulaire.
  */
 export async function runScoringAction(
   payload: unknown,
@@ -53,9 +55,20 @@ export async function runScoringAction(
     return { ok: true, result, persisted: false };
   }
 
+  // La persistance exige une session authentifiée avec le rôle adéquat.
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) {
+    return {
+      ok: true,
+      result,
+      persisted: false,
+      persistenceWarningFr: `Résultat calculé mais non enregistré : ${session.reasonFr}`,
+    };
+  }
+
   try {
     const run = await executeRatingRun(
-      { name: "ui-analyst", role: "ANALYST" },
+      session.identity,
       input as RatingInput,
       counterpartyId
     );

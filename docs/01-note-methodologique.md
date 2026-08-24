@@ -70,7 +70,7 @@ Le dispositif présenté répond à ces trois points. Il propose un **modèle ex
 
 Deux caractéristiques méritent l'attention de la Direction générale.
 
-**Le modèle ne prétend pas prédire une probabilité de défaut.** Il produit un classement ordinal fiable et explicable. Le statut de calibration est affiché en permanence comme non calibré, et l'outil bloque techniquement l'usage de ce score pour IFRS 9, la tarification ou le capital réglementaire. C'est une position volontairement prudente : un score expert présenté comme une probabilité de défaut exposerait l'établissement à une critique immédiate de la validation indépendante et du superviseur. La calibration viendra de l'historique que ce dispositif permettra précisément de constituer.
+**Le modèle ne prétend pas prédire une probabilité de défaut.** Il produit un classement ordinal fiable et explicable. La calibration actuellement attachée est établie sur des données **simulées** : elle porte un statut distinct, `CALIBRATED_SYNTHETIC`, et l'outil signale son origine partout où la probabilité est restituée. L'usage de ce score pour IFRS 9, la tarification ou le capital réglementaire reste exclu jusqu'à une calibration sur défauts observés, validée indépendamment. C'est une position volontairement prudente : un score expert présenté comme une probabilité de défaut exposerait l'établissement à une critique immédiate de la validation indépendante et du superviseur. La calibration viendra de l'historique que ce dispositif permettra précisément de constituer.
 
 **Les cinq finalités restent séparées.** La notation de la contrepartie, la décision de crédit, la classification réglementaire, le staging IFRS 9 et le calcul de capital sont cinq moteurs distincts. Une garantie peut réduire la perte en cas de défaut, sécuriser une décision ou modifier une pondération prudentielle ; elle ne rend jamais l'emprunteur intrinsèquement meilleur. Cette séparation, structurante pour l'architecture, est la principale différence avec des outils de place qui agrègent tout dans un score unique.
 
@@ -140,7 +140,7 @@ Le poids relatif des domaines varie selon le segment, selon une logique défenda
 |---|---|---|
 | Les seuils experts s'avèrent mal calibrés sur le portefeuille réel | Élevée | Tous les seuils sont des paramètres versionnés, modifiables sans livraison de code ; pilote en mode fantôme obligatoire avant usage contraignant |
 | Données comptables insuffisantes sur la TPE | Élevée | Modèle TPE comportemental distinct, avec identifiant, poids et calibration propres ; aucune note moyenne attribuée par défaut |
-| Le score expert est utilisé comme une probabilité de défaut | Moyenne | Blocage technique : aucune PD n'est produite ni exposée par l'API tant que le statut est non calibré |
+| Le score expert est utilisé comme une probabilité de défaut | Moyenne | Statut de calibration distinct et propagé au contrat d'interface, à l'instantané persisté et à l'écran de résultat ; toute probabilité issue de données simulées est marquée `CALIBRATED_SYNTHETIC` et accompagnée de son avertissement |
 | Dérive des pratiques de dérogation | Moyenne | Double validation, limite de crans, motifs codifiés, suivi des taux et contrôle a posteriori des grades brut et final |
 | Divergence entre la documentation et le calcul réel | Moyenne | Les grilles de la Partie III sont **générées depuis le code du moteur** ; toute modification se répercute à la régénération |
 | Dépendance à un fournisseur de base de données ou de cloud | Moyenne | Source de schéma unique générant quatre dialectes ; déploiement local en une commande ; aucune dépendance à un service en ligne |
@@ -188,7 +188,7 @@ Les variables qui échouent sur la disponibilité sur un segment donné y reçoi
 
 ### 8.4 Approche de pondération
 
-Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global, afin qu'aucune variable isolée ne détermine la note ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
+Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global dans le modèle standard, afin qu'aucune variable isolée ne détermine la note — le modèle TPE comportemental admet un plafond de 8 %, la mesure des retards de paiement y étant la variable la plus discriminante disponible ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
 
 Ces poids sont des hypothèses documentées, destinées à être challengées sur le portefeuille de la banque, puis remplacées par des coefficients estimés lors du passage au modèle challenger.
 
@@ -660,6 +660,26 @@ Analyser séparément les segments TPE, PME et GE, puis tester si un regroupemen
 Le segment GE produit structurellement trop peu de défauts pour une estimation classique. Traiter explicitement ce cas par regroupement avec test d'homogénéité, information externe validée avec justification de transposabilité, approche hiérarchique ou bayésienne, estimation par intervalle avec borne haute prudente, et marge de prudence croissante avec l'incertitude.
 
 Documenter le nombre de défauts par grade et par génération : **un tableau de calibration sans effectifs est irrecevable.** Ne jamais extrapoler une probabilité sur un grade sans défaut observé sans marge documentée.
+
+### 25.4 Répétition à blanc sur portefeuille simulé
+
+La chaîne de calibration décrite ci-dessus a été exécutée intégralement sur un portefeuille **simulé**, avant toute disponibilité de défauts observés. L'objet n'est pas d'obtenir des probabilités : il est de s'assurer que la chaîne fonctionne, que l'échelle ordonne correctement le risque, et que la batterie de validation sait détecter un défaut de calibration lorsqu'il y en a un. Elle a été exécutée sur les **deux modèles**, chacun avec sa propre calibration : les deux grilles n'observent pas la même chose — flux bancaires pour le modèle TPE comportemental, états financiers pour le modèle standard — et ne produisent pas la même distribution de grades. Une calibration transposée de l'un à l'autre serait indéfendable. Les rapports détaillés figurent en annexe (`docs/06-rapport-calibration-corp-std-v1.md` et `docs/06-rapport-calibration-corp-tpe-behav-v1.md`).
+
+Deux garde-fous méthodologiques structurent l'exercice.
+
+**Les scores ne sont pas simulés.** Le simulateur produit des données d'entrée — ratios, ancrages qualitatifs, flags structurels, qualité de l'information — et c'est le moteur réel qui en tire un score et un grade. Simuler directement un score puis lui associer une probabilité aurait rendu l'exercice circulaire : il aurait vérifié l'hypothèse posée, pas le modèle.
+
+**Le statut de calibration reste distinct.** Une probabilité issue de données simulées porte le statut `CALIBRATED_SYNTHETIC`, jamais `CALIBRATED`. La distinction est propagée jusqu'au contrat d'interface, à l'instantané persisté et à l'écran de résultat : aucun système aval ne peut confondre les deux.
+
+Trois enseignements de portée générale en sont ressortis.
+
+**La probabilité doit être calibrée sur le grade, non sur le score.** Le grade final intègre les caps, qui déplacent une contrepartie vers le bas sans toucher à son score brut. Le score moyen n'est donc pas monotone dans l'échelle : sur le portefeuille simulé, le score moyen de G4 dépasse celui de G3, et celui de G7 dépasse celui de G6, parce que ces grades rassemblent des dossiers bien notés mais plafonnés. Le risque, lui, reste monotone. Dériver la probabilité d'une courbe du score réaffecterait à ces dossiers la probabilité de leur score et annulerait l'effet du cap.
+
+**Les caps de confiance créent deux points de masse dans l'échelle.** G4 et G7 rassemblent à eux seuls la moitié du portefeuille, et la majorité des dossiers qui s'y trouvent y ont été **déplacés** par un cap de qualité d'information : 61 % en G4 et 55 % en G7 pour le modèle standard, 65 % et 61 % pour le modèle TPE. Les autres grades ne sont pratiquement pas touchés par les caps. C'est le comportement voulu, mais il a une conséquence opérationnelle : améliorer la collecte d'information déplacerait davantage de dossiers que réviser les pondérations.
+
+**Sur le modèle TPE, deux grades ne se distinguent plus.** La régression isotone fusionne G6 et G7 à une même probabilité. Le cap de confiance déverse dans G7 des dossiers dont le score moyen (73,8) dépasse celui de G6 (67,5), au point que les taux de défaut des deux grades ne diffèrent plus de façon détectable — la comparaison des deux proportions donne p = 0,27 en développement et p = 0,59 hors période. Ce n'est pas un défaut de la calibration : c'est le constat qu'une distinction de grade ne porte plus de différence de risque. Deux issues relèvent du comité modèles : revoir ce qui alimente ces grades, ou les fusionner dans l'échelle.
+
+**Le test d'adéquation usuel est inadapté à un système de notation.** Le test de Hosmer-Lemeshow découpe la population en déciles de probabilité prédite ; or celle-ci ne prend qu'une valeur par grade. Un même grade se retrouve scindé en groupes de probabilité identique dont les taux observés diffèrent par le seul hasard, et le test rejette pour une mauvaise raison. Le test retenu groupe par grade.
 
 ## 26. Validation indépendante et surveillance
 

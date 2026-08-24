@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { listModels } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  // Toute page porteuse de données exige une session authentifiée.
+  await requireSession();
+
   const { data: stats, dbAvailable } = await safeQuery(
     async () => {
       const [counterparties, runs, recent, gradeRows] = await Promise.all([

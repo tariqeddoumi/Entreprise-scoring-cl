@@ -1,6 +1,10 @@
 import { CORP_STD_V1 } from "@/models";
+import { requireSession } from "@/lib/session";
 
-export default function MethodologyPage() {
+export default async function MethodologyPage() {
+  // Toute page porteuse de données exige une session authentifiée.
+  await requireSession();
+
   const m = CORP_STD_V1;
   return (
     <div style={{ display: "grid", gap: 18, maxWidth: 900 }}>

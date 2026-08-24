@@ -1,48 +1,45 @@
 import type { NextRequest } from "next/server";
 import type { RatingInput } from "@/core/types";
-import { authenticate } from "@/lib/auth";
 import { ok, problem } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { executeRatingRun, RatingServiceError } from "@/lib/rating-service";
+import { guard, readJsonBody } from "@/lib/route-guard";
 import { ratingRequestSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
+const MAX_PAGE_SIZE = 200;
+
 /**
- * POST /api/v1/rating-runs — exécute et persiste un run de notation.
+ * POST /api/v1/rating-runs — exécute et persiste une notation.
  *
  * Le serveur détermine poids, barèmes et scores depuis la version de modèle
  * publiée : le client ne fournit jamais le score final ni un poids exécutable.
- * Idempotence via l'en-tête `Idempotency-Key`.
+ * Idempotence via l'en-tête « Idempotency-Key ».
  */
 export async function POST(req: NextRequest) {
-  const auth = authenticate(req, "ANALYST");
-  if (!auth.ok) return problem(auth.status, auth.message);
+  const g = guard(req, "ANALYST");
+  if (!g.ok) return g.response;
 
-  const body = await req.json().catch(() => null);
-  const parsed = ratingRequestSchema.safeParse(body);
-  if (!parsed.success) {
+  const body = await readJsonBody(req, ratingRequestSchema);
+  if (!body.ok) return body.response;
+
+  const { counterpartyId, ...ratingInput } = body.value;
+  if (!counterpartyId) {
     return problem(
       400,
-      "Payload invalide",
-      parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(" ; ")
+      "counterpartyId requis",
+      "Utiliser /rating-runs/simulate pour un calcul sans persistance."
     );
   }
-  if (!parsed.data.counterpartyId) {
-    return problem(400, "counterpartyId requis (utiliser /rating-runs/simulate pour un calcul sans persistance).");
-  }
 
-  const idempotencyKey = req.headers.get("idempotency-key") ?? undefined;
-  const correlationId = req.headers.get("x-correlation-id") ?? undefined;
-
-  const { counterpartyId, ...ratingInput } = parsed.data;
   try {
     const { runId, result, replayed } = await executeRatingRun(
-      auth.identity,
+      g.ctx.identity,
       ratingInput as RatingInput,
       counterpartyId,
-      idempotencyKey,
-      correlationId
+      g.ctx.idempotencyKey,
+      g.ctx.correlationId
     );
     return ok({ runId, replayed, result }, replayed ? 200 : 201);
   } catch (e) {
@@ -51,13 +48,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** GET /api/v1/rating-runs — derniers runs (tous portefeuilles). */
+/** GET /api/v1/rating-runs — derniers runs, tous portefeuilles confondus. */
 export async function GET(req: NextRequest) {
-  const auth = authenticate(req, "READONLY");
-  if (!auth.ok) return problem(auth.status, auth.message);
+  const g = guard(req, "READONLY");
+  if (!g.ok) return g.response;
 
   const { searchParams } = new URL(req.url);
-  const limit = Math.min(Number(searchParams.get("limit") ?? 50), 200);
+  const limit = Number(searchParams.get("limit") ?? 50);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
+    return problem(400, `Paramètre « limit » invalide (entier de 1 à ${MAX_PAGE_SIZE}).`);
+  }
+
   const runs = await prisma.ratingRun.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,
