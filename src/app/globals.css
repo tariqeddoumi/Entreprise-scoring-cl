@@ -79,3 +79,33 @@ textarea {
 button {
   cursor: pointer;
 }
+
+/*
+ * Impression du résultat de notation : une trace papier/PDF opposable pour un
+ * dossier de comité. Masque la navigation et les sections de saisie ; le
+ * résultat lui-même s'imprime sans les couleurs d'accent qui useraient trop
+ * d'encre, mais garde ses bordures pour rester lisible en noir et blanc.
+ */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  main {
+    max-width: none;
+    padding: 0;
+  }
+  .card {
+    border: 1px solid #999;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+  table.data {
+    break-inside: auto;
+  }
+  table.data tr {
+    break-inside: avoid;
+  }
+}

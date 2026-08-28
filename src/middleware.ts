@@ -24,22 +24,33 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store, max-age=0",
 };
 
-const CSP = [
-  "default-src 'self'",
-  // Next.js injecte des styles en ligne ; aucun script en ligne n'est autorisé
-  // au-delà de l'amorçage du framework.
-  "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  // Aucun appel réseau vers un domaine tiers.
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
-].join("; ");
+/**
+ * `next dev` enveloppe chaque module compilé dans un `eval(...)` pour générer
+ * des cartes source rapides (comportement par défaut de webpack en
+ * développement, hors du contrôle de ce dépôt). Sous la CSP stricte de
+ * production, ce `eval` est bloqué : aucun composant client n'hydrate,
+ * silencieusement — formulaires, filtres et boutons cessent de répondre sans
+ * la moindre erreur visible. `unsafe-eval` n'est donc admis qu'en
+ * développement, jamais en production ni en préproduction.
+ */
+export function buildCsp(isProduction: boolean): string {
+  return [
+    "default-src 'self'",
+    // Next.js injecte des styles en ligne ; aucun script en ligne n'est autorisé
+    // au-delà de l'amorçage du framework.
+    "style-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
+    "img-src 'self' data:",
+    "font-src 'self'",
+    // Aucun appel réseau vers un domaine tiers.
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "upgrade-insecure-requests",
+  ].join("; ");
+}
 
 export function middleware(req: NextRequest) {
   const cfg = appConfig();
@@ -70,7 +81,7 @@ export function middleware(req: NextRequest) {
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
     res.headers.set(key, value);
   }
-  res.headers.set("Content-Security-Policy", CSP);
+  res.headers.set("Content-Security-Policy", buildCsp(cfg.isProduction));
 
   if (cfg.isProduction) {
     res.headers.set(

@@ -1,6 +1,8 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { ModelConfig, RatingResult } from "@/core/types";
+import { GradeBadge } from "../ui-helpers";
 
 const OUTCOME_LABELS: Record<string, string> = {
   SCORED: "Notation produite",
@@ -31,9 +33,27 @@ export function ResultPanel({
       className="card"
       style={{ padding: 20, borderTopWidth: 3, borderTopColor: accent }}
     >
-      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-        {OUTCOME_LABELS[result.outcome] ?? result.outcome}
-      </h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+          {OUTCOME_LABELS[result.outcome] ?? result.outcome}
+        </h2>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="no-print"
+          style={{
+            background: "none",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            padding: "5px 12px",
+            color: "var(--text)",
+            fontSize: 12,
+            whiteSpace: "nowrap",
+          }}
+        >
+          Imprimer / PDF
+        </button>
+      </div>
       <p className="muted" style={{ marginBottom: 16 }}>
         {result.explanationFr}
       </p>
@@ -51,8 +71,8 @@ export function ResultPanel({
               : "indéterminé"
           }
         />
-        <Metric label="Grade moteur" value={result.engineGrade ?? "—"} />
-        <Metric label="Grade après caps" value={result.cappedGrade ?? "—"} />
+        <Metric label="Grade moteur" value={<GradeBadge grade={result.engineGrade} size="lg" />} />
+        <Metric label="Grade après caps" value={<GradeBadge grade={result.cappedGrade} size="lg" />} />
         <Metric
           label="Confiance"
           value={`${result.confidenceScore.toFixed(1)} (${result.confidenceLevelFr})`}
@@ -262,7 +282,7 @@ export function ResultPanel({
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <div className="muted" style={{ fontSize: 11, textTransform: "uppercase" }}>

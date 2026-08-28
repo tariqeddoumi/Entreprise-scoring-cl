@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checkOutboundUrl } from "@/lib/url-safety";
 import { checkRateLimit, resetRateLimits } from "@/lib/rate-limit";
 import { config, resetConfigCache } from "@/lib/env";
+import { buildCsp } from "@/middleware";
 import { signPayload, verifySignature } from "@/lib/webhooks";
 import {
   ratingRequestSchema,
@@ -240,6 +241,15 @@ describe("Configuration", () => {
     setEnv("CORS_ALLOWED_ORIGINS", undefined);
     resetConfigCache();
     expect(config().corsAllowedOrigins).toEqual([]);
+  });
+
+  it("n'admet 'unsafe-eval' que hors production", () => {
+    // En développement, next dev enveloppe chaque module dans un eval(...) :
+    // sans cette exception, aucun composant client n'hydrate (voir le
+    // commentaire de buildCsp). En production, l'exception doit rester
+    // fermée — c'est la seule chose que ce test protège vraiment.
+    expect(buildCsp(true)).not.toMatch(/unsafe-eval/);
+    expect(buildCsp(false)).toMatch(/script-src[^;]*'unsafe-eval'/);
   });
 
   it("traite une variable Vercel déclarée mais laissée vide comme absente, pas comme invalide", () => {

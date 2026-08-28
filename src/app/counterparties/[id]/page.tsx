@@ -4,6 +4,7 @@ import { compareRuns } from "@/core/compare";
 import type { RatingResult } from "@/core/types";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
+import { GradeBadge } from "@/app/ui-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -168,9 +169,9 @@ export default async function CounterpartyPage({
                   <td>{r.asOfDate}</td>
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore !== null ? Number(r.rawScore).toFixed(2) : "—"}</td>
-                  <td>{r.engineGrade ?? "—"}</td>
+                  <td><GradeBadge grade={r.engineGrade} /></td>
                   <td>
-                    {r.finalGrade ?? "—"}
+                    <GradeBadge grade={r.finalGrade} />
                     {r.finalGrade !== r.cappedGrade && r.finalGrade && (
                       <span className="muted" style={{ fontSize: 11 }}> (dérogé)</span>
                     )}

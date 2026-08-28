@@ -2,6 +2,15 @@ import Link from "next/link";
 import { listModels } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
+import { GradeBadge } from "./ui-helpers";
+
+/** Rang numérique d'un grade pour un tri correct (G10 après G9, jamais après G1). */
+function gradeRank(grade: string | null): number {
+  if (!grade) return 999;
+  if (grade.startsWith("DEF")) return 100 + (Number(grade.slice(3)) || 0);
+  const n = Number(grade.slice(1));
+  return Number.isFinite(n) ? n : 999;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +53,7 @@ export default async function DashboardPage() {
   );
 
   const models = listModels();
+  const calibrated = models.filter((m) => m.calibration).length;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -74,7 +84,11 @@ export default async function DashboardPage() {
         <StatCard label="Contreparties" value={stats.counterparties} />
         <StatCard label="Runs de notation" value={stats.runs} />
         <StatCard label="Modèles publiés" value={models.length} />
-        <StatCard label="Statut PD" value="UNCALIBRATED" small />
+        <StatCard
+          label="Calibration PD"
+          value={`${calibrated}/${models.length} calibré(s)`}
+          small
+        />
       </section>
 
       <section className="card" style={{ padding: 16 }}>
@@ -82,24 +96,44 @@ export default async function DashboardPage() {
         {stats.gradeRows.length === 0 ? (
           <p className="muted">Aucune notation enregistrée.</p>
         ) : (
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Grade</th>
-                <th>Nombre</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.gradeRows
-                .sort((a, b) => (a.finalGrade ?? "").localeCompare(b.finalGrade ?? ""))
-                .map((g) => (
-                  <tr key={g.finalGrade}>
-                    <td>{g.finalGrade}</td>
-                    <td>{g._count._all}</td>
+          (() => {
+            const sorted = [...stats.gradeRows].sort(
+              (a, b) => gradeRank(a.finalGrade) - gradeRank(b.finalGrade)
+            );
+            const max = Math.max(...sorted.map((g) => g._count._all));
+            return (
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>Grade</th>
+                    <th>Nombre</th>
+                    <th style={{ width: "50%" }}></th>
                   </tr>
-                ))}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {sorted.map((g) => (
+                    <tr key={g.finalGrade}>
+                      <td>
+                        <GradeBadge grade={g.finalGrade} />
+                      </td>
+                      <td>{g._count._all}</td>
+                      <td>
+                        <div
+                          style={{
+                            height: 8,
+                            borderRadius: 4,
+                            width: `${Math.max(4, (g._count._all / max) * 100)}%`,
+                            background: "var(--brand)",
+                            opacity: 0.6,
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()
         )}
       </section>
 
@@ -130,11 +164,15 @@ export default async function DashboardPage() {
             <tbody>
               {stats.recent.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.counterparty.name}</td>
+                  <td>
+                    <Link href={`/rating-runs/${r.id}`} style={{ color: "var(--brand)" }}>
+                      {r.counterparty.name}
+                    </Link>
+                  </td>
                   <td>{r.asOfDate}</td>
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore ? Number(r.rawScore).toFixed(2) : "—"}</td>
-                  <td>{r.finalGrade ?? "—"}</td>
+                  <td><GradeBadge grade={r.finalGrade} /></td>
                   <td className="muted">{r.outcome}</td>
                 </tr>
               ))}
@@ -154,6 +192,7 @@ export default async function DashboardPage() {
               <th>Statut</th>
               <th>Segments</th>
               <th>Critères</th>
+              <th>Calibration</th>
             </tr>
           </thead>
           <tbody>
@@ -169,6 +208,13 @@ export default async function DashboardPage() {
                 <td className="muted">{m.status}</td>
                 <td>{m.segments.join(", ")}</td>
                 <td>{m.criteria.length}</td>
+                <td className="muted" style={{ fontSize: 12 }}>
+                  {m.calibration
+                    ? m.calibration.dataSource === "SYNTHETIC"
+                      ? "simulée"
+                      : "défauts observés"
+                    : "non calibré"}
+                </td>
               </tr>
             ))}
           </tbody>

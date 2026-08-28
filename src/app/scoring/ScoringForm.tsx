@@ -9,6 +9,7 @@ import type {
   RatingResult,
   Segment,
 } from "@/core/types";
+import { RedFlagLevelBadge } from "../ui-helpers";
 import { runScoringAction } from "./actions";
 import { ResultPanel } from "./ResultPanel";
 
@@ -35,24 +36,41 @@ const STATUSES: DataStatus[] = [
 
 const CONFIDENCE_LEVELS = [100, 75, 50, 25, 0];
 
+const DEFAULT_CONFIDENCE = { completeness: 100, freshness: 100, reliability: 75, provenance: 75 };
+
+function initialCriteria(model: ModelConfig): Record<string, CriterionState> {
+  return Object.fromEntries(
+    model.criteria.map((c) => [
+      c.code,
+      { status: "AVAILABLE" as DataStatus, value: "", score: "50", specialCase: "" },
+    ])
+  );
+}
+
+/**
+ * Un critère compte comme renseigné s'il porte la donnée qui sera réellement
+ * soumise au moteur : une valeur (ou un cas particulier) pour un critère
+ * quantitatif, toujours vrai pour un qualitatif puisque son sélecteur porte
+ * une valeur par défaut valide (voir `submit`). Un statut explicitement
+ * différent de AVAILABLE compte aussi comme une décision prise par l'analyste.
+ */
+function isAnswered(criterion: CriterionConfig, state: CriterionState): boolean {
+  if (state.status !== "AVAILABLE" && state.status !== "ESTIMATED" && state.status !== "STALE") {
+    return true;
+  }
+  if (state.specialCase) return true;
+  if (criterion.type === "QUANTITATIVE") return state.value.trim() !== "";
+  return true;
+}
+
 export function ScoringForm({ model, counterparties }: Props) {
   const [segment, setSegment] = useState<Segment>("PME");
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
   const [counterpartyId, setCounterpartyId] = useState("");
   const [criteria, setCriteria] = useState<Record<string, CriterionState>>(() =>
-    Object.fromEntries(
-      model.criteria.map((c) => [
-        c.code,
-        { status: "AVAILABLE" as DataStatus, value: "", score: "50", specialCase: "" },
-      ])
-    )
+    initialCriteria(model)
   );
-  const [confidence, setConfidence] = useState({
-    completeness: 100,
-    freshness: 100,
-    reliability: 75,
-    provenance: 75,
-  });
+  const [confidence, setConfidence] = useState(DEFAULT_CONFIDENCE);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [companyAgeYears, setCompanyAgeYears] = useState("");
   const [hasStrongGroupSupport, setHasStrongGroupSupport] = useState(false);
@@ -62,14 +80,40 @@ export function ScoringForm({ model, counterparties }: Props) {
   const [result, setResult] = useState<RatingResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const applicable = useMemo(
     () => model.criteria.filter((c) => (c.weightsBps[segment] ?? 0) > 0),
     [model, segment]
   );
 
+  const answeredCount = useMemo(
+    () => applicable.filter((c) => isAnswered(c, criteria[c.code])).length,
+    [applicable, criteria]
+  );
+  const unansweredCritical = useMemo(
+    () => applicable.filter((c) => c.critical && !isAnswered(c, criteria[c.code])),
+    [applicable, criteria]
+  );
+
   function update(code: string, patch: Partial<CriterionState>) {
     setCriteria((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
+  }
+
+  function resetForm() {
+    if (!window.confirm("Réinitialiser le formulaire ? Toutes les valeurs saisies seront perdues.")) {
+      return;
+    }
+    setCriteria(initialCriteria(model));
+    setConfidence(DEFAULT_CONFIDENCE);
+    setFlags({});
+    setCompanyAgeYears("");
+    setHasStrongGroupSupport(false);
+    setRedFlags([]);
+    setDefaultTriggered(false);
+    setResult(null);
+    setMessage(null);
+    setError(null);
   }
 
   async function submit() {
@@ -140,8 +184,69 @@ export function ScoringForm({ model, counterparties }: Props) {
   }
 
   return (
-    <div style={{ display: "grid", gap: 18 }}>
-      <section className="card" style={{ padding: 16 }}>
+    <div style={{ display: "grid", gap: 18, paddingBottom: 72 }}>
+      <section
+        className="card no-print"
+        style={{
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 12,
+              marginBottom: 4,
+            }}
+          >
+            <span className="muted">
+              {answeredCount} / {applicable.length} critères renseignés
+            </span>
+            {unansweredCritical.length > 0 && (
+              <span style={{ color: "var(--bad)", fontWeight: 600 }}>
+                {unansweredCritical.length} critère(s) critique(s) manquant(s) :{" "}
+                {unansweredCritical.map((c) => c.code).join(", ")}
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              height: 6,
+              borderRadius: 3,
+              background: "var(--bg)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${applicable.length ? (answeredCount / applicable.length) * 100 : 0}%`,
+                background: unansweredCritical.length > 0 ? "var(--warn)" : "var(--good)",
+                transition: "width 150ms ease",
+              }}
+            />
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(Object.fromEntries(model.domains.map((d) => [d.code, true])))}
+          style={buttonGhostStyle}
+        >
+          Tout replier
+        </button>
+        <button type="button" onClick={() => setCollapsed({})} style={buttonGhostStyle}>
+          Tout déplier
+        </button>
+      </section>
+
+      <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 12 }}>Cadrage du dossier</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
           <label>
@@ -223,39 +328,67 @@ export function ScoringForm({ model, counterparties }: Props) {
           (acc, c) => acc + (c.weightsBps[segment] ?? 0),
           0
         );
+        const answered = domainCriteria.filter((c) => isAnswered(c, criteria[c.code])).length;
+        const missingCritical = domainCriteria.filter(
+          (c) => c.critical && !isAnswered(c, criteria[c.code])
+        ).length;
+        const isCollapsed = collapsed[domain.code] ?? false;
         return (
-          <section key={domain.code} className="card" style={{ padding: 16 }}>
-            <div
+          <section key={domain.code} className="card no-print" style={{ padding: 16 }}>
+            <button
+              type="button"
+              onClick={() => setCollapsed((prev) => ({ ...prev, [domain.code]: !isCollapsed }))}
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "baseline",
-                marginBottom: 12,
+                alignItems: "center",
+                width: "100%",
+                background: "none",
+                border: "none",
+                padding: 0,
+                marginBottom: isCollapsed ? 0 : 12,
+                textAlign: "left",
               }}
+              aria-expanded={!isCollapsed}
             >
-              <h2 style={{ fontWeight: 600 }}>
-                {domain.code} — {domain.labelFr}
-              </h2>
-              <span className="muted" style={{ fontSize: 12 }}>
-                Poids {segment} : {(weight / 100).toFixed(2)} %
+              <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className="muted" style={{ fontSize: 11, width: 12, display: "inline-block" }}>
+                  {isCollapsed ? "▸" : "▾"}
+                </span>
+                <h2 style={{ fontWeight: 600 }}>
+                  {domain.code} — {domain.labelFr}
+                </h2>
               </span>
-            </div>
-            <div style={{ display: "grid", gap: 14 }}>
-              {domainCriteria.map((c) => (
-                <CriterionRow
-                  key={c.code}
-                  criterion={c}
-                  segment={segment}
-                  state={criteria[c.code]}
-                  onChange={(patch) => update(c.code, patch)}
-                />
-              ))}
-            </div>
+              <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {missingCritical > 0 && (
+                  <span style={{ color: "var(--bad)", fontSize: 11, fontWeight: 600 }}>
+                    {missingCritical} critique(s) manquant(s)
+                  </span>
+                )}
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {answered}/{domainCriteria.length} · poids {segment}{" "}
+                  {(weight / 100).toFixed(2)} %
+                </span>
+              </span>
+            </button>
+            {!isCollapsed && (
+              <div style={{ display: "grid", gap: 14 }}>
+                {domainCriteria.map((c) => (
+                  <CriterionRow
+                    key={c.code}
+                    criterion={c}
+                    segment={segment}
+                    state={criteria[c.code]}
+                    onChange={(patch) => update(c.code, patch)}
+                  />
+                ))}
+              </div>
+            )}
           </section>
         );
       })}
 
-      <section className="card" style={{ padding: 16 }}>
+      <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Qualité des données</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
           Confiance = {model.confidenceWeights.completeness} % complétude +{" "}
@@ -294,7 +427,7 @@ export function ScoringForm({ model, counterparties }: Props) {
         </div>
       </section>
 
-      <section className="card" style={{ padding: 16 }}>
+      <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Caps structurels</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
           Politique interne : un cap plafonne le grade final sans jamais modifier le
@@ -317,7 +450,7 @@ export function ScoringForm({ model, counterparties }: Props) {
         </div>
       </section>
 
-      <section className="card" style={{ padding: 16 }}>
+      <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Red flags et défaut</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
           Un signal BLOCK arrête la notation ; un signal DEFAULT_CHECK ou REFER n&apos;est
@@ -338,9 +471,10 @@ export function ScoringForm({ model, counterparties }: Props) {
                   )
                 }
               />
-              <span style={{ fontSize: 13 }}>
-                <strong>{rf.code}</strong>{" "}
-                <span className={badgeClass(rf.level)}>{rf.level}</span> — {rf.labelFr}
+              <span style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <strong>{rf.code}</strong>
+                <RedFlagLevelBadge level={rf.level} />
+                {rf.labelFr}
               </span>
             </label>
           ))}
@@ -361,7 +495,19 @@ export function ScoringForm({ model, counterparties }: Props) {
         </label>
       </section>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+      <div
+        className="card no-print"
+        style={{
+          position: "sticky",
+          bottom: 16,
+          padding: "12px 16px",
+          display: "flex",
+          gap: 12,
+          alignItems: "center",
+          boxShadow: "0 4px 16px color-mix(in srgb, var(--text) 12%, transparent)",
+          zIndex: 5,
+        }}
+      >
         <button
           onClick={submit}
           disabled={pending}
@@ -377,6 +523,12 @@ export function ScoringForm({ model, counterparties }: Props) {
         >
           {pending ? "Calcul en cours…" : "Calculer la notation"}
         </button>
+        <button type="button" onClick={resetForm} style={buttonGhostStyle}>
+          Réinitialiser
+        </button>
+        <span className="muted" style={{ fontSize: 12 }}>
+          {answeredCount}/{applicable.length} renseignés
+        </span>
         {message && <span className="muted">{message}</span>}
         {error && <span style={{ color: "var(--bad)" }}>{error}</span>}
       </div>
@@ -385,6 +537,15 @@ export function ScoringForm({ model, counterparties }: Props) {
     </div>
   );
 }
+
+const buttonGhostStyle = {
+  background: "none",
+  border: "1px solid var(--border)",
+  borderRadius: 6,
+  padding: "5px 12px",
+  color: "var(--text)",
+  fontSize: 12,
+} as const;
 
 const CAP_FLAGS = [
   { key: "negativeTangibleEquity", label: "Fonds propres tangibles négatifs (CAP02)" },
@@ -397,10 +558,6 @@ const CAP_FLAGS = [
   { key: "activeRestructuringForbearance", label: "Restructuration / forbearance active (CAP09)" },
   { key: "materialGroupFileIncomplete", label: "Dossier groupe matériel incomplet (CAP10)" },
 ];
-
-function badgeClass(level: string): string {
-  return level === "BLOCK" ? "muted" : "muted";
-}
 
 function CriterionRow({
   criterion,

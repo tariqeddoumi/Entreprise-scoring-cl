@@ -5,6 +5,7 @@ import { getModel } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
+import { GradeBadge } from "@/app/ui-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -95,8 +96,8 @@ export default async function RatingRunPage({
               {run.overrides.map((o) => (
                 <tr key={o.id}>
                   <td>{o.status}</td>
-                  <td>{o.fromGrade}</td>
-                  <td>{o.toGrade}</td>
+                  <td><GradeBadge grade={o.fromGrade} /></td>
+                  <td><GradeBadge grade={o.toGrade} /></td>
                   <td className="muted">{o.reasonCode}</td>
                   <td className="muted">{o.requestedBy}</td>
                   <td className="muted">{o.decidedBy ?? "—"}</td>

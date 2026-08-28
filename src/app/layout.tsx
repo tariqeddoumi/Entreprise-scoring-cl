@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getSessionIdentity } from "@/lib/session";
+import { listModels } from "@/models";
 import { logoutAction } from "./login/actions";
+import { NavLinks } from "./nav-links";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,23 +12,34 @@ export const metadata: Metadata = {
     "Plateforme de notation interne des contreparties entreprises non financières au Maroc (BAM, IFRS 9, Bâle II/III).",
 };
 
-const NAV = [
-  { href: "/", label: "Tableau de bord" },
-  { href: "/counterparties", label: "Contreparties" },
-  { href: "/scoring", label: "Nouvelle notation" },
-  { href: "/models", label: "Modèles" },
-  { href: "/methodology", label: "Méthodologie" },
-];
+/**
+ * Résumé exact de l'état de calibration des modèles publiés, calculé plutôt
+ * qu'affirmé : un texte figé aurait pu continuer à dire « non calibré » après
+ * l'attachement d'une calibration, comme c'est arrivé pour la carte de
+ * statistique du tableau de bord.
+ */
+function calibrationFooterFr(models: ReturnType<typeof listModels>): string {
+  const observed = models.filter((m) => m.calibration?.dataSource === "OBSERVED").length;
+  const synthetic = models.filter((m) => m.calibration?.dataSource === "SYNTHETIC").length;
+  const none = models.length - observed - synthetic;
+  const parts: string[] = [];
+  if (observed > 0) parts.push(`${observed} calibré(s) sur défauts observés`);
+  if (synthetic > 0) parts.push(`${synthetic} calibré(s) sur données simulées uniquement`);
+  if (none > 0) parts.push(`${none} non calibré(s)`);
+  return `Modèles publiés : ${parts.join(", ")}.`;
+}
 
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await getSessionIdentity("READONLY");
+  const models = listModels();
 
   return (
     <html lang="fr">
       <body>
         <header
+          className="no-print"
           style={{
             background: "var(--surface)",
             borderBottom: "1px solid var(--border)",
@@ -49,13 +62,7 @@ export default async function RootLayout({
             >
               Scoring Entreprises · Maroc
             </Link>
-            <nav style={{ display: "flex", gap: 20 }}>
-              {NAV.map((n) => (
-                <Link key={n.href} href={n.href} style={{ color: "var(--muted)" }}>
-                  {n.label}
-                </Link>
-              ))}
-            </nav>
+            <NavLinks />
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
               {session.ok ? (
                 <>
@@ -90,6 +97,7 @@ export default async function RootLayout({
           {children}
         </main>
         <footer
+          className="no-print"
           style={{
             maxWidth: 1280,
             margin: "0 auto",
@@ -98,10 +106,11 @@ export default async function RootLayout({
             fontSize: 12,
           }}
         >
-          Modèle expert seed non calibré (pd_status = UNCALIBRATED). Les seuils ne
-          constituent ni des règles Bank Al-Maghrib ni des paramètres IFRS 9 : ils
-          doivent être calibrés, validés indépendamment et approuvés avant tout usage
-          contraignant.
+          {calibrationFooterFr(models)} Une calibration sur données simulées valide la
+          chaîne de traitement, jamais le niveau réel du risque. Les seuils ne
+          constituent ni des règles Bank Al-Maghrib ni des paramètres IFRS 9 tant
+          qu&apos;ils n&apos;ont pas été calibrés sur historique réel, validés
+          indépendamment et approuvés.
         </footer>
       </body>
     </html>
