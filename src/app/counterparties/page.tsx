@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { prisma, safeQuery } from "@/lib/safe-db";
-import { requireSession } from "@/lib/session";
+import { getSessionIdentity, requireSession } from "@/lib/session";
 import { CounterpartiesTable } from "./CounterpartiesTable";
+import { NewCounterpartyForm } from "./NewCounterpartyForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function CounterpartiesPage() {
   // Toute page porteuse de données exige une session authentifiée.
   await requireSession();
+  // La création exige le rôle ANALYST : le formulaire ne s'affiche donc que
+  // pour les identités habilitées à écrire, comme le fait déjà l'API REST.
+  const canCreate = (await getSessionIdentity("ANALYST")).ok;
 
   const { data: items, dbAvailable } = await safeQuery(
     () =>
@@ -50,6 +54,8 @@ export default async function CounterpartiesPage() {
           </span>
         </div>
       )}
+
+      {dbAvailable && canCreate && <NewCounterpartyForm />}
 
       <section className="card" style={{ padding: 16 }}>
         {items.length === 0 ? (
