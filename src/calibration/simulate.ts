@@ -278,12 +278,12 @@ export function simulatePortfolio(opts: SimulationOptions): SimulationResult {
         defaulted,
         alreadyInDefault,
         input,
-        outcome: result.outcome,
+        outcome: result.ratingStatus,
         rawScore: result.rawScore,
         engineGrade: result.engineGrade,
         finalGrade: result.finalGrade,
-        confidenceScore: result.confidenceScore,
-        bindingCap: bindingCapCode(model, result.engineGrade, result.finalGrade, result.appliedCaps),
+        confidenceScore: result.confidence.score,
+        bindingCap: bindingCapCode(model, result.engineGrade, result.finalGrade, result.appliedRules),
       });
     }
   }
@@ -306,7 +306,7 @@ function bindingCapCode(
   appliedCaps: readonly { code: string; maxGrade: string }[]
 ): string | null {
   if (!engineGrade || !finalGrade || engineGrade === finalGrade) return null;
-  const rank = (g: string) => model.masterScale.findIndex((b) => b.grade === g);
+  const rank = (g: string) => model.gradeScale.bands.findIndex((b) => b.grade === g);
   // Le cap mordant est celui dont le plafond correspond au grade final retenu.
   const mordants = appliedCaps.filter((c) => c.maxGrade !== "NO_GRADE" && rank(c.maxGrade) === rank(finalGrade));
   if (mordants.length > 0) return mordants[0].code;
@@ -344,7 +344,7 @@ function buildInput(
     const level = levelFromQuantile(u, a.scoreLevelMix);
     levels[c.code] = level;
 
-    const critique = c.critical === true || c.missingPolicy === "BLOCK";
+    const critique = c.unavailablePolicy === "BLOCK";
     // Une donnée critique manquante bloque le scoring : c'est le comportement
     // recherché du moteur, mais un portefeuille de calibration majoritairement
     // bloqué n'apprendrait rien. On ne l'omet donc que rarement.
@@ -415,7 +415,7 @@ function buildInput(
   // Un flag que le modèle ne sait pas exploiter est retiré : il ne déclencherait
   // aucun cap et brouillerait la lecture du dossier.
   const flagsExploitables = new Set(
-    model.structuralCaps.map((c) => CAP_TRIGGER_TO_FLAG[c.trigger]).filter(Boolean)
+    model.nonCompensatoryRules.map((c) => CAP_TRIGGER_TO_FLAG[c.trigger]).filter(Boolean)
   );
   for (const k of Object.keys(flags) as (keyof StructuralFlagsInput)[]) {
     if (k === "companyAgeYears" || k === "hasStrongGroupSupport") continue;

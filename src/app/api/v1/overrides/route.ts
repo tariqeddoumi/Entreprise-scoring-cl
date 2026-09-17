@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   let notches: number;
   try {
     notches = Math.abs(
-      gradeRank(model.masterScale, toGrade) - gradeRank(model.masterScale, run.cappedGrade)
+      gradeRank(model.gradeScale, toGrade) - gradeRank(model.gradeScale, run.cappedGrade)
     );
   } catch {
     return problem(400, `Grade cible inconnu : ${toGrade}`);

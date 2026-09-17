@@ -68,13 +68,13 @@ describe("Comparaison de deux notations", () => {
     expect(c.criterionDeltas[0].code).toBe("D3.1");
   });
 
-  it("signale un cap apparu", () => {
+  it("signale une exception non compensatoire apparue", () => {
     const before = run();
     const after = run((i) => {
       i.structuralFlags = { baseDscrBelow1: true };
     });
     const c = compareRuns(before, after);
-    expect(c.capChangesFr.join(" ")).toContain("CAP06");
+    expect(c.capChangesFr.join(" ")).toContain("NC01");
     expect(c.gradeChanged).toBe(true);
   });
 
@@ -109,11 +109,27 @@ describe("Comparaison de deux notations", () => {
   it("refuse de comparer lorsqu'une exécution n'a pas produit de score", () => {
     const before = run();
     const after = run((i) => {
-      i.redFlags = ["RF01"]; // bloquant : aucun score
+      // Donnée critique absente : aucun score n'est produit.
+      i.criteria["D1.5"] = { status: "MISSING" };
     });
     const c = compareRuns(before, after);
     expect(c.comparable).toBe(false);
     expect(c.incomparableReasonFr).toContain("n'a pas produit de score");
     expect(c.summaryFr).toContain("sans score");
+  });
+
+  it("compare toujours deux notations dont l'une est bloquée en conformité", () => {
+    // Constat C06 : un blocage de conformité ne supprime plus la notation. Les
+    // deux exécutions restent donc comparables, et le statut conformité est
+    // porté séparément.
+    const before = run();
+    const after = run((i) => {
+      i.redFlags = ["RF01"];
+      i.existingExposure = true;
+    });
+    const c = compareRuns(before, after);
+    expect(c.comparable).toBe(true);
+    expect(after.complianceStatus).toBe("BLOCKED");
+    expect(after.ratingStatus).toBe("RATED");
   });
 });

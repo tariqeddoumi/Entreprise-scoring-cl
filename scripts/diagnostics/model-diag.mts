@@ -25,7 +25,7 @@ function diag(m: ModelConfig) {
   }
 
   // 2. Critères critiques
-  const critical = m.criteria.filter(c => c.critical);
+  const critical = m.criteria.filter(c => c.unavailablePolicy === "BLOCK");
   console.log(`\nCritères critiques (blocage si absent) : ${critical.map(c => c.code).join(", ") || "aucun"}`);
 
   // 3. Poids max d'un critère
@@ -41,10 +41,10 @@ function diag(m: ModelConfig) {
   console.log(`\nCritères à cas spéciaux : ${withSpecial.length}`);
 
   // 5. Red flags jamais reliés à un critère
-  console.log(`Red flags : ${m.redFlags.length}, caps : ${m.structuralCaps.length}`);
+  console.log(`Red flags : ${m.redFlags.length}, caps : ${m.nonCompensatoryRules.length}`);
 
   // 6. Couverture des triggers de cap
-  console.log(`Triggers de cap : ${m.structuralCaps.map(c => c.trigger).join(", ")}`);
+  console.log(`Triggers de cap : ${m.nonCompensatoryRules.map(c => c.trigger).join(", ")}`);
 }
 
 diag(CORP_STD_V1);

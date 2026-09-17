@@ -9,19 +9,28 @@
 import type { CSSProperties } from "react";
 
 /**
- * Couleur d'un grade, par tiers de l'échelle G1–G10 (+ DEF, toujours le pire).
- * Ne dépend pas de la master scale d'un modèle précis : les modèles publiés
- * partagent aujourd'hui la même échelle à dix grades, et cette fonction reste
- * une approximation d'affichage même si ce n'était plus le cas.
+ * Couleur d'un grade.
+ *
+ * Chaque modèle porte désormais son échelle propre — STD-P1…STD-P8 pour le
+ * modèle standard, TPE-B1…TPE-B6 pour le comportemental — et les deux n'ont
+ * ni la même longueur ni la même signification (constat C03). La couleur est
+ * donc calculée sur la POSITION RELATIVE dans l'échelle du grade lu, à partir
+ * du nombre de grades que porte son préfixe, et non sur un numéro absolu.
+ *
+ * Reste purement cosmétique : aucun calcul métier n'en dépend.
  */
+const SCALE_LENGTHS: Record<string, number> = { "STD-P": 8, "TPE-B": 6 };
+
 export function gradeAccent(grade: string | null | undefined): string {
   if (!grade) return "var(--muted)";
   if (grade.startsWith("DEF")) return "var(--bad)";
-  const match = /^G(\d+)$/.exec(grade);
+  const match = /^([A-Z]+-[A-Z])(\d+)$/.exec(grade);
   if (!match) return "var(--muted)";
-  const n = Number(match[1]);
-  if (n <= 4) return "var(--good)";
-  if (n <= 7) return "var(--warn)";
+  const total = SCALE_LENGTHS[match[1]];
+  if (!total) return "var(--muted)";
+  const position = Number(match[2]) / total;
+  if (position <= 0.4) return "var(--good)";
+  if (position <= 0.75) return "var(--warn)";
   return "var(--bad)";
 }
 

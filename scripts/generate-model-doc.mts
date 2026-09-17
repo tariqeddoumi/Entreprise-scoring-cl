@@ -53,9 +53,9 @@ function renderCriterion(model: ModelConfig, c: CriterionConfig, segments: Segme
 
   const weightCells = segments.map((s) => `${s} ${pct(c.weightsBps[s])}`).join(" · ");
   const nature = c.type === "QUANTITATIVE" ? "quantitatif" : "qualitatif ancré";
-  const policy = c.critical
+  const policy = c.unavailablePolicy === "BLOCK"
     ? "donnée critique — absence bloquante"
-    : `politique en cas d'absence : ${c.missingPolicy}`;
+    : `politique en cas d'absence : ${c.unavailableScore}`;
   w(`**Poids :** ${weightCells} · **Nature :** ${nature} · **${policy}**`);
   w();
 
@@ -153,55 +153,80 @@ function renderModel(model: ModelConfig, title: string) {
     for (const c of criteria) renderCriterion(model, c, segments);
   }
 
-  w(`### Échelle interne (master scale)`);
+  w(`### Échelle de grades propre au modèle — ${model.gradeScale.scaleId}`);
   w();
-  w(`| Grade | Score | Libellé | Décision indicative |`);
-  w(`|---|---|---|---|`);
-  for (const b of model.masterScale) {
+  w(
+    `Statut : ${model.gradeScale.status === "PROVISIONAL" ? "provisoire" : "calibrée"}. ${
+      model.gradeScale.comparableWith.length === 0
+        ? "Aucune correspondance validée avec une autre échelle : ces grades ne sont comparables à ceux d'aucun autre modèle."
+        : `Correspondance validée avec : ${model.gradeScale.comparableWith.join(", ")}.`
+    } L'échelle ne porte aucune décision indicative — la décision de crédit relève d'un moteur distinct.`
+  );
+  w();
+  w(`| Grade | Score | Libellé |`);
+  w(`|---|---|---|`);
+  for (const b of model.gradeScale.bands) {
     const range =
       b.minScore === null
         ? `< ${b.maxScore}`
         : b.maxScore === null
           ? `≥ ${b.minScore}`
           : `[${b.minScore} ; ${b.maxScore}[`;
-    w(`| ${b.grade} | ${range} | ${b.labelFr} | ${b.indicativeDecisionFr} |`);
+    w(`| ${b.grade} | ${range} | ${b.labelFr} |`);
   }
-  w(
-    `| DEF1 · DEF2 · DEF3 | définition de défaut déclenchée | Grades défaut internes | Recouvrement et classification par les dispositifs dédiés |`
-  );
   w();
-
-  w(`### Caps structurels`);
+  w(`Grades de défaut, communs aux modèles (un défaut est un état constaté) :`);
   w();
-  w(`| Code | Situation | Plafond de grade | Source de la règle |`);
+  w(`| Grade | Libellé | Critères d'entrée | Règle de guérison |`);
   w(`|---|---|---|---|`);
-  for (const c of model.structuralCaps) {
-    const cap = c.maxGrade === "NO_GRADE" ? "aucun grade final" : `pas mieux que ${c.maxGrade}`;
-    w(`| ${c.code} | ${c.labelFr} | ${cap} | ${c.source} |`);
+  for (const d of model.gradeScale.defaultGrades) {
+    w(`| ${d.grade} | ${d.labelFr} | ${d.entryCriteriaFr.join(" ")} | ${d.cureRuleFr} |`);
   }
   w();
 
-  w(`### Niveau de confiance et conséquence sur le grade`);
+  w(`### Exceptions non compensatoires`);
+  w();
+  if (model.nonCompensatoryRules.length === 0) {
+    w(
+      `Aucune exception. Toutes les contributions sont continues : aucun effet marginal n'a à être isolé pour calibrer la grille.`
+    );
+    w();
+  } else {
+    w(`| Code | Situation | Plafond de grade | Contribution centrale | Source | Justification de l'effet incrémental |`);
+    w(`|---|---|---|---|---|---|`);
+    for (const c of model.nonCompensatoryRules) {
+      const cap = c.maxGrade === "NO_GRADE" ? "aucun grade final" : `pas mieux que ${c.maxGrade}`;
+      w(
+        `| ${c.code} | ${c.labelFr} | ${cap} | ${c.centralCriterion ?? "—"} | ${c.source} | ${c.incrementalRationaleFr} |`
+      );
+    }
+    w();
+  }
+
+  w(`### Classe de confiance et porte de couverture`);
   w();
   w(
-    `Confiance = ${model.confidenceWeights.completeness} % complétude + ${model.confidenceWeights.freshness} % fraîcheur + ${model.confidenceWeights.reliability} % fiabilité + ${model.confidenceWeights.provenance} % provenance.`
+    `Confiance = ${model.confidence.weights.completeness} % complétude + ${model.confidence.weights.freshness} % fraîcheur + ${model.confidence.weights.reliability} % fiabilité + ${model.confidence.weights.provenance} % provenance.`
   );
   w();
-  w(`| Score de confiance | Niveau | Conséquence |`);
+  w(
+    `La classe de confiance ne plafonne pas le grade : elle est restituée à côté de lui. Sous la classe minimale (${model.confidence.minimumClassForRating}), aucun grade n'est produit.`
+  );
+  w();
+  w(`| Score de confiance | Classe | Effet |`);
   w(`|---|---|---|`);
-  for (const b of [...model.confidenceCaps].sort((a, z) => z.minConfidence - a.minConfidence)) {
-    const range =
-      b.maxConfidence === null
-        ? `≥ ${b.minConfidence}`
-        : `[${b.minConfidence} ; ${b.maxConfidence}[`;
+  for (const b of [...model.confidence.classes].sort((a, z) => z.minScore - a.minScore)) {
+    const range = b.maxScore === null ? `≥ ${b.minScore}` : `[${b.minScore} ; ${b.maxScore}[`;
     const eff =
-      b.maxGrade === "NONE"
-        ? "aucun cap lié à la qualité des données"
-        : b.maxGrade === "NO_GRADE"
-          ? "aucun grade final : dossier incomplet ou modèle alternatif requis"
-          : `le grade final ne peut être meilleur que ${b.maxGrade}`;
-    w(`| ${range} | ${b.levelFr} | ${eff} |`);
+      b.code === "U"
+        ? "aucun grade produit : dossier non notable en l'état"
+        : "grade produit, classe restituée à côté du grade";
+    w(`| ${range} | ${b.code} — ${b.labelFr} | ${eff} |`);
   }
+  w();
+  w(
+    `Couverture minimale exigée : ${(model.coverage.minGlobalObservedBps / 100).toFixed(0)} % du poids total porté par une donnée observée, et ${(model.coverage.minDomainObservedBps / 100).toFixed(0)} % par domaine. Une estimation ne compte pas comme une observation.`
+  );
   w();
 
   w(`### Red flags`);

@@ -204,14 +204,25 @@ export interface ValidationReport {
   perSegmentGini: { segment: Segment; n: number; gini: number }[];
 }
 
-const GRADE_ORDER = ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10"];
+/**
+ * Ordre des grades — LU sur l'échelle du modèle calibré.
+ *
+ * Une liste figée « G1…G10 » vivait ici : elle est devenue fausse le jour où
+ * chaque modèle a reçu son échelle propre (constat C03), et elle produisait un
+ * effectif nul sans rien signaler. L'ordre vient désormais de la configuration
+ * réellement chargée, comme partout ailleurs.
+ */
+function gradeOrder(model: ModelConfig): string[] {
+  return model.gradeScale.bands.map((b) => b.grade);
+}
 
-function gradeCounts(obs: readonly Observation[]): number[] {
-  return GRADE_ORDER.map((g) => obs.filter((o) => o.grade === g).length);
+function gradeCounts(order: readonly string[], obs: readonly Observation[]): number[] {
+  return order.map((g) => obs.filter((o) => o.grade === g).length);
 }
 
 function validateSample(
   name: string,
+  order: readonly string[],
   obs: readonly Observation[],
   gradePd: Map<string, number>,
   moc: number
@@ -223,7 +234,7 @@ function validateSample(
   const scores = obs.map((o) => o.score);
 
   const grades: GradeCheck[] = [];
-  for (const g of GRADE_ORDER) {
+  for (const g of order) {
     const sub = obs.filter((o) => o.grade === g);
     if (sub.length === 0) continue;
     const assigned = gradePd.get(g);
@@ -368,7 +379,8 @@ export function fitCalibration(opts: FitOptions): FitResult {
   //   c. rétrécissement du taux observé vers cette tendance, d'autant plus fort
   //      que le grade compte peu de DÉFAUTS (et non peu de dossiers : c'est le
   //      nombre de défauts qui porte l'information).
-  const perGrade = GRADE_ORDER.map((g) => {
+  const order = gradeOrder(model);
+  const perGrade = order.map((g) => {
     const sub = dev.filter((o) => o.grade === g);
     return { grade: g, n: sub.length, defaults: sub.reduce((a, o) => a + o.defaulted, 0) };
   }).filter((r) => r.n > 0);
@@ -435,7 +447,7 @@ export function fitCalibration(opts: FitOptions): FitResult {
   const centralTendency = toutes.reduce((a, o) => a + o.defaulted, 0) / Math.max(1, toutes.length);
 
   // --- Validation ----------------------------------------------------------
-  const validation = buildValidation(samples, lookup, opts.seed, opts.bootstrapReplicates ?? 300, moc);
+  const validation = buildValidation(samples, order, lookup, opts.seed, opts.bootstrapReplicates ?? 300, moc);
 
   const calibration: CalibrationConfig = {
     calibrationId: opts.calibrationId,
@@ -486,15 +498,16 @@ function stableStringify(value: unknown): string {
 
 function buildValidation(
   samples: Samples,
+  order: readonly string[],
   lookup: Map<string, number>,
   seed: number,
   replicates: number,
   moc: number
 ): ValidationReport {
   const dev = samples.development;
-  const development = validateSample("développement", dev, lookup, moc);
-  const holdout = validateSample("hors-échantillon", samples.holdout, lookup, moc);
-  const outOfTime = validateSample("hors-période", samples.outOfTime, lookup, moc);
+  const development = validateSample("développement", order, dev, lookup, moc);
+  const holdout = validateSample("hors-échantillon", order, samples.holdout, lookup, moc);
+  const outOfTime = validateSample("hors-période", order, samples.outOfTime, lookup, moc);
 
   // Intervalle de confiance du Gini par bootstrap, générateur injecté pour
   // rester reproductible d'une exécution à l'autre.
@@ -541,9 +554,9 @@ function buildValidation(
     holdout,
     outOfTime,
     giniCi: { point: giniCi.point, lower: giniCi.lower, upper: giniCi.upper },
-    psiHoldout: psi(gradeCounts(dev), gradeCounts(samples.holdout)),
-    psiOutOfTime: psi(gradeCounts(dev), gradeCounts(samples.outOfTime)),
-    gradeHerfindahl: herfindahl(gradeCounts(dev)),
+    psiHoldout: psi(gradeCounts(order, dev), gradeCounts(order, samples.holdout)),
+    psiOutOfTime: psi(gradeCounts(order, dev), gradeCounts(order, samples.outOfTime)),
+    gradeHerfindahl: herfindahl(gradeCounts(order, dev)),
     excluded: samples.excluded,
     perSegmentGini,
   };

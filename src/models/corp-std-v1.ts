@@ -1,6 +1,7 @@
 import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
+import { DEFAULT_GRADES } from "@/reference/default-policy";
 import calibrationJson from "./calibrations/CORP_STD_V1-SYNTH-20260823.json";
 
 /**
@@ -35,13 +36,14 @@ const criteria: CriterionConfig[] = [
       "CAGR −15 % à −5 %, ou deux exercices consécutifs en baisse, ou écart défavorable au secteur > 10 points",
       "CAGR < −15 %, effondrement récent > 25 %, perte majeure de clientèle ou CA non fiable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
     evidenceRequiredFr: ["États financiers N, N−1, N−2", "Comparaison sectorielle datée"],
   },
   {
     code: "D1.2",
     domainCode: "D1",
+    cgncEntry: "EBE_EBITDA",
     labelFr: "Marge EBITDA / performance opérationnelle",
     descriptionFr:
       "EBITDA ajusté/CA, percentile sectoriel, tendance sur trois ans. Si l'EBITDA est non pertinent pour l'activité, utiliser un indicateur opérationnel équivalent validé.",
@@ -54,8 +56,8 @@ const criteria: CriterionConfig[] = [
       "Marge entre P10 et P25, ou baisse > 3 points, ou un exercice proche de zéro",
       "Marge négative au dernier exercice, < P10, pertes opérationnelles récurrentes ou EBITDA non fiable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
     evidenceRequiredFr: ["EBITDA ajusté et trace des retraitements", "Référentiel sectoriel daté"],
   },
   {
@@ -73,12 +75,13 @@ const criteria: CriterionConfig[] = [
       "P10 à P25, proche de zéro ou forte dépendance à des éléments non récurrents",
       "Négatif au dernier exercice et tendance non corrigée, ou < P10 sur deux exercices"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D1.4",
     domainCode: "D1",
+    cgncEntry: "FONDS_PROPRES_TANGIBLES",
     labelFr: "Fonds propres tangibles / total bilan",
     descriptionFr:
       "FP tangibles / total bilan ajusté, en %. Une réévaluation non liquide ou une créance sur associé ne vaut pas recapitalisation en cash. Comptes courants d'associés assimilés aux FP uniquement si subordination, blocage et permanence approuvés.",
@@ -95,17 +98,18 @@ const criteria: CriterionConfig[] = [
     specialCases: [
       {
         code: "NEGATIVE_TANGIBLE_EQUITY",
-        labelFr: "Fonds propres tangibles négatifs — déclenche également le cap CAP02",
+        labelFr:
+          "Fonds propres tangibles négatifs (contribution centrale du phénomène ; RF09 route la revue, aucun plafond ne s'y ajoute)",
         score: 0,
       },
     ],
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
     evidenceRequiredFr: ["Bilan et retraitements des incorporels/non-valeurs"],
   },
   {
     code: "D1.5",
     domainCode: "D1",
+    cgncEntry: "DETTE_FINANCIERE_ECONOMIQUE",
     labelFr: "Dette financière nette / EBITDA ajusté",
     descriptionFr:
       "Dette nette négative : score 100 uniquement si trésorerie libre, durable, rapprochée et non affectée. Holding : look-through des flux/dividendes, pas d'application mécanique.",
@@ -126,13 +130,13 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
     evidenceRequiredFr: ["États financiers", "Trace des retraitements dette/trésorerie"],
   },
   {
     code: "D1.6",
     domainCode: "D1",
+    cgncEntry: "CREANCES_PUBLIQUES_TVA",
     labelFr: "Liquidité court terme",
     descriptionFr:
       "Actif circulant réalisable CT / passif circulant exigible, stocks obsolètes et créances douteuses retraités. Secteurs à BFR structurellement négatif : sous-modèle cash/stress validé.",
@@ -152,8 +156,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D1.7",
@@ -170,8 +174,8 @@ const criteria: CriterionConfig[] = [
       "> P75 ou détérioration de 16 à 45 jours ; stocks/créances vieillissants",
       "> P90 avec détérioration > 45 jours, actifs non recouvrables, fournisseurs durablement impayés ou BFR non finançable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D1.8",
@@ -192,8 +196,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // =========================================================================
@@ -214,12 +218,13 @@ const criteria: CriterionConfig[] = [
       PME: bins5("HIGHER_IS_BETTER", [5.0, 3.0, 2.0, 1.2]),
       GE: bins5("HIGHER_IS_BETTER", [6.0, 4.0, 2.5, 1.5]),
     },
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D2.2",
     domainCode: "D2",
+    cgncEntry: "SERVICE_DETTE",
     labelFr: "DSCR / couverture du service de la dette",
     descriptionFr:
       "CFADS / (intérêts + principal exigibles), service de dette complet y compris leasing et dette assimilée. Revolving sans amortissement : convention de conversion documentée.",
@@ -232,8 +237,8 @@ const criteria: CriterionConfig[] = [
       PME: bins5("HIGHER_IS_BETTER", [1.6, 1.35, 1.2, 1.0]),
       GE: bins5("HIGHER_IS_BETTER", [1.75, 1.4, 1.2, 1.0]),
     },
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
     evidenceRequiredFr: ["Échéancier complet de la dette", "CFADS et retraitements"],
   },
   {
@@ -254,8 +259,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D2.4",
@@ -272,8 +277,8 @@ const criteria: CriterionConfig[] = [
       "Couverture 3–6 mois, headroom < 10 %, mur de dette proche ou lignes non confirmées",
       "Couverture < 3 mois, gap avéré, refinancement non sécurisé ou rupture prévisible"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D2.5",
@@ -293,8 +298,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D2.6",
@@ -309,8 +314,8 @@ const criteria: CriterionConfig[] = [
       "Marge entre 0 % et 10 %, waiver en cours ou reporting incomplet",
       "Covenant rompu non régularisé, information dissimulée ou accélération possible de dette"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // =========================================================================
@@ -339,8 +344,7 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
     evidenceRequiredFr: ["Système autoritatif DPD banque"],
   },
   {
@@ -357,8 +361,8 @@ const criteria: CriterionConfig[] = [
       "16–30 jours cumulés, épisodes mensuels ou montant > 10 %",
       "> 30 jours, dépassement permanent, compte bloqué ou absence d'autorisation"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D3.3",
@@ -375,12 +379,13 @@ const criteria: CriterionConfig[] = [
       "> 95 % pendant plus de trois mois, pics fréquents ou dépendance au renouvellement",
       "> 100 % non autorisé, ligne saturée sans capacité de réduction ou besoin structurel non financé"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D3.4",
     domainCode: "D3",
+    cgncEntry: "FLUX_BANCAIRES_NETTOYES",
     labelFr: "Mouvements créditeurs et domiciliation",
     descriptionFr:
       "Mouvements créditeurs observés / flux attendus (%), tendance 12 mois et part des flux domiciliés. Virements circulaires et mouvements artificiels exclus.",
@@ -401,8 +406,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D3.5",
@@ -418,8 +423,8 @@ const criteria: CriterionConfig[] = [
       "Incidents récurrents, régularisation tardive ou incident matériel",
       "Incident grave/non régularisé, interdiction ou signal bloquant selon dispositif applicable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D3.6",
@@ -434,8 +439,8 @@ const criteria: CriterionConfig[] = [
       "Restructuration < 24 mois, concession significative ou dépendance à un moratoire",
       "Échec de restructuration, seconde concession, impayé post-restructuration ou défaut"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D3.7",
@@ -451,8 +456,8 @@ const criteria: CriterionConfig[] = [
       "Hausse > 25 %, dette non expliquée, multiplication de demandes ou dégradation d'une entité liée",
       "Cross-default, contagion applicable, dette cachée, incident majeur groupe ou soutien inversé non soutenable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // =========================================================================
@@ -473,8 +478,8 @@ const criteria: CriterionConfig[] = [
       "S4 — secteur vulnérable/sous surveillance",
       "S5 — secteur très vulnérable/crise structurelle"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
     evidenceRequiredFr: ["Référentiel sectoriel interne daté et version"],
   },
   {
@@ -490,8 +495,8 @@ const criteria: CriterionConfig[] = [
       "Position faible ; perte de parts/clients ; pression prix élevée ; dépendance à un canal",
       "Position marginale/non viable ; produit obsolète ; rupture de licence ; perte du marché essentiel"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D4.3",
@@ -516,8 +521,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
     evidenceRequiredFr: ["Balance clients", "Élimination des ventes intragroupe"],
   },
   {
@@ -539,8 +544,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
     evidenceRequiredFr: ["Balance fournisseurs", "Cartographie des alternatives"],
   },
   {
@@ -558,8 +563,8 @@ const criteria: CriterionConfig[] = [
       "3–6 mois, carnet non ferme, churn élevé ou dépendance à appels d'offres non acquis",
       "< 3 mois, annulations matérielles, carnet artificiel ou arrêt d'activité prévisible"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D4.6",
@@ -576,8 +581,8 @@ const criteria: CriterionConfig[] = [
       "Exposition 50–100 %, couverture < 50 %, risque pays/transfert ou commodity matériel",
       "Exposition > 100 % de l'EBITDA, aucune couverture, continuité menacée ou pays bloqué"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D4.7",
@@ -592,8 +597,8 @@ const criteria: CriterionConfig[] = [
       "Outil vieillissant, incidents fréquents, sous-investissement, dépendance critique, assurance insuffisante",
       "Arrêt majeur non résolu, technologie obsolète, perte de licence/certification ou capex vital non financé"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D4.8",
@@ -608,8 +613,8 @@ const criteria: CriterionConfig[] = [
       "Croissance non rentable, BFR tendu, expansion trop rapide ou investissements sous-estimés",
       "Croissance artificielle/circulaire, acquisitions non intégrées, destruction de cash ou plan irréaliste"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // =========================================================================
@@ -628,8 +633,8 @@ const criteria: CriterionConfig[] = [
       "Équipe incomplète, turnover élevé, expérience limitée, objectifs régulièrement non atteints",
       "Incompétence manifeste, départs critiques, information trompeuse ou incapacité à exploiter"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D5.2",
@@ -644,8 +649,8 @@ const criteria: CriterionConfig[] = [
       "Dirigeant concentre clients, technique et pouvoirs ; absence de succession crédible",
       "Indisponibilité de l'homme-clé compromettant immédiatement l'activité, sans solution"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D5.3",
@@ -660,8 +665,8 @@ const criteria: CriterionConfig[] = [
       "Pouvoirs concentrés, contrôles faibles, recommandations récurrentes non clôturées",
       "Absence de contrôle, fraude/irrégularité de gouvernance, décisions non autorisées"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D5.4",
@@ -678,8 +683,8 @@ const criteria: CriterionConfig[] = [
       "Conflits, dilution probable, actionnaires endettés ou soutien incertain",
       "Groupe en difficulté, ponctions de cash, litige actionnarial majeur ou opacité"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D5.5",
@@ -694,8 +699,8 @@ const criteria: CriterionConfig[] = [
       "Plans fréquemment révisés, réalisations < 60 %, hypothèses trop optimistes",
       "Absence de stratégie, budgets manipulés ou décisions menaçant la continuité"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D5.6",
@@ -710,8 +715,8 @@ const criteria: CriterionConfig[] = [
       "Créances/avances importantes, prix non démontrés, cash-pooling défavorable",
       "Détournement de ressources, créances irrécouvrables, garanties cachées ou transactions non autorisées"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D5.7",
@@ -726,8 +731,8 @@ const criteria: CriterionConfig[] = [
       "Pilotage tardif, absence de forecast, données contradictoires, réaction après incident",
       "Aucun pilotage fiable, refus de transparence ou dissimulation de difficultés"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // =========================================================================
@@ -746,8 +751,8 @@ const criteria: CriterionConfig[] = [
       "Réserves matérielles, nombreux retraitements ou périmètre incomplet",
       "Comptes non fiables/refusés, soupçon de falsification ou continuité non reflétée"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D6.2",
@@ -770,8 +775,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D6.3",
@@ -791,8 +796,8 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D6.4",
@@ -807,8 +812,8 @@ const criteria: CriterionConfig[] = [
       "Arriérés/litige matériel, plan fragile, saisie ou risque de sanction significatif",
       "Mesure d'exécution majeure, dette non soutenable, procédure menaçant l'activité ou document falsifié"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D6.5",
@@ -823,8 +828,8 @@ const criteria: CriterionConfig[] = [
       "Chaîne de détention complexe/opaque, documents expirés ou hors bilan incomplet",
       "UBO/pouvoirs impossibles à établir, faux document ou blocage KYC"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // =========================================================================
@@ -843,8 +848,22 @@ const criteria: CriterionConfig[] = [
       "Exposition élevée (eau/chaleur/inondation/sécheresse), données ou mitigation insuffisantes",
       "Actifs critiques menacés à court terme, sinistres récurrents, absence de solution viable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    // Porte de matérialité (constat H09) : un risque physique n'est évalué que
+    // s'il existe. Sans cette porte, un cabinet de conseil casablancais et une
+    // conserverie du Souss recevaient le même score générique — fausse
+    // précision que le diagnostic relevait explicitement.
+    materialityGate: {
+      flag: "esgPhysicalMaterial",
+      rationaleFr:
+        "Matérialité établie par le référentiel sectoriel et la localisation des sites, jamais au jugement libre de l'analyste.",
+    },
+    notApplicableRule: {
+      allowedCasesFr:
+        "Aucune exposition physique matérielle : activité hors secteurs dépendants de l'eau, de l'agriculture, du littoral ou d'installations exposées aux aléas.",
+      transferWeightTo: "D7.3",
+    },
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D7.2",
@@ -859,8 +878,18 @@ const criteria: CriterionConfig[] = [
       "Forte dépendance énergie/carbone/réglementation, capex important non totalement financé",
       "Modèle économique menacé, interdiction/obsolescence probable, aucun plan crédible"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    materialityGate: {
+      flag: "esgTransitionMaterial",
+      rationaleFr:
+        "Matérialité établie par l'intensité énergétique du secteur et l'exposition à des marchés d'exportation sous contrainte carbone.",
+    },
+    notApplicableRule: {
+      allowedCasesFr:
+        "Activité sans intensité énergétique ni exposition à une réglementation carbone, directe ou via ses donneurs d'ordre.",
+      transferWeightTo: "D7.4",
+    },
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D7.3",
@@ -875,8 +904,8 @@ const criteria: CriterionConfig[] = [
       "Non-conformité matérielle, accident/litige, plan incomplet ou passif potentiel important",
       "Autorisation retirée, fermeture/sanction grave, dommage majeur ou violation bloquante"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "D7.4",
@@ -891,8 +920,8 @@ const criteria: CriterionConfig[] = [
       "Approche réactive, données faibles, plan non chiffré ou sans propriétaire",
       "Déni d'un risque matériel, aucune gouvernance, information trompeuse ou greenwashing démontré"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 ];
 
@@ -908,13 +937,35 @@ const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
 
 export const CORP_STD_V1: ModelConfig = {
   modelId: "CORP_STD_V1",
-  version: "1.0.0",
+  version: "3.0.0",
   labelFr:
     "Modèle expert de notation interne — Entreprises non financières Maroc (TPE/PME/GE)",
   status: "DRAFT_EXPERT_SEED",
-  effectiveFrom: "2026-08-18",
+  effectiveFrom: "2026-09-17",
   conventionFr: "Score 100 = risque le plus faible ; score 0 = risque le plus élevé.",
   segments: ["TPE", "PME", "GE"],
+
+  // Philosophie de notation (constat H01) — sans elle, calibration, backtesting
+  // et IFRS 9 travaillent sur des horizons implicitement différents.
+  philosophy: {
+    type: "HYBRID",
+    horizonMonths: 12,
+    observationWindowsMonths: {
+      financialStatements: 36,
+      behavioral: 24,
+      behavioralTarget: 36,
+      sector: 60,
+    },
+    cycleTreatmentFr:
+      "Hybride assumé : la forte pondération du comportement récent et des flux rend la note sensible au point du cycle, tandis que les grilles financières lissent sur trois exercices. Aucune correction de cycle n'est appliquée tant que l'historique ne permet pas de l'estimer ; la sensibilité au cycle est une limitation documentée, pas une propriété revendiquée.",
+    migrationRuleFr:
+      "Une notation reste valide jusqu'à son terme sauf événement significatif : impayé, restructuration, perte d'un client vital, changement de contrôle, arrivée d'états financiers plus récents. La migration n'est jamais lissée : le grade suit l'information disponible à la date d'arrêté.",
+    refreshRuleFr:
+      "Revue annuelle au minimum, trimestrielle sur les dossiers en surveillance, immédiate sur événement significatif.",
+    postCutoffEventsFr:
+      "Un événement postérieur à la date d'arrêté ne modifie jamais rétroactivement une notation produite : il déclenche une nouvelle notation, à une nouvelle date d'arrêté. C'est la condition du rejeu historique.",
+  },
+
   domains: [
     { code: "D1", labelFr: "Performance financière et structure bilancielle" },
     { code: "D2", labelFr: "Capacité de remboursement et stress" },
@@ -925,71 +976,146 @@ export const CORP_STD_V1: ModelConfig = {
     { code: "D7", labelFr: "ESG et climat" },
   ],
   criteria,
-  masterScale: [
-    { grade: "G1", minScore: 90, maxScore: null, labelFr: "Excellent", indicativeDecisionFr: "Délégation favorable sous contrôles usuels" },
-    { grade: "G2", minScore: 85, maxScore: 90, labelFr: "Très solide", indicativeDecisionFr: "Favorable" },
-    { grade: "G3", minScore: 80, maxScore: 85, labelFr: "Solide", indicativeDecisionFr: "Favorable" },
-    { grade: "G4", minScore: 75, maxScore: 80, labelFr: "Bon", indicativeDecisionFr: "Favorable avec conditions usuelles" },
-    { grade: "G5", minScore: 70, maxScore: 75, labelFr: "Satisfaisant", indicativeDecisionFr: "Analyse normale / conditions selon produit" },
-    { grade: "G6", minScore: 65, maxScore: 70, labelFr: "Acceptable", indicativeDecisionFr: "Conditions renforcées et suivi" },
-    { grade: "G7", minScore: 60, maxScore: 65, labelFr: "Fragile", indicativeDecisionFr: "Comité / revue renforcée, watchlist possible" },
-    { grade: "G8", minScore: 55, maxScore: 60, labelFr: "Faible", indicativeDecisionFr: "Exception très encadrée ou réduction du risque" },
-    { grade: "G9", minScore: 45, maxScore: 55, labelFr: "Très faible", indicativeDecisionFr: "Généralement défavorable, stratégie de réduction" },
-    { grade: "G10", minScore: null, maxScore: 45, labelFr: "Risque très élevé", indicativeDecisionFr: "Défavorable sauf décision exceptionnelle formelle" },
+
+  /**
+   * Échelle PROPRE au modèle standard (constat C03).
+   *
+   * Les libellés G1–G10 partagés avec le modèle comportemental ont été
+   * supprimés : deux grilles qui n'observent pas la même chose ne peuvent pas
+   * afficher le même grade tant qu'aucune correspondance n'a été établie sur
+   * des probabilités de défaut comparables. `comparableWith` reste donc vide.
+   *
+   * Huit grades au lieu de dix (constat H03) : la calibration synthétique
+   * montrait des grades voisins que les données ne distinguaient pas. La
+   * granularité définitive est un RÉSULTAT de calibration sur défauts observés,
+   * pas un choix de présentation — d'où le statut PROVISIONAL.
+   */
+  gradeScale: {
+    scaleId: "STD-P-2026.1",
+    labelFr: "Échelle provisoire du modèle standard",
+    comparableWith: [],
+    status: "PROVISIONAL",
+    bands: [
+      { grade: "STD-P1", minScore: 88, maxScore: null, labelFr: "Très solide" },
+      { grade: "STD-P2", minScore: 82, maxScore: 88, labelFr: "Solide" },
+      { grade: "STD-P3", minScore: 76, maxScore: 82, labelFr: "Bon" },
+      { grade: "STD-P4", minScore: 70, maxScore: 76, labelFr: "Satisfaisant" },
+      { grade: "STD-P5", minScore: 64, maxScore: 70, labelFr: "Acceptable" },
+      { grade: "STD-P6", minScore: 57, maxScore: 64, labelFr: "Fragile" },
+      { grade: "STD-P7", minScore: 48, maxScore: 57, labelFr: "Faible" },
+      { grade: "STD-P8", minScore: null, maxScore: 48, labelFr: "Très faible" },
+    ],
+    defaultGrades: DEFAULT_GRADES,
+  },
+
+  /**
+   * Exceptions non compensatoires (constat C08).
+   *
+   * Dix plafonds en V2, quatre ici. Chacun déclare le critère qui porte la
+   * contribution centrale du phénomène et la raison pour laquelle un effet non
+   * linéaire s'y ajoute ; l'inventaire phénomène-règle (core/double-counting)
+   * refuse le chargement d'une exception qui ne le ferait pas.
+   */
+  nonCompensatoryRules: [
+    {
+      code: "NC01",
+      labelFr: "Couverture du service de la dette inférieure à 1 en scénario de base",
+      maxGrade: "STD-P7",
+      source: "CREDIT_POLICY",
+      trigger: "BASE_DSCR_BELOW_1",
+      centralCriterion: "D2.2",
+      incrementalRationaleFr:
+        "Une incapacité à couvrir le service de la dette en scénario de base n'est compensable ni par la gouvernance ni par un secteur porteur : le défaut survient par manque de trésorerie à l'échéance, quelles que soient les autres qualités du dossier. L'effet incrémental par rapport au score de D2.2 reste à mesurer sur défauts observés.",
+    },
+    {
+      code: "NC02",
+      labelFr: "Incertitude matérielle sur la continuité d'exploitation",
+      maxGrade: "STD-P7",
+      source: "CREDIT_POLICY",
+      trigger: "GOING_CONCERN_UNCERTAINTY",
+      centralCriterion: "D6.1",
+      incrementalRationaleFr:
+        "Une réserve d'auditeur sur la continuité d'exploitation porte une information que les ratios ne contiennent pas encore : elle synthétise un jugement professionnel sur des éléments prospectifs. Son pouvoir prédictif non linéaire est largement documenté ; l'effet incrémental reste à mesurer localement.",
+    },
+    {
+      code: "NC03",
+      labelFr: "Excédent brut d'exploitation négatif deux années sur trois",
+      maxGrade: "STD-P7",
+      source: "CREDIT_POLICY",
+      trigger: "EBITDA_NEGATIVE_2_OF_3",
+      centralCriterion: "D1.2",
+      incrementalRationaleFr:
+        "La persistance distingue un accident d'exercice d'un modèle économique qui ne dégage pas d'excédent. Le critère D1.2 note le niveau du dernier exercice ; il ne capture pas la répétition, qui est précisément ce qui rend le redressement improbable sans apport externe.",
+    },
+    {
+      code: "NC04",
+      labelFr: "Dossier groupe incomplet alors que le groupe est matériel",
+      maxGrade: "STD-P6",
+      source: "CREDIT_POLICY",
+      trigger: "GROUP_FILE_INCOMPLETE",
+      centralCriterion: "D5.4",
+      incrementalRationaleFr:
+        "Contrairement aux autres insuffisances d'information, celle-ci porte sur un périmètre de consolidation entier et non sur une variable isolée : la porte de couverture, qui raisonne critère par critère, ne la détecte pas. Sans vision groupe, ni la contagion ni les sorties de trésorerie ne sont appréciables.",
+    },
   ],
-  structuralCaps: [
-    { code: "CAP01", labelFr: "Entreprise de moins de 2 ans, hors support groupe juridiquement robuste", maxGrade: "G7", source: "CREDIT_POLICY", trigger: "YOUNG_COMPANY_NO_SUPPORT" },
-    { code: "CAP02", labelFr: "Fonds propres tangibles négatifs sans recapitalisation ferme et réalisée", maxGrade: "G9", source: "CREDIT_POLICY", trigger: "NEGATIVE_TANGIBLE_EQUITY" },
-    { code: "CAP03", labelFr: "Incertitude matérielle sur la continuité d'exploitation", maxGrade: "G9", source: "CREDIT_POLICY", trigger: "GOING_CONCERN_UNCERTAINTY" },
-    { code: "CAP04", labelFr: "Comptes annuels trop anciens (au-delà du maximum segment)", maxGrade: "NO_GRADE", source: "CREDIT_POLICY", trigger: "ACCOUNTS_TOO_OLD" },
-    { code: "CAP05", labelFr: "EBITDA négatif deux années sur trois", maxGrade: "G9", source: "CREDIT_POLICY", trigger: "EBITDA_NEGATIVE_2_OF_3" },
-    { code: "CAP06", labelFr: "DSCR < 1,0× en scénario de base", maxGrade: "G9", source: "CREDIT_POLICY", trigger: "BASE_DSCR_BELOW_1" },
-    { code: "CAP07", labelFr: "DSCR < 1,0× uniquement en stress", maxGrade: "G7", source: "CREDIT_POLICY", trigger: "STRESS_DSCR_BELOW_1" },
-    { code: "CAP08", labelFr: "Dépendance client unique sans contrat ferme ni mitigation", maxGrade: "G8", source: "CREDIT_POLICY", trigger: "SINGLE_CLIENT_DEPENDENCY" },
-    { code: "CAP09", labelFr: "Restructuration active / forbearance", maxGrade: "G8", source: "CREDIT_POLICY", trigger: "ACTIVE_RESTRUCTURING" },
-    { code: "CAP10", labelFr: "Dossier groupe incomplet alors que le groupe est matériel", maxGrade: "G7", source: "CREDIT_POLICY", trigger: "GROUP_FILE_INCOMPLETE" },
-  ],
+
   redFlags: [
-    { code: "RF01", labelFr: "Identité/UBO/pouvoirs impossibles à valider", level: "BLOCK", source: "COMPLIANCE", treatmentFr: "Stop KYC, pas de score final" },
-    { code: "RF02", labelFr: "Sanction ou interdiction issue du système conformité autoritatif", level: "BLOCK", source: "COMPLIANCE", treatmentFr: "Suivre la décision Conformité, jamais diluer dans le score" },
-    { code: "RF03", labelFr: "Fraude ou falsification documentaire confirmée", level: "BLOCK", source: "COMPLIANCE", treatmentFr: "Escalade fraude/juridique et audit" },
-    { code: "RF04", labelFr: "Activité interdite par politique ou loi", level: "BLOCK", source: "CREDIT_POLICY", treatmentFr: "Rejet/routage selon politique" },
-    { code: "RF05", labelFr: "Liquidation, cessation ou procédure incompatible avec le going concern", level: "DEFAULT_CHECK", source: "CREDIT_POLICY", treatmentFr: "Classe/grade défaut selon règles applicables" },
-    { code: "RF06", labelFr: "DPD ≥ seuil de défaut, UTP ou cross-default", level: "DEFAULT_CHECK", source: "CREDIT_POLICY", treatmentFr: "Évaluer défaut, contagion, IFRS 9 et BAM séparément" },
-    { code: "RF07", labelFr: "DPD 31–89 jours ou incident matériel récurrent", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Revue risque, watchlist/SICR éventuels" },
-    { code: "RF08", labelFr: "Échec de restructuration ou seconde concession", level: "DEFAULT_CHECK", source: "CREDIT_POLICY", treatmentFr: "Défaut/forbearance selon politique" },
-    { code: "RF09", labelFr: "Fonds propres négatifs et aucun plan ferme", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Cap G9, recapitalisation comme condition éventuelle" },
-    { code: "RF10", labelFr: "Opinion audit défavorable / refus de certifier", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Selon matérialité et fiabilité des comptes (peut devenir BLOCK)" },
-    { code: "RF11", labelFr: "Dette fiscale/sociale ou saisie matérielle", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Quantifier, vérifier plan et priorité de paiement" },
+    { code: "RF01", labelFr: "Identité/UBO/pouvoirs impossibles à valider", level: "BLOCK", source: "COMPLIANCE", treatmentFr: "Statut conformité BLOQUÉ : pas d'entrée en relation. La notation d'une exposition existante reste produite pour la surveillance." },
+    { code: "RF02", labelFr: "Sanction ou interdiction issue du système conformité autoritatif", level: "BLOCK", source: "COMPLIANCE", treatmentFr: "Décision Conformité appliquée telle quelle, jamais diluée dans le score" },
+    { code: "RF03", labelFr: "Fraude ou falsification documentaire confirmée", level: "BLOCK", source: "COMPLIANCE", treatmentFr: "Escalade fraude/juridique et audit ; fiabilité des données à réexaminer intégralement" },
+    { code: "RF04", labelFr: "Activité interdite par politique ou loi", level: "BLOCK", source: "CREDIT_POLICY", treatmentFr: "Rejet/routage selon politique de crédit" },
+    { code: "RF05", labelFr: "Liquidation, cessation ou procédure incompatible avec le going concern", level: "DEFAULT_CHECK", source: "CREDIT_POLICY", treatmentFr: "Évaluation défaut DEF3 par le moteur dédié" },
+    { code: "RF06", labelFr: "DPD ≥ seuil de défaut, UTP ou cross-default", level: "DEFAULT_CHECK", source: "CREDIT_POLICY", treatmentFr: "Évaluer défaut, contagion, IFRS 9 et classification BAM séparément" },
+    { code: "RF07", labelFr: "DPD 31–89 jours ou incident matériel récurrent", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Revue risque, watchlist et augmentation significative du risque éventuelles" },
+    { code: "RF08", labelFr: "Échec de restructuration ou seconde concession", level: "DEFAULT_CHECK", source: "CREDIT_POLICY", treatmentFr: "Défaut DEF2 / forbearance selon la politique validée" },
+    { code: "RF09", labelFr: "Fonds propres négatifs et aucun plan ferme", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Revue ; la contribution au risque est portée par D1.4, sans plafond additionnel" },
+    { code: "RF10", labelFr: "Opinion audit défavorable / refus de certifier", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Selon matérialité et fiabilité des comptes" },
+    { code: "RF11", labelFr: "Dette fiscale/sociale ou saisie matérielle", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Quantifier, vérifier plan d'apurement et rang de paiement" },
     { code: "RF12", labelFr: "Litige menaçant la continuité", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Scénario de perte et avis juridique" },
-    { code: "RF13", labelFr: "Perte d'un client/fournisseur/licence vital", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Reforecast et stress immédiats" },
-    { code: "RF14", labelFr: "Covenant rompu non régularisé", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Vérifier exigibilité et waiver" },
-    { code: "RF15", labelFr: "Transactions liées ou sortie de cash inexpliquée", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Investigation et cap selon impact" },
-    { code: "RF16", labelFr: "Information critique manquante/incohérente", level: "REFER", source: "MODEL", treatmentFr: "Appliquer la politique de complétude (peut devenir BLOCK)" },
-    { code: "RF17", labelFr: "Risque climatique/ESG avec fermeture probable", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Scénario, cap et plan d'adaptation" },
+    { code: "RF13", labelFr: "Perte d'un client/fournisseur/licence vital", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Reprévision et stress immédiats" },
+    { code: "RF14", labelFr: "Covenant rompu non régularisé", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Vérifier exigibilité anticipée et waiver" },
+    { code: "RF15", labelFr: "Transactions liées ou sortie de cash inexpliquée", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Investigation des flux avec parties liées" },
+    { code: "RF16", labelFr: "Information critique manquante/incohérente", level: "REFER", source: "MODEL", treatmentFr: "Traité par la porte de couverture : sous le seuil, aucun grade n'est produit" },
+    { code: "RF17", labelFr: "Risque climatique/ESG avec fermeture probable", level: "REFER", source: "CREDIT_POLICY", treatmentFr: "Scénario sectoriel et plan d'adaptation" },
     { code: "RF18", labelFr: "Contagion groupe réglementaire/politique", level: "DEFAULT_CHECK", source: "REGULATORY", treatmentFr: "Appliquer uniquement la règle validée du régime applicable" },
   ],
-  confidenceWeights: { completeness: 35, freshness: 20, reliability: 30, provenance: 15 },
-  confidenceCaps: [
-    { minConfidence: 0, maxConfidence: 55, levelFr: "Insuffisant", maxGrade: "NO_GRADE" },
-    { minConfidence: 55, maxConfidence: 70, levelFr: "Faible", maxGrade: "G7" },
-    { minConfidence: 70, maxConfidence: 85, levelFr: "Moyen", maxGrade: "G4" },
-    { minConfidence: 85, maxConfidence: null, levelFr: "Élevé", maxGrade: "NONE" },
-  ],
-  segmentation: {
-    geTurnoverThreshold: 175_000_000,
-    smeTurnoverThreshold: 10_000_000,
-    smeExposureThreshold: 2_000_000,
-    currency: "MAD",
-    sourceFr:
-      "Seed inspiré de la segmentation prudentielle des entreprises (BAM) — seuils, définitions de CA/exposition et traitement du groupe À CONFIRMER dans le corpus BAM applicable avant production.",
-    status: "SEED_TO_CONFIRM",
+
+  /**
+   * Confiance (constat H02) : une CLASSE restituée à côté du grade, jamais un
+   * plafond. Sous la classe minimale, aucun grade — un dossier trop peu
+   * documenté n'est pas un dossier moyen.
+   */
+  confidence: {
+    weights: { completeness: 35, freshness: 20, reliability: 30, provenance: 15 },
+    classes: [
+      { code: "A", minScore: 85, maxScore: null, labelFr: "Élevée — estimation robuste" },
+      { code: "B", minScore: 70, maxScore: 85, labelFr: "Moyenne — estimation utilisable avec réserve" },
+      { code: "C", minScore: 55, maxScore: 70, labelFr: "Faible — estimation fragile, à compléter" },
+      { code: "U", minScore: 0, maxScore: 55, labelFr: "Insuffisante — aucun grade produit" },
+    ],
+    minimumClassForRating: "C",
   },
-  // Le statut porté ici est le statut PAR DÉFAUT, appliqué quand aucune
-  // calibration n'est attachée. Dès qu'une calibration l'est, le moteur le
-  // remplace par CALIBRATED ou CALIBRATED_SYNTHETIC selon l'origine des données.
+
+  /**
+   * Couverture (constat C07) : part du poids portée par une donnée réellement
+   * OBSERVÉE. Une estimation n'y compte pas. Seuils seed, à recalibrer sur le
+   * portefeuille réel.
+   */
+  coverage: {
+    minGlobalObservedBps: 6000,
+    minDomainObservedBps: 3000,
+  },
+
+  groupSupport: {
+    maxNotches: 2,
+    requiresAllConditions: true,
+    methodFr:
+      "Note autonome calculée et conservée. Relèvement accordé seulement si les quatre conditions sont documentées : capacité financière du garant, volonté démontrée, engagement juridiquement contraignant, transférabilité effective des fonds. Plafonné à deux crans. Une garantie qui ne remplit pas ces conditions appartient au moteur de décision et à la perte en cas de défaut, pas à la note.",
+  },
+
+  segmentationRulesetId: "SEG-2026.1",
   pdStatus: "UNCALIBRATED",
   calibration: SYNTHETIC_CALIBRATION,
   disclaimerFr:
-    "Modèle expert seed. La calibration attachée est établie sur données SIMULÉES : elle valide la chaîne de traitement et l'ordonnancement de l'échelle, jamais le niveau des probabilités. Aucune PD produite par ce modèle ne doit alimenter un calcul de provision IFRS 9, une exigence en fonds propres ou une décision d'octroi tant qu'une calibration sur défauts observés n'a pas été réalisée et validée indépendamment. Les seuils ne sont ni des règles BAM ni des paramètres IFRS 9.",
+    "Modèle expert seed, non calibré sur défauts observés et non validé indépendamment. La calibration attachée est établie sur données SIMULÉES : elle valide la chaîne de traitement et l'ordonnancement de l'échelle, jamais le niveau des probabilités. Aucune probabilité de défaut n'est exposée hors environnement bac à sable. Usage autorisé : pilote en mode fantôme et aide au jugement. Usages interdits : décision automatisée, tarification, staging ou pertes attendues IFRS 9, classification Bank Al-Maghrib, exigence en fonds propres.",
 };

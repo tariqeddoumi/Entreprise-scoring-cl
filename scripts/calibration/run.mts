@@ -152,7 +152,7 @@ const truePdMean =
 // Constats calculés sur le portefeuille plutôt qu'affirmés : ils dépendent du
 // modèle et du tirage, et doivent donc être relus à chaque exécution.
 const notes = sim.obligors.filter((o) => !o.alreadyInDefault && o.finalGrade !== null && o.rawScore !== null);
-const ordreGrades = model.masterScale.map((b) => b.grade);
+const ordreGrades = model.gradeScale.bands.map((b) => b.grade);
 const parGrade = ordreGrades
   .map((grade) => {
     const sub = notes.filter((o) => o.finalGrade === grade);

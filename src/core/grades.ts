@@ -1,43 +1,88 @@
-import type { GradeBand } from "./types";
+import { DEFAULT_GRADES } from "@/reference/default-policy";
+import type { GradeBand, GradeScaleConfig } from "./types";
 
-/** Grade défaut interne : forcé par le moteur défaut, jamais par le score. */
+/**
+ * Échelles de grades.
+ *
+ * V3 — chaque modèle porte SA propre échelle (constat C03). Deux modèles qui
+ * n'observent pas la même chose — états financiers d'un côté, flux bancaires de
+ * l'autre — ne peuvent pas afficher le même libellé de grade tant qu'aucune
+ * correspondance n'a été établie sur des probabilités de défaut comparables.
+ * Les fonctions ci-dessous refusent donc toute comparaison entre échelles non
+ * déclarées comparables.
+ */
+
+/** Grade de défaut appliqué quand le constat amont n'en précise pas la nature. */
 export const DEFAULT_GRADE = "DEF1";
 
 /**
- * Détermine le grade moteur à partir du score brut et de la master scale.
- * Convention : minScore inclus, maxScore exclu (grilles §18.1).
+ * Détermine le grade à partir du score brut.
+ * Convention : minScore inclus, maxScore exclu.
  */
-export function gradeFromScore(scale: GradeBand[], score: number): string {
-  for (const band of scale) {
+export function gradeFromScore(scale: GradeScaleConfig, score: number): string {
+  for (const band of scale.bands) {
     const okMin = band.minScore === null || score >= band.minScore;
     const okMax = band.maxScore === null || score < band.maxScore;
     if (okMin && okMax) return band.grade;
   }
-  // La master scale validée couvre [0, 100] ; ce chemin signale une config invalide.
-  throw new Error(`Master scale non exhaustive : aucun grade pour le score ${score}`);
+  throw new Error(
+    `Échelle ${scale.scaleId} non exhaustive : aucun grade pour le score ${score}`
+  );
 }
 
-/** Rang ordinal d'un grade : 1 = meilleur. Les grades défaut sont les pires. */
-export function gradeRank(scale: GradeBand[], grade: string): number {
-  const idx = scale.findIndex((b) => b.grade === grade);
+/** Rang ordinal d'un grade : 1 = meilleur. Les grades de défaut sont les pires. */
+export function gradeRank(scale: GradeScaleConfig, grade: string): number {
+  const idx = scale.bands.findIndex((b) => b.grade === grade);
   if (idx >= 0) return idx + 1;
-  if (grade.startsWith("DEF")) return scale.length + 1;
-  throw new Error(`Grade inconnu : ${grade}`);
+  const defIdx = DEFAULT_GRADES.findIndex((d) => d.grade === grade);
+  if (defIdx >= 0) return scale.bands.length + 1 + defIdx;
+  throw new Error(`Grade inconnu de l'échelle ${scale.scaleId} : ${grade}`);
 }
 
 /**
- * Applique un cap « pas mieux que maxGrade » : retourne le grade le plus
+ * Applique un plafond « pas mieux que maxGrade » : retourne le grade le plus
  * défavorable des deux. Le score brut n'est jamais modifié.
  */
-export function applyCap(scale: GradeBand[], current: string, maxGrade: string): string {
+export function applyCap(
+  scale: GradeScaleConfig,
+  current: string,
+  maxGrade: string
+): string {
   const curRank = gradeRank(scale, current);
   const capRank = gradeRank(scale, maxGrade);
   return capRank > curRank ? maxGrade : current;
 }
 
-export function gradeLabelFr(scale: GradeBand[], grade: string): string {
-  const band = scale.find((b) => b.grade === grade);
+export function gradeLabelFr(scale: GradeScaleConfig, grade: string | null): string {
+  if (grade === null) return "—";
+  const band = scale.bands.find((b) => b.grade === grade);
   if (band) return band.labelFr;
-  if (grade.startsWith("DEF")) return "Défaut";
+  const def = DEFAULT_GRADES.find((d) => d.grade === grade);
+  if (def) return def.labelFr;
   return grade;
+}
+
+export function bandForGrade(scale: GradeScaleConfig, grade: string): GradeBand | undefined {
+  return scale.bands.find((b) => b.grade === grade);
+}
+
+/**
+ * Deux grades ne sont comparables que si leurs échelles se déclarent
+ * mutuellement comparables — ce qui suppose une étude de correspondance
+ * validée. En son absence, la fonction refuse plutôt que de renvoyer un
+ * résultat trompeur : c'est exactement le scénario que le diagnostic
+ * décrivait, un même « G6 » paraissant porter le même risque dans deux modèles
+ * qui ne mesurent pas la même chose.
+ */
+export function assertComparable(a: GradeScaleConfig, b: GradeScaleConfig): void {
+  if (a.scaleId === b.scaleId) return;
+  if (a.comparableWith.includes(b.scaleId) && b.comparableWith.includes(a.scaleId)) return;
+  throw new Error(
+    `Échelles non comparables : ${a.scaleId} et ${b.scaleId}. Une correspondance validée sur probabilités de défaut est requise avant toute comparaison de grades.`
+  );
+}
+
+export function areComparable(a: GradeScaleConfig, b: GradeScaleConfig): boolean {
+  if (a.scaleId === b.scaleId) return true;
+  return a.comparableWith.includes(b.scaleId) && b.comparableWith.includes(a.scaleId);
 }

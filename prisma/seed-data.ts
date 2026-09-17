@@ -278,7 +278,7 @@ export const RUNS: SeedRun[] = [
     asOfDate: "2025-12-31",
     requestedBy: "seed:analyste.entreprises",
     purposeFr:
-      "Score correct mais DSCR < 1 en base : démontre qu'un cap plafonne le grade sans modifier le score brut",
+      "Score correct mais DSCR < 1 en base : démontre qu'une exception non compensatoire plafonne le grade sans modifier le score brut",
     input: {
       segment: seg("PME"),
       confidence: CONF_GOOD,
@@ -374,7 +374,7 @@ export const RUNS: SeedRun[] = [
     asOfDate: "2025-12-31",
     requestedBy: "seed:charge.affaires.tpe",
     purposeFr:
-      "Information trop pauvre : le score brut est calculé mais aucun grade final n'est produit",
+      "Information trop pauvre : le score brut est calculé et conservé, mais la porte de couverture refuse de produire un grade",
     input: {
       segment: seg("PME"),
       confidence: CONF_LOW,
@@ -495,7 +495,7 @@ export const OVERRIDES: SeedOverride[] = [
   {
     counterpartyKey: "AGRO",
     asOfDate: "2025-12-31",
-    toGrade: "G3",
+    toGrade: "STD-P2",
     reasonCode: "RECENT_EVENT_POSITIVE",
     comment:
       "Contrat pluriannuel signé postérieurement à la date d'arrêté, sécurisant environ 40 % du chiffre d'affaires prévisionnel. L'information n'est reflétée par aucun critère du modèle à cette date.",
@@ -509,7 +509,7 @@ export const OVERRIDES: SeedOverride[] = [
   {
     counterpartyKey: "BTP",
     asOfDate: "2025-12-31",
-    toGrade: "G7",
+    toGrade: "STD-P6",
     reasonCode: "TEMPORARY_SHOCK",
     comment:
       "Le demandeur estime le déficit de couverture de dette temporaire, lié au décalage d'encaissement d'un marché public.",
@@ -523,10 +523,10 @@ export const OVERRIDES: SeedOverride[] = [
   {
     counterpartyKey: "AUTO",
     asOfDate: "2025-12-31",
-    toGrade: "G6",
+    toGrade: "STD-P5",
     reasonCode: "GROUP_SUPPORT",
     comment:
-      "Lettre de soutien de la maison mère étrangère, non juridiquement contraignante mais assortie d'un historique de recapitalisation.",
+      "Lettre de soutien de la maison mère étrangère, non juridiquement contraignante mais assortie d'un historique de recapitalisation. Depuis la V3, le support groupe relève d'une méthode dédiée exigeant les quatre conditions (capacité, volonté, caractère contraignant, transférabilité) : cette demande illustre précisément le cas où le relèvement passe par une dérogation tracée faute d'engagement contraignant, et non par la méthode.",
     evidence: "GED/DEMO/2026-03-02/lettre-soutien-groupe.pdf",
     requestedBy: "seed:analyste.corporate",
     // Volontairement laissée en attente : illustre le circuit maker-checker.

@@ -4,13 +4,18 @@ import type { ReactNode } from "react";
 import type { ModelConfig, RatingResult } from "@/core/types";
 import { GradeBadge } from "../ui-helpers";
 
-const OUTCOME_LABELS: Record<string, string> = {
-  SCORED: "Notation produite",
-  BLOCKED_RED_FLAG: "Notation arrêtée — red flag bloquant",
-  BLOCKED_DATA: "Notation bloquée — données critiques",
-  BLOCKED_SEGMENTATION: "Notation bloquée — segment indéterminable",
-  DEFAULT_GRADE: "Grade défaut forcé",
-  NO_GRADE_CONFIDENCE: "Aucun grade final — qualité insuffisante",
+const STATUS_LABELS: Record<string, string> = {
+  RATED: "Notation produite",
+  DEFAULTED: "Grade de défaut constaté",
+  NO_RATING_INSUFFICIENT_DATA: "Aucun grade — information insuffisante",
+  NO_RATING_SEGMENT_UNDETERMINED: "Aucun grade — segment indéterminable",
+  NO_RATING_ROUTED_OTHER_MODEL: "Dossier routé hors de cette grille",
+};
+
+const PURPOSE_LABELS: Record<string, string> = {
+  PRODUCTION_RATING: "Notation de production",
+  PILOT_SHADOW: "Pilote en mode fantôme",
+  SIMULATION_ONLY: "Simulation — bac à sable",
 };
 
 export function ResultPanel({
@@ -20,11 +25,11 @@ export function ResultPanel({
   result: RatingResult;
   model: ModelConfig;
 }) {
-  const gradeBand = model.masterScale.find((b) => b.grade === result.finalGrade);
+  const gradeBand = model.gradeScale.bands.find((b) => b.grade === result.finalGrade);
   const accent =
-    result.outcome === "SCORED"
+    result.ratingStatus === "RATED"
       ? "var(--good)"
-      : result.outcome === "DEFAULT_GRADE" || result.outcome.startsWith("BLOCKED")
+      : result.ratingStatus === "DEFAULTED"
         ? "var(--bad)"
         : "var(--warn)";
 
@@ -35,7 +40,7 @@ export function ResultPanel({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-          {OUTCOME_LABELS[result.outcome] ?? result.outcome}
+          {STATUS_LABELS[result.ratingStatus] ?? result.ratingStatus}
         </h2>
         <button
           type="button"
@@ -72,27 +77,41 @@ export function ResultPanel({
           }
         />
         <Metric label="Grade moteur" value={<GradeBadge grade={result.engineGrade} size="lg" />} />
-        <Metric label="Grade après caps" value={<GradeBadge grade={result.cappedGrade} size="lg" />} />
         <Metric
-          label="Confiance"
-          value={`${result.confidenceScore.toFixed(1)} (${result.confidenceLevelFr})`}
+          label="Grade autonome"
+          value={<GradeBadge grade={result.standaloneGrade} size="lg" />}
+        />
+        {result.groupSupport?.granted && (
+          <Metric
+            label="Grade après support groupe"
+            value={<GradeBadge grade={result.finalGrade} size="lg" />}
+          />
+        )}
+        <Metric
+          label="Classe de confiance"
+          value={`${result.confidence.classCode} — ${result.confidence.score.toFixed(1)}`}
+        />
+        <Metric
+          label="Couverture observée"
+          value={`${(result.coverage.globalObservedBps / 100).toFixed(1)} %`}
         />
         <Metric
           label="PD 12 mois"
           value={
             result.pd12m !== null
               ? `${(result.pd12m * 100).toFixed(2)} %`
-              : "non produite"
+              : `non exposée (${result.pdStatus})`
           }
         />
       </div>
 
       {gradeBand && (
         <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>
-          <strong>{gradeBand.grade} — {gradeBand.labelFr}.</strong>{" "}
-          Décision indicative : {gradeBand.indicativeDecisionFr}. Cette indication ne
-          remplace pas le moteur de politique de crédit (limites, produit, garanties,
-          délégation).
+          <strong>{gradeBand.grade} — {gradeBand.labelFr}</strong>, sur l&apos;échelle{" "}
+          {result.gradeScaleId} propre à ce modèle. Cette échelle mesure un risque, elle
+          ne porte aucune décision : l&apos;octroi, la limite, le prix et les garanties
+          relèvent du moteur de décision, qui n&apos;est pas implémenté ici. Les grades ne
+          sont pas comparables à ceux d&apos;un autre modèle sans correspondance validée.
         </p>
       )}
 
@@ -122,15 +141,45 @@ export function ResultPanel({
       {result.blockingReasonsFr.length > 0 && (
         <Block title="Motifs de blocage" color="var(--bad)" items={result.blockingReasonsFr} />
       )}
-      {result.appliedCaps.length > 0 && (
+      {result.appliedRules.length > 0 && (
         <Block
-          title="Caps appliqués"
+          title="Exceptions non compensatoires appliquées"
           color="var(--warn)"
-          items={result.appliedCaps.map(
-            (c) => `${c.code} — ${c.labelFr} → pas mieux que ${c.maxGrade} [${c.source}]`
+          items={result.appliedRules.map(
+            (c) =>
+              `${c.code} — ${c.labelFr} → pas mieux que ${c.maxGrade} [${c.source}${c.centralCriterion ? `, contribution centrale ${c.centralCriterion}` : ""}]`
           )}
         />
       )}
+      {result.groupSupport && (
+        <Block
+          title="Support groupe"
+          color={result.groupSupport.granted ? "var(--good)" : "var(--muted)"}
+          items={[
+            result.groupSupport.rationaleFr,
+            ...result.groupSupport.missingConditionsFr.map((c) => `Condition manquante : ${c}`),
+          ]}
+        />
+      )}
+      <Block
+        title={`Droits d'usage — ${PURPOSE_LABELS[result.usageRights.purpose] ?? result.usageRights.purpose}`}
+        color="var(--brand)"
+        items={[
+          ...result.usageRights.permittedUsesFr.map((u) => `Autorisé : ${u}`),
+          ...result.usageRights.restrictionsFr.map((r) => `Interdit / réserve : ${r}`),
+        ]}
+      />
+      <Block
+        title="Statuts des cinq moteurs"
+        color="var(--muted)"
+        items={[
+          `Notation : ${result.ratingStatus}`,
+          `Conformité : ${result.complianceStatus}`,
+          `Décision de crédit : ${result.decisionStatus} (moteur distinct, non implémenté)`,
+          `Classification réglementaire : ${result.regulatoryClassStatus} (moteur distinct, non implémenté)`,
+          `IFRS 9 : ${result.ifrs9Status} (moteur distinct, non implémenté)`,
+        ]}
+      />
       {result.triggeredRedFlags.length > 0 && (
         <Block
           title="Red flags"
@@ -202,7 +251,7 @@ export function ResultPanel({
                 <th>Domaine</th>
                 <th>Score</th>
                 <th>Poids</th>
-                <th>Poids applicable</th>
+                <th>Poids observé</th>
                 <th>Contribution</th>
               </tr>
             </thead>
@@ -214,7 +263,7 @@ export function ResultPanel({
                   </td>
                   <td>{d.score !== null ? d.score.toFixed(2) : "n/a"}</td>
                   <td>{(d.weightBps / 100).toFixed(2)} %</td>
-                  <td>{(d.applicableWeightBps / 100).toFixed(2)} %</td>
+                  <td>{(d.observedWeightBps / 100).toFixed(2)} %</td>
                   <td>
                     {d.globalContribution !== null
                       ? d.globalContribution.toFixed(2)

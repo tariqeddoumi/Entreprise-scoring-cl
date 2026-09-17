@@ -92,7 +92,7 @@ export function ScoringForm({ model, counterparties }: Props) {
     [applicable, criteria]
   );
   const unansweredCritical = useMemo(
-    () => applicable.filter((c) => c.critical && !isAnswered(c, criteria[c.code])),
+    () => applicable.filter((c) => c.unavailablePolicy === "BLOCK" && !isAnswered(c, criteria[c.code])),
     [applicable, criteria]
   );
 
@@ -330,7 +330,7 @@ export function ScoringForm({ model, counterparties }: Props) {
         );
         const answered = domainCriteria.filter((c) => isAnswered(c, criteria[c.code])).length;
         const missingCritical = domainCriteria.filter(
-          (c) => c.critical && !isAnswered(c, criteria[c.code])
+          (c) => c.unavailablePolicy === "BLOCK" && !isAnswered(c, criteria[c.code])
         ).length;
         const isCollapsed = collapsed[domain.code] ?? false;
         return (
@@ -391,10 +391,10 @@ export function ScoringForm({ model, counterparties }: Props) {
       <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Qualité des données</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Confiance = {model.confidenceWeights.completeness} % complétude +{" "}
-          {model.confidenceWeights.freshness} % fraîcheur +{" "}
-          {model.confidenceWeights.reliability} % fiabilité +{" "}
-          {model.confidenceWeights.provenance} % provenance. Un niveau insuffisant
+          Confiance = {model.confidence.weights.completeness} % complétude +{" "}
+          {model.confidence.weights.freshness} % fraîcheur +{" "}
+          {model.confidence.weights.reliability} % fiabilité +{" "}
+          {model.confidence.weights.provenance} % provenance. Un niveau insuffisant
           empêche la production d&apos;un grade final.
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
@@ -581,7 +581,7 @@ function CriterionRow({
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>
             {criterion.code} — {criterion.labelFr}
-            {criterion.critical && (
+            {criterion.unavailablePolicy === "BLOCK" && (
               <span style={{ color: "var(--bad)", marginLeft: 6, fontSize: 11 }}>
                 critique
               </span>
@@ -674,7 +674,7 @@ function CriterionRow({
           <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>
             {state.status === "NOT_APPLICABLE"
               ? "Poids redistribué à l'intérieur du domaine."
-              : criterion.critical
+              : criterion.unavailablePolicy === "BLOCK"
                 ? "Donnée critique absente : la notation sera bloquée."
                 : "Critère exclu du calcul ; impact porté par le niveau de confiance."}
           </div>

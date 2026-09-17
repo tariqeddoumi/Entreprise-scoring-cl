@@ -1,83 +1,59 @@
 {
   "calibrationId": "CORP_TPE_BEHAV_V1-SYNTH-20260824",
-  "contentHash": "f95377b06a6a05cd86579e8f6551413dc82da7ebbe20784f1a2af1d657171795",
+  "contentHash": "9678bbda54eb76d7b37b8b59389677cb68a81f682c0f6b4132859ec67011e2cb",
   "modelId": "CORP_TPE_BEHAV_V1",
-  "modelVersion": "1.0.0",
+  "modelVersion": "3.0.0",
   "dataSource": "SYNTHETIC",
-  "createdAt": "2026-08-24T06:01:38.015Z",
+  "createdAt": "2026-09-17T09:36:51.157Z",
   "horizonMonths": 12,
   "methodFr": "PD à 12 mois calibrée par grade : taux de défaut observé avec correction de continuité, rétréci vers une tendance log-linéaire sur le rang du grade proportionnellement au nombre de défauts, monotonie imposée par régression isotone pondérée, marge de prudence relative puis plancher. La calibration porte sur le grade final et non sur le score brut, afin de conserver l'effet des caps.",
   "seed": 20260824,
   "floor": 0.0003,
   "marginOfConservatism": 0.1,
-  "centralTendency": 0.06269917914051183,
+  "centralTendency": 0.05066982593638932,
   "curve": {
-    "intercept": 1.7322265433115864,
-    "slope": -7.078307465450171
+    "intercept": 1.9136035921693824,
+    "slope": -7.778424733478954
   },
   "gradePd": [
     {
-      "grade": "G1",
-      "pd": 0.0017506625764829233,
-      "count": 336,
-      "observedRate": 0
+      "grade": "TPE-B1",
+      "pd": 0.004792168679006087,
+      "count": 1645,
+      "observedRate": 0.00303951367781155
     },
     {
-      "grade": "G2",
-      "pd": 0.003183185449328232,
-      "count": 279,
-      "observedRate": 0
+      "grade": "TPE-B2",
+      "pd": 0.012633516043172664,
+      "count": 2112,
+      "observedRate": 0.011837121212121212
     },
     {
-      "grade": "G3",
-      "pd": 0.007475417635902291,
-      "count": 253,
-      "observedRate": 0.015810276679841896
+      "grade": "TPE-B3",
+      "pd": 0.028880427919533526,
+      "count": 2046,
+      "observedRate": 0.026881720430107527
     },
     {
-      "grade": "G4",
-      "pd": 0.010334401938220732,
-      "count": 3907,
-      "observedRate": 0.009214230867673407
+      "grade": "TPE-B4",
+      "pd": 0.05474330762402298,
+      "count": 1602,
+      "observedRate": 0.04931335830212235
     },
     {
-      "grade": "G5",
-      "pd": 0.029758470473558375,
-      "count": 1374,
-      "observedRate": 0.03129548762736536
+      "grade": "TPE-B5",
+      "pd": 0.09726005041907974,
+      "count": 1304,
+      "observedRate": 0.08588957055214724
     },
     {
-      "grade": "G6",
-      "pd": 0.047543586086500715,
-      "count": 1132,
-      "observedRate": 0.04946996466431095
-    },
-    {
-      "grade": "G7",
-      "pd": 0.047543586086500715,
-      "count": 6440,
-      "observedRate": 0.0422360248447205
-    },
-    {
-      "grade": "G8",
-      "pd": 0.10378789810213217,
-      "count": 1416,
-      "observedRate": 0.09392655367231638
-    },
-    {
-      "grade": "G9",
-      "pd": 0.15422664733239919,
-      "count": 1801,
-      "observedRate": 0.138811771238201
-    },
-    {
-      "grade": "G10",
-      "pd": 0.3203819015446447,
-      "count": 1279,
-      "observedRate": 0.292415949960907
+      "grade": "TPE-B6",
+      "pd": 0.24698060346791517,
+      "count": 910,
+      "observedRate": 0.22527472527472528
     }
   ],
   "defaultGradePd": 1,
-  "sampleSize": 18217,
+  "sampleSize": 9619,
   "limitationsFr": "Calibration établie sur des données SIMULÉES. Elle valide la chaîne de traitement et l'ordonnancement de l'échelle, non le niveau des probabilités. Elle ne doit alimenter ni un calcul de provision IFRS 9, ni une exigence en fonds propres, ni une décision d'octroi."
 }

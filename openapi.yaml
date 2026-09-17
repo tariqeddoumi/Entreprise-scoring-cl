@@ -473,31 +473,105 @@ components:
 
     RatingResult:
       type: object
+      description: >
+        Résultat du SEUL moteur implémenté : la notation du risque intrinsèque.
+        Les quatre autres finalités portent leur propre statut, toujours
+        NOT_EVALUATED — c'est une information, pas un oubli.
       properties:
-        outcome:
+        ratingStatus:
           type: string
           enum:
-            - SCORED
-            - BLOCKED_RED_FLAG
-            - BLOCKED_DATA
-            - BLOCKED_SEGMENTATION
-            - DEFAULT_GRADE
-            - NO_GRADE_CONFIDENCE
+            - RATED
+            - DEFAULTED
+            - NO_RATING_INSUFFICIENT_DATA
+            - NO_RATING_SEGMENT_UNDETERMINED
+            - NO_RATING_ROUTED_OTHER_MODEL
+        complianceStatus:
+          type: string
+          enum: [NOT_EVALUATED, CLEAR, REFER, BLOCKED]
+          description: >
+            Produit par les systèmes amont. BLOCKED interdit l'entrée en relation
+            ou l'opération ; il n'empêche pas de noter une exposition existante.
+        decisionStatus:
+          type: string
+          enum: [NOT_EVALUATED]
+          description: Moteur de décision de crédit — non implémenté.
+        regulatoryClassStatus:
+          type: string
+          enum: [NOT_EVALUATED]
+          description: Moteur de classification réglementaire — non implémenté.
+        ifrs9Status:
+          type: string
+          enum: [NOT_EVALUATED]
+          description: Moteur IFRS 9 — non implémenté.
         modelId: { type: string }
         modelVersion: { type: string }
         engineVersion: { type: string }
+        gradeScaleId:
+          type: string
+          description: >
+            Échelle propre au modèle. Deux grades d'échelles différentes ne sont
+            pas comparables sans étude de correspondance validée.
         segment: { type: string, nullable: true }
         segmentSource: { type: string, enum: [PROVIDED, COMPUTED, UNDETERMINED] }
+        segmentationRulesetId: { type: string }
         asOfDate: { type: string, format: date }
         rawScore:
           type: number
           nullable: true
-          description: Score brut 0–100, conservé même lorsqu'un cap s'applique
-        confidenceScore: { type: number }
-        confidenceLevelFr: { type: string }
+          description: >
+            Score brut 0–100. Conservé pour la surveillance même lorsqu'aucun
+            grade n'est produit faute de couverture suffisante ; nul lorsqu'une
+            donnée critique est absente.
+        confidence:
+          type: object
+          description: >
+            Classe de confiance restituée À CÔTÉ du grade. Elle ne le plafonne
+            pas : elle décrit la robustesse de l'estimation, pas le risque.
+          properties:
+            score: { type: number }
+            classCode: { type: string, enum: [A, B, C, U] }
+            labelFr: { type: string }
+            affectsGrade: { type: boolean, enum: [false] }
+        coverage:
+          type: object
+          description: Part du poids portée par une donnée réellement observée.
+          properties:
+            globalObservedBps: { type: integer }
+            totalWeightBps: { type: integer }
+            deficientDomains: { type: array, items: { type: string } }
+            meetsPolicy: { type: boolean }
         engineGrade: { type: string, nullable: true }
-        cappedGrade: { type: string, nullable: true }
-        finalGrade: { type: string, nullable: true }
+        standaloneGrade:
+          type: string
+          nullable: true
+          description: Grade après exceptions non compensatoires — note autonome.
+        finalGrade:
+          type: string
+          nullable: true
+          description: Grade après relèvement de support groupe éventuel.
+        groupSupport:
+          type: object
+          nullable: true
+          properties:
+            claimed: { type: boolean }
+            granted: { type: boolean }
+            notchesApplied: { type: integer }
+            missingConditionsFr: { type: array, items: { type: string } }
+            rationaleFr: { type: string }
+        usageRights:
+          type: object
+          description: >
+            Droits d'usage attachés au résultat : un système aval n'a pas à
+            deviner ce qu'il a le droit d'en faire.
+          properties:
+            purpose:
+              type: string
+              enum: [SIMULATION_ONLY, PILOT_SHADOW, PRODUCTION_RATING]
+            calibrationStatus: { type: string }
+            pdDisclosed: { type: boolean }
+            permittedUsesFr: { type: array, items: { type: string } }
+            restrictionsFr: { type: array, items: { type: string } }
         domainResults:
           type: array
           items:
@@ -506,13 +580,23 @@ components:
               code: { type: string }
               score: { type: number, nullable: true }
               weightBps: { type: integer }
-              applicableWeightBps: { type: integer }
+              observedWeightBps: { type: integer }
               globalContribution: { type: number, nullable: true }
               criteria: { type: array, items: { type: object } }
-        appliedCaps: { type: array, items: { type: object } }
+        appliedRules:
+          type: array
+          description: Exceptions non compensatoires appliquées, après le grade moteur.
+          items: { type: object }
         triggeredRedFlags: { type: array, items: { type: object } }
         blockingReasonsFr: { type: array, items: { type: string } }
         warningsFr: { type: array, items: { type: string } }
+        pd12m:
+          type: number
+          nullable: true
+          description: >
+            Probabilité de défaut à 12 mois. NULLE hors environnement bac à sable
+            tant que la calibration n'est pas établie sur défauts observés : une
+            PD simulée ne quitte jamais le bac à sable.
         pdStatus:
           type: string
           enum: [UNCALIBRATED, CALIBRATED, CALIBRATED_SYNTHETIC, TECHNICAL_ONLY_DISABLED]
@@ -589,7 +673,11 @@ webhooks:
                     modelId: { type: string }
                     outcome: { type: string }
                     rawScore: { type: number, nullable: true }
+                    gradeScaleId: { type: string }
                     finalGrade: { type: string, nullable: true }
                     pdStatus: { type: string }
+                    purpose: { type: string }
+                    permittedUses: { type: array, items: { type: string } }
+                    restrictions: { type: array, items: { type: string } }
       responses:
         "2XX": { description: Événement accepté }

@@ -109,7 +109,7 @@ async function main() {
     const input: RatingInput = { ...r.input, modelId, asOfDate: r.asOfDate };
     // Horodatage fixe : le jeu reste reproductible d'une exécution à l'autre.
     const result = computeRating(model, input, `${r.asOfDate}T12:00:00.000Z`);
-    tally[result.outcome] = (tally[result.outcome] ?? 0) + 1;
+    tally[result.ratingStatus] = (tally[result.ratingStatus] ?? 0) + 1;
 
     // La clé d'idempotence rend le seed rejouable sans doublon.
     const idempotencyKey = `seed:${r.counterpartyKey}:${r.asOfDate}`;
@@ -122,11 +122,11 @@ async function main() {
       engineVersion: result.engineVersion,
       asOfDate: result.asOfDate,
       segment: result.segment,
-      outcome: result.outcome,
+      outcome: result.ratingStatus,
       rawScore: result.rawScore,
-      confidenceScore: result.confidenceScore,
+      confidenceScore: result.confidence.score,
       engineGrade: result.engineGrade,
-      cappedGrade: result.cappedGrade,
+      cappedGrade: result.standaloneGrade,
       finalGrade: result.finalGrade,
       inputSnapshot: stableStringify(input),
       resultSnapshot: stableStringify(result),
@@ -140,7 +140,7 @@ async function main() {
 
     runIdByKey.set(`${r.counterpartyKey}:${r.asOfDate}`, row.id);
 
-    if (result.segment && result.outcome !== "BLOCKED_SEGMENTATION") {
+    if (result.segment && result.ratingStatus !== "NO_RATING_SEGMENT_UNDETERMINED") {
       await prisma.counterparty.update({
         where: { id: counterpartyId },
         data: { segment: result.segment },
@@ -150,7 +150,7 @@ async function main() {
     const grade = result.finalGrade ?? "—";
     const score = result.rawScore !== null ? result.rawScore.toFixed(2).padStart(6) : "    —";
     console.log(
-      `  ${r.asOfDate}  ${score}  ${grade.padEnd(4)} ${result.outcome.padEnd(22)} ${r.counterpartyKey}`
+      `  ${r.asOfDate}  ${score}  ${grade.padEnd(4)} ${result.ratingStatus.padEnd(22)} ${r.counterpartyKey}`
     );
   }
 

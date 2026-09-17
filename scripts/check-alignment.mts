@@ -104,9 +104,9 @@ const segEngine = enumFrom(types, /export type Segment = ([\s\S]*?);/);
 const segZod = enumFrom(schemas, /segment: z\.enum\(\[([\s\S]*?)\]\)/);
 compare("Segment", segEngine, segZod);
 
-const outcomeEngine = enumFrom(types, /export type RatingOutcome =\s*([\s\S]*?);/);
-const outcomeSpec = [...openapi.matchAll(/^ {12}- (SCORED|BLOCKED_\w+|DEFAULT_GRADE|NO_GRADE_CONFIDENCE)$/gm)].map((m) => m[1]);
-compare("RatingOutcome (moteur vs OpenAPI)", outcomeEngine, outcomeSpec);
+const outcomeEngine = enumFrom(types, /export type RatingStatus =\s*([\s\S]*?);/);
+const outcomeSpec = [...openapi.matchAll(/^ {12}- (RATED|DEFAULTED|NO_RATING_\w+)$/gm)].map((m) => m[1]);
+compare("RatingStatus (moteur vs OpenAPI)", outcomeEngine, outcomeSpec);
 
 const eventsZod = enumFrom(schemas, /events: z\s*\.array\(\s*z\.enum\(\[([\s\S]*?)\]\)/);
 const eventsCode = enumFrom(readFileSync("src/lib/webhooks.ts", "utf8"), /export type WebhookEventType =\s*([\s\S]*?);/);
@@ -148,7 +148,7 @@ for (const m of listModels()) {
   }
   // Les triggers de cap doivent être connus du moteur.
   const engineSrc = readFileSync("src/core/engine.ts", "utf8");
-  for (const cap of m.structuralCaps) {
+  for (const cap of m.nonCompensatoryRules) {
     if (!engineSrc.includes(`case "${cap.trigger}"`)) {
       fail(`${m.modelId} : trigger ${cap.trigger} déclaré mais non implémenté dans le moteur`);
       modelOk = false;
@@ -171,7 +171,7 @@ if (hardcoded.length > 0) {
 // ou une valeur calculée : on cherche le nom du drapeau partout dans le
 // formulaire, pas seulement dans la liste des cases.
 const capFlags = [...form.matchAll(/\b(\w+)\b/g)].map((m) => m[1]);
-const engineFlags = CORP_STD_V1.structuralCaps.map((c) => c.trigger);
+const engineFlags = CORP_STD_V1.nonCompensatoryRules.map((c) => c.trigger);
 const orphelins = unmappedTriggers(engineFlags);
 if (orphelins.length > 0) fail(`déclencheurs sans champ d'entrée : ${orphelins.join(", ")}`);
 const uncovered = engineFlags.filter((t) => !capFlags.includes(CAP_TRIGGER_TO_FLAG[t]));
@@ -221,7 +221,7 @@ if (!existsSync(noteePath)) {
   }
 
   const missingCaps = listModels()
-    .flatMap((m) => m.structuralCaps.map((c) => c.code))
+    .flatMap((m) => m.nonCompensatoryRules.map((c) => c.code))
     .filter((code) => !note.includes(code));
   if (missingCaps.length) {
     fail(`caps structurels non documentés : ${[...new Set(missingCaps)].join(", ")}`);
@@ -273,7 +273,7 @@ console.log("\n6. Calibration : artefact vs modèle et contrat\n");
 
     // Tout grade de l'échelle doit porter une PD, sans quoi une notation
     // parfaitement valide se retrouverait sans PD.
-    const echelle = model.masterScale.map((b) => b.grade);
+    const echelle = model.gradeScale.bands.map((b) => b.grade);
     const calibres = cal.gradePd.map((g) => g.grade);
     const manquants = echelle.filter((g) => !calibres.includes(g));
     const orphelins = calibres.filter((g) => !echelle.includes(g));

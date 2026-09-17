@@ -38,7 +38,7 @@ i2.redFlags = ["RF06"]; // DPD >= seuil de défaut, alors que D3.1 = 0 jour
 const r2 = computeRating(CORP_STD_V1, i2);
 const dpd = r2.domainResults.flatMap(d=>d.criteria).find(c=>c.code==="D3.1");
 console.log(`D3.1 (DPD) score ${dpd?.score} mais RF06 « DPD >= seuil de défaut » déclaré`);
-console.log(`Résultat : ${r2.outcome}, aucune incohérence signalée ? ${r2.warningsFr.length === 0 ? "AUCUNE ALERTE" : r2.warningsFr.join("; ")}`);
+console.log(`Résultat : ${r2.ratingStatus}, aucune incohérence signalée ? ${r2.warningsFr.length === 0 ? "AUCUNE ALERTE" : r2.warningsFr.join("; ")}`);
 
 console.log("\n=== SONDE 3 : score qualitatif hors ancrage passé directement au moteur ===");
 const i3 = base();

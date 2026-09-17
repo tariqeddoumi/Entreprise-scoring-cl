@@ -263,3 +263,44 @@ describe("Configuration", () => {
     }
   });
 });
+
+describe("Droits d'usage et exposition de la PD (constats C02 et M01)", () => {
+  it("refuse le démarrage si la PD simulée est autorisée en production", () => {
+    setEnv("NODE_ENV", "production");
+    setEnv("DATABASE_PROVIDER", "postgresql");
+    setEnv("ALLOW_SYNTHETIC_PD", "1");
+    resetConfigCache();
+    expect(() => config()).toThrow(/ALLOW_SYNTHETIC_PD/);
+  });
+
+  it("la dérogation reste fermée par défaut", () => {
+    setEnv("ALLOW_SYNTHETIC_PD", undefined);
+    resetConfigCache();
+    expect(config().allowSyntheticPd).toBe(false);
+  });
+
+  it("aucune PD numérique ne sort du moteur sans dérogation explicite", async () => {
+    const { computeRating } = await import("@/core/engine");
+    const { CORP_STD_V1 } = await import("@/models");
+    const { tpeGoldenInput } = await import("./fixtures");
+
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), { nowIso: "2026-09-17T00:00:00Z" });
+    // Le statut de calibration reste visible : le système aval sait POURQUOI la
+    // valeur est absente, ce qui vaut mieux qu'un champ nul sans explication.
+    expect(r.pd12m).toBeNull();
+    expect(r.pdStatus).toBe("CALIBRATED_SYNTHETIC");
+    expect(r.usageRights.pdDisclosed).toBe(false);
+    expect(JSON.stringify(r)).not.toMatch(/"pd12m":\s*0\.\d/);
+  });
+
+  it("le résultat porte toujours ses usages autorisés et ses restrictions", async () => {
+    const { computeRating } = await import("@/core/engine");
+    const { CORP_STD_V1 } = await import("@/models");
+    const { tpeGoldenInput } = await import("./fixtures");
+
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), { nowIso: "2026-09-17T00:00:00Z" });
+    expect(r.usageRights.permittedUsesFr.length).toBeGreaterThan(0);
+    expect(r.usageRights.restrictionsFr.length).toBeGreaterThan(0);
+    expect(r.usageRights.restrictionsFr.join(" ")).toMatch(/IFRS 9/);
+  });
+});

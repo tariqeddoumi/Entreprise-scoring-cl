@@ -1,44 +1,62 @@
 import type {
-  ConfidenceCapBand,
   ConfidenceInput,
-  ConfidenceWeights,
+  ConfidencePolicy,
+  ConfidenceResultView,
 } from "./types";
 
-export interface ConfidenceResult {
-  score: number;
-  levelFr: string;
-  maxGrade: string | "NO_GRADE" | "NONE";
-}
-
 /**
- * Score de confiance (grilles §15.1) :
- * Confiance = 35% × Complétude + 20% × Fraîcheur + 30% × Fiabilité + 15% × Provenance
- * Chaque composante est notée 0/25/50/75/100. Les pondérations sont
- * paramétrées dans la version de modèle (somme = 100, contrôlée au chargement).
+ * Classe de confiance (constat H02).
+ *
+ * V2 traduisait la qualité de l'information en PLAFOND de grade. Sur le
+ * portefeuille simulé, ce mécanisme déplaçait 55 à 65 % des dossiers de deux
+ * grades et concentrait la moitié du portefeuille sur deux grades — au point
+ * que le score moyen d'un grade dépassait celui du grade censé lui être
+ * supérieur. La qualité de la mesure dominait ainsi le risque mesuré.
+ *
+ * V3 sépare les deux. La confiance est restituée comme une CLASSE (A, B, C, U)
+ * à côté du grade, jamais dessus. Sous la classe minimale, aucun grade n'est
+ * produit : un dossier trop peu documenté n'est pas un dossier moyen, c'est un
+ * dossier non notable — et c'est une information opérationnelle utile, puisque
+ * la réponse est de compléter le dossier, pas de négocier la note.
  */
 export function computeConfidence(
   input: ConfidenceInput,
-  weights: ConfidenceWeights,
-  caps: ConfidenceCapBand[]
-): ConfidenceResult {
+  policy: ConfidencePolicy
+): ConfidenceResultView {
   for (const [k, v] of Object.entries(input)) {
     if (!Number.isFinite(v) || v < 0 || v > 100) {
       throw new Error(`Composante de confiance invalide : ${k}=${v}`);
     }
   }
+  const w = policy.weights;
   const score =
-    (input.completeness * weights.completeness +
-      input.freshness * weights.freshness +
-      input.reliability * weights.reliability +
-      input.provenance * weights.provenance) /
+    (input.completeness * w.completeness +
+      input.freshness * w.freshness +
+      input.reliability * w.reliability +
+      input.provenance * w.provenance) /
     100;
 
-  for (const band of caps) {
-    const okMin = score >= band.minConfidence;
-    const okMax = band.maxConfidence === null || score < band.maxConfidence;
+  for (const band of policy.classes) {
+    const okMin = score >= band.minScore;
+    const okMax = band.maxScore === null || score < band.maxScore;
     if (okMin && okMax) {
-      return { score, levelFr: band.levelFr, maxGrade: band.maxGrade };
+      return {
+        score,
+        classCode: band.code,
+        labelFr: band.labelFr,
+        affectsGrade: false,
+      };
     }
   }
-  throw new Error(`Bandes de confiance non exhaustives pour le score ${score}`);
+  throw new Error(`Classes de confiance non exhaustives pour le score ${score}`);
+}
+
+const CLASS_ORDER: Record<"A" | "B" | "C" | "U", number> = { A: 1, B: 2, C: 3, U: 4 };
+
+/** true si la classe atteint le minimum exigé pour produire un grade. */
+export function meetsMinimumClass(
+  classCode: "A" | "B" | "C" | "U",
+  minimum: "A" | "B" | "C"
+): boolean {
+  return CLASS_ORDER[classCode] <= CLASS_ORDER[minimum];
 }

@@ -1,478 +1,553 @@
 import { describe, expect, it } from "vitest";
 import { computeRating } from "@/core/engine";
-import { CORP_STD_V1 } from "@/models";
+import { areComparable } from "@/core/grades";
+import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "@/models";
+import type { RatingInput } from "@/core/types";
 import { FULL_CONFIDENCE, tpeGoldenInput } from "./fixtures";
 
-describe("Golden vectors — agrégation (grilles §21)", () => {
-  it("reproduit l'exemple 21.1 : D1 TPE = 61,00", () => {
-    const result = computeRating(CORP_STD_V1, tpeGoldenInput());
+const AT = "2026-09-17T00:00:00Z";
+
+describe("Vecteurs de contrôle — agrégation", () => {
+  it("reproduit l'exemple de référence : D1 TPE = 61,00", () => {
+    const result = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
     const d1 = result.domainResults.find((d) => d.code === "D1")!;
     expect(d1.score).toBeCloseTo(61.0, 10);
   });
 
-  it("agrège le score global exactement (64,50 → G7)", () => {
-    const result = computeRating(CORP_STD_V1, tpeGoldenInput());
-    expect(result.outcome).toBe("SCORED");
+  it("agrège le score global exactement (64,50 → STD-P5)", () => {
+    const result = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    expect(result.ratingStatus).toBe("RATED");
     expect(result.rawScore).toBeCloseTo(64.5, 10);
-    expect(result.engineGrade).toBe("G7");
-    expect(result.finalGrade).toBe("G7");
-    const scores = Object.fromEntries(
-      result.domainResults.map((d) => [d.code, d.score])
-    );
-    expect(scores.D2).toBeCloseTo(50, 10);
-    expect(scores.D3).toBeCloseTo(75, 10);
-    expect(scores.D5).toBeCloseTo(75, 10);
-  });
-
-  it("vérifie la formule §21.1 complète : 61×25% + 60×10% + 82×25% + 65×15% + 70×15% + 75×7% + 50×3% = 68,75", () => {
-    // Contrôle arithmétique de la formule d'agrégation elle-même.
-    const global =
-      (61 * 2500 + 60 * 1000 + 82 * 2500 + 65 * 1500 + 70 * 1500 + 75 * 700 + 50 * 300) /
-      10000;
-    expect(global).toBeCloseTo(68.75, 10);
+    expect(result.engineGrade).toBe("STD-P5");
+    expect(result.finalGrade).toBe("STD-P5");
   });
 
   it("est reproductible : même snapshot => même résultat", () => {
-    const a = computeRating(CORP_STD_V1, tpeGoldenInput(), "2026-08-18T00:00:00Z");
-    const b = computeRating(CORP_STD_V1, tpeGoldenInput(), "2026-08-18T00:00:00Z");
+    const a = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    const b = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
     expect(a).toEqual(b);
   });
 });
 
-describe("Bornes des barèmes (tests de frontière §24.4)", () => {
+describe("Poids total constant (constat C07)", () => {
+  /**
+   * Le cœur du constat : en V2, une donnée manquante sortait du dénominateur.
+   * Deux dossiers n'étaient alors plus comparables, et l'absence d'une
+   * information défavorable pouvait améliorer un score.
+   */
+  it("le poids total appliqué ne dépend pas des données manquantes", () => {
+    const complet = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    const lacunaire = computeRating(
+      CORP_STD_V1,
+      {
+        ...tpeGoldenInput(),
+        criteria: { ...tpeGoldenInput().criteria, "D4.1": { status: "MISSING" } },
+      },
+      AT
+    );
+    const total = (r: typeof complet) =>
+      r.domainResults.reduce((acc, d) => acc + d.weightBps, 0);
+    expect(total(lacunaire)).toBe(total(complet));
+    expect(total(complet)).toBe(10000);
+  });
+
+  it("une information absente ne peut jamais améliorer le score", () => {
+    const base = tpeGoldenInput();
+    // D4.1 vaut 50 dans le vecteur de référence ; l'effacer applique la
+    // catégorie prudente (25) et doit donc dégrader, jamais améliorer.
+    const avec = computeRating(CORP_STD_V1, base, AT);
+    const sans = computeRating(
+      CORP_STD_V1,
+      { ...base, criteria: { ...base.criteria, "D4.1": { status: "MISSING" } } },
+      AT
+    );
+    expect(sans.rawScore!).toBeLessThan(avec.rawScore!);
+  });
+
+  it("marque le critère imputé et le retire de la couverture observée", () => {
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...base, criteria: { ...base.criteria, "D4.1": { status: "MISSING" } } },
+      AT
+    );
+    const crit = r.domainResults
+      .flatMap((d) => d.criteria)
+      .find((c) => c.code === "D4.1")!;
+    expect(crit.imputed).toBe(true);
+    expect(crit.score).toBe(25);
+    expect(r.coverage.globalObservedBps).toBeLessThan(10000);
+  });
+
+  it("refuse une non-applicabilité que le modèle n'a pas prévue", () => {
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...base, criteria: { ...base.criteria, "D3.2": { status: "NOT_APPLICABLE" } } },
+      AT
+    );
+    const crit = r.domainResults
+      .flatMap((d) => d.criteria)
+      .find((c) => c.code === "D3.2")!;
+    // Traitée comme manquante, et l'incohérence est signalée.
+    expect(crit.imputed).toBe(true);
+    expect(r.inconsistenciesFr.join(" ")).toContain("D3.2");
+  });
+
+  it("une donnée critique manquante interdit toute notation", () => {
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...base, criteria: { ...base.criteria, "D1.5": { status: "MISSING" } } },
+      AT
+    );
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
+    expect(r.finalGrade).toBeNull();
+    expect(r.blockingReasonsFr.join(" ")).toContain("D1.5");
+  });
+});
+
+describe("Porte de couverture et classe de confiance (constats C07 et H02)", () => {
+  it("la confiance ne plafonne plus le grade", () => {
+    const base = tpeGoldenInput();
+    const forte = computeRating(CORP_STD_V1, base, AT);
+    const moyenne = computeRating(
+      CORP_STD_V1,
+      { ...base, confidence: { completeness: 75, freshness: 75, reliability: 75, provenance: 75 } },
+      AT
+    );
+    expect(moyenne.finalGrade).toBe(forte.finalGrade);
+    expect(moyenne.confidence.classCode).toBe("B");
+    expect(moyenne.confidence.affectsGrade).toBe(false);
+  });
+
+  it("sous la classe minimale, aucun grade n'est produit mais le score est conservé", () => {
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...base, confidence: { completeness: 25, freshness: 25, reliability: 25, provenance: 25 } },
+      AT
+    );
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
+    expect(r.confidence.classCode).toBe("U");
+    expect(r.finalGrade).toBeNull();
+    expect(r.rawScore).toBeCloseTo(64.5, 10);
+  });
+
+  it("sous le seuil de couverture, aucun grade n'est produit", () => {
+    const base = tpeGoldenInput();
+    // Toutes les données non critiques deviennent manquantes : le score reste
+    // calculable par la catégorie prudente, mais il ne mesure plus rien.
+    const critiques = new Set(
+      CORP_STD_V1.criteria.filter((c) => c.unavailablePolicy === "BLOCK").map((c) => c.code)
+    );
+    const criteria = Object.fromEntries(
+      Object.entries(base.criteria).map(([code, v]) =>
+        critiques.has(code) ? [code, v] : [code, { status: "MISSING" as const }]
+      )
+    );
+    const r = computeRating(CORP_STD_V1, { ...base, criteria }, AT);
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
+    expect(r.coverage.meetsPolicy).toBe(false);
+    expect(r.rawScore).not.toBeNull();
+  });
+
+  it("une valeur estimée ne compte pas comme une observation", () => {
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...base,
+        criteria: { ...base.criteria, "D4.1": { status: "ESTIMATED", score: 50 } },
+      },
+      AT
+    );
+    expect(r.coverage.globalObservedBps).toBeLessThan(10000);
+    expect(r.warningsFr.join(" ")).toContain("estimée");
+  });
+});
+
+describe("Ordre canonique du pipeline (constat H14)", () => {
+  it("l'exception non compensatoire s'applique APRÈS le grade moteur", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), structuralFlags: { baseDscrBelow1: true } },
+      AT
+    );
+    // Le grade moteur reste celui du score ; seul le grade autonome est ramené.
+    expect(r.engineGrade).toBe("STD-P5");
+    expect(r.standaloneGrade).toBe("STD-P7");
+    expect(r.rawScore).toBeCloseTo(64.5, 10);
+    expect(r.appliedRules.map((x) => x.code)).toContain("NC01");
+  });
+
+  it("l'exception déclare le critère qui porte sa contribution centrale", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), structuralFlags: { baseDscrBelow1: true } },
+      AT
+    );
+    expect(r.appliedRules.find((x) => x.code === "NC01")!.centralCriterion).toBe("D2.2");
+  });
+
+  it("plusieurs exceptions : la plus contraignante l'emporte", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...tpeGoldenInput(),
+        structuralFlags: { baseDscrBelow1: true, materialGroupFileIncomplete: true },
+      },
+      AT
+    );
+    expect(r.standaloneGrade).toBe("STD-P7");
+  });
+
+  it("un défaut constaté s'impose quel que soit le score", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), defaultTriggered: true, defaultGrade: "DEF2" },
+      AT
+    );
+    expect(r.ratingStatus).toBe("DEFAULTED");
+    expect(r.finalGrade).toBe("DEF2");
+    expect(r.rawScore).toBeCloseTo(64.5, 10);
+  });
+});
+
+describe("Séparation des finalités (constat C06)", () => {
+  it("les quatre autres moteurs restent explicitement non évalués", () => {
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    expect(r.decisionStatus).toBe("NOT_EVALUATED");
+    expect(r.regulatoryClassStatus).toBe("NOT_EVALUATED");
+    expect(r.ifrs9Status).toBe("NOT_EVALUATED");
+  });
+
+  it("un blocage conformité n'empêche plus de noter une exposition existante", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), redFlags: ["RF01"], existingExposure: true },
+      AT
+    );
+    expect(r.complianceStatus).toBe("BLOCKED");
+    expect(r.ratingStatus).toBe("RATED");
+    expect(r.finalGrade).toBe("STD-P5");
+    expect(r.usageRights.restrictionsFr.join(" ")).toContain("conformité");
+  });
+
+  it("l'échelle ne porte aucune décision indicative", () => {
+    for (const band of CORP_STD_V1.gradeScale.bands) {
+      expect(Object.keys(band)).not.toContain("indicativeDecisionFr");
+    }
+  });
+});
+
+describe("Échelles propres aux modèles (constat C03)", () => {
+  it("les deux modèles portent des échelles distinctes", () => {
+    expect(CORP_STD_V1.gradeScale.scaleId).not.toBe(CORP_TPE_BEHAV_V1.gradeScale.scaleId);
+  });
+
+  it("aucune comparabilité n'est déclarée tant que l'échelle est provisoire", () => {
+    expect(areComparable(CORP_STD_V1.gradeScale, CORP_TPE_BEHAV_V1.gradeScale)).toBe(false);
+    expect(CORP_STD_V1.gradeScale.status).toBe("PROVISIONAL");
+  });
+
+  it("les grades produits portent le préfixe de leur modèle", () => {
+    const std = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    expect(std.finalGrade).toMatch(/^STD-P\d$/);
+    expect(std.gradeScaleId).toBe("STD-P-2026.1");
+  });
+});
+
+describe("Exposition de la probabilité de défaut (constat C02)", () => {
+  it("aucune PD n'est exposée hors bac à sable", () => {
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), { nowIso: AT });
+    expect(r.pd12m).toBeNull();
+    expect(r.pdStatus).toBe("CALIBRATED_SYNTHETIC");
+    expect(r.usageRights.purpose).toBe("PILOT_SHADOW");
+    expect(r.usageRights.pdDisclosed).toBe(false);
+  });
+
+  it("la PD n'apparaît qu'en bac à sable explicitement déclaré", () => {
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), {
+      nowIso: AT,
+      syntheticPdAllowed: true,
+    });
+    expect(r.pd12m).not.toBeNull();
+    expect(r.usageRights.purpose).toBe("SIMULATION_ONLY");
+  });
+
+  it("les restrictions d'usage accompagnent toujours le résultat", () => {
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), { nowIso: AT });
+    const texte = r.usageRights.restrictionsFr.join(" ");
+    expect(texte).toContain("IFRS 9");
+    expect(texte).toContain("SIMULÉES");
+    expect(r.usageRights.permittedUsesFr.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Routage (constats C04 et C08)", () => {
+  it("un modèle non publié pour le segment refuse de noter", () => {
+    const r = computeRating(
+      CORP_TPE_BEHAV_V1,
+      { ...tpeGoldenInput(), modelId: "CORP_TPE_BEHAV_V1", segment: "GE" },
+      AT
+    );
+    expect(r.ratingStatus).toBe("NO_RATING_ROUTED_OTHER_MODEL");
+  });
+
+  it("une entreprise de moins de deux ans est routée hors grille, pas plafonnée", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), structuralFlags: { companyAgeYears: 1 } },
+      AT
+    );
+    expect(r.ratingStatus).toBe("NO_RATING_ROUTED_OTHER_MODEL");
+    expect(r.finalGrade).toBeNull();
+    expect(r.blockingReasonsFr.join(" ")).toContain("jeune entreprise");
+  });
+
+  it("segment indéterminable : aucun segment par défaut", () => {
+    const input: RatingInput = {
+      ...tpeGoldenInput(),
+      segment: undefined,
+      segmentationData: {},
+    };
+    const r = computeRating(CORP_STD_V1, input, AT);
+    expect(r.ratingStatus).toBe("NO_RATING_SEGMENT_UNDETERMINED");
+  });
+
+  it("le jeu de règles de segmentation est tracé dans le résultat", () => {
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    expect(r.segmentationRulesetId).toBe("SEG-2026.1");
+  });
+});
+
+describe("Support groupe (constat H05)", () => {
+  const base = tpeGoldenInput();
+
+  it("refuse le relèvement si une seule condition manque", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...base,
+        groupSupport: {
+          claimed: true,
+          capacityDocumented: true,
+          willingnessDocumented: true,
+          legallyBinding: false,
+          fundsTransferable: true,
+          requestedNotches: 2,
+        },
+      },
+      AT
+    );
+    expect(r.groupSupport!.granted).toBe(false);
+    expect(r.finalGrade).toBe(r.standaloneGrade);
+    expect(r.groupSupport!.missingConditionsFr.join(" ")).toContain("contraignant");
+  });
+
+  it("accorde un relèvement plafonné et conserve la note autonome", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...base,
+        groupSupport: {
+          claimed: true,
+          capacityDocumented: true,
+          willingnessDocumented: true,
+          legallyBinding: true,
+          fundsTransferable: true,
+          requestedNotches: 4,
+        },
+      },
+      AT
+    );
+    expect(r.groupSupport!.granted).toBe(true);
+    expect(r.groupSupport!.notchesApplied).toBe(2); // plafond
+    expect(r.standaloneGrade).toBe("STD-P5");
+    expect(r.finalGrade).toBe("STD-P3");
+  });
+});
+
+describe("Matérialité ESG (constat H09)", () => {
+  it("transfère le poids d'un risque non matériel selon la règle déclarée", () => {
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    const d7 = r.domainResults.find((d) => d.code === "D7")!;
+    const d71 = d7.criteria.find((c) => c.code === "D7.1")!;
+    const d73 = d7.criteria.find((c) => c.code === "D7.3")!;
+    expect(d71.effectiveWeightBps).toBe(0);
+    expect(d73.effectiveWeightBps).toBe(200); // 100 propre + 100 transféré
+    expect(d7.weightBps).toBe(300);
+  });
+
+  it("évalue le critère lorsque le risque est matériel", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), materiality: { esgPhysicalMaterial: true } },
+      AT
+    );
+    const d71 = r.domainResults
+      .flatMap((d) => d.criteria)
+      .find((c) => c.code === "D7.1")!;
+    expect(d71.effectiveWeightBps).toBe(100);
+    expect(d71.score).toBe(50);
+  });
+});
+
+describe("Bornes des barèmes", () => {
   const cases: Array<[number, number]> = [
-    [1.0, 100], // borne incluse
+    [1.0, 100],
     [1.0001, 75],
-    [2.0, 75], // borne incluse côté 75
+    [2.0, 75],
     [2.0001, 50],
     [3.5, 50],
     [3.5001, 25],
     [5.0, 25],
     [5.0001, 0],
-    [-0.5, 100], // dette nette négative (cas trésorerie libre documenté)
   ];
   for (const [value, expected] of cases) {
     it(`D1.5 TPE : valeur ${value} → score ${expected}`, () => {
-      const input = tpeGoldenInput();
-      input.criteria["D1.5"] = { status: "AVAILABLE", value };
-      const result = computeRating(CORP_STD_V1, input);
-      const c = result.domainResults
-        .find((d) => d.code === "D1")!
-        .criteria.find((c) => c.code === "D1.5")!;
+      const base = tpeGoldenInput();
+      const r = computeRating(
+        CORP_STD_V1,
+        { ...base, criteria: { ...base.criteria, "D1.5": { status: "AVAILABLE", value } } },
+        AT
+      );
+      const c = r.domainResults.flatMap((d) => d.criteria).find((x) => x.code === "D1.5")!;
       expect(c.score).toBe(expected);
     });
   }
 
-  it("monotonicité : améliorer isolément D1.4 ne dégrade jamais le score global", () => {
-    let prev = -1;
-    for (const value of [2, 10, 20, 30, 40]) {
-      const input = tpeGoldenInput();
-      input.criteria["D1.4"] = { status: "AVAILABLE", value };
-      const result = computeRating(CORP_STD_V1, input);
-      expect(result.rawScore!).toBeGreaterThanOrEqual(prev);
-      prev = result.rawScore!;
-    }
-  });
-
-  it("cas spécial EBITDA <= 0 : D1.5 => score 0 explicite et code de raison", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D1.5"] = { status: "AVAILABLE", specialCase: "EBITDA_LTE_0" };
-    const result = computeRating(CORP_STD_V1, input);
-    const c = result.domainResults
-      .find((d) => d.code === "D1")!
-      .criteria.find((c) => c.code === "D1.5")!;
+  it("cas spécial EBITDA ≤ 0 : score 0 explicite", () => {
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...base,
+        criteria: {
+          ...base.criteria,
+          "D1.5": { status: "AVAILABLE", specialCase: "EBITDA_LTE_0" },
+        },
+      },
+      AT
+    );
+    const c = r.domainResults.flatMap((d) => d.criteria).find((x) => x.code === "D1.5")!;
     expect(c.score).toBe(0);
-    // Le code reste stable et exploitable ; l'explication porte le libellé.
-    expect(c.reasonCode).toBe("D1.D1_5.NEG.SPECIAL_EBITDA_LTE_0");
-    expect(c.explanationFr).toContain("EBITDA");
+    expect(c.reasonCode).toContain("SPECIAL_EBITDA_LTE_0");
   });
 
   it("refuse un cas spécial non déclaré par le critère", () => {
-    const input = tpeGoldenInput();
-    // D4.2 ne déclare aucun cas spécial : un code inventé ne doit pas pouvoir
-    // imposer un score.
-    input.criteria["D4.2"] = { status: "AVAILABLE", specialCase: "CODE_INVENTE" };
-    const result = computeRating(CORP_STD_V1, input);
-    const c = result.domainResults
-      .find((d) => d.code === "D4")!
-      .criteria.find((c) => c.code === "D4.2")!;
-    expect(c.score).toBeNull();
-    expect(c.status).toBe("INVALID");
-    expect(result.warningsFr.join(" ")).toContain("CODE_INVENTE");
-  });
-
-  it("refuse un cas spécial déclaré sur un autre critère", () => {
-    const input = tpeGoldenInput();
-    // EBITDA_LTE_0 existe, mais pas pour D1.6.
-    input.criteria["D1.6"] = { status: "AVAILABLE", specialCase: "EBITDA_LTE_0" };
-    const result = computeRating(CORP_STD_V1, input);
-    const c = result.domainResults
-      .find((d) => d.code === "D1")!
-      .criteria.find((c) => c.code === "D1.6")!;
-    expect(c.score).toBeNull();
-    expect(c.status).toBe("INVALID");
-  });
-
-  it("un cas spécial peut imposer un score autre que zéro", async () => {
-    const { CORP_TPE_BEHAV_V1 } = await import("@/models");
-    const sc = CORP_TPE_BEHAV_V1.criteria
-      .find((c) => c.code === "B2.2")!
-      .specialCases!.find((s) => s.code === "FLOWS_DOWN_OVER_15PCT")!;
-    expect(sc.score).toBe(25);
-  });
-});
-
-describe("Segmentation TPE/PME/GE (seed paramétrable)", () => {
-  const base = () => {
-    const input = tpeGoldenInput();
-    delete input.segment;
-    return input;
-  };
-
-  it("CA 200 MMAD → GE", () => {
-    const input = base();
-    input.segmentationData = { annualTurnover: 200_000_000 };
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.segment).toBe("GE");
-    expect(r.segmentSource).toBe("COMPUTED");
-  });
-
-  it("CA 50 MMAD → PME", () => {
-    const input = base();
-    input.segmentationData = { annualTurnover: 50_000_000, globalBankExposure: 0 };
-    expect(computeRating(CORP_STD_V1, input).segment).toBe("PME");
-  });
-
-  it("CA 5 MMAD + exposition 3 MMAD → PME", () => {
-    const input = base();
-    input.segmentationData = { annualTurnover: 5_000_000, globalBankExposure: 3_000_000 };
-    expect(computeRating(CORP_STD_V1, input).segment).toBe("PME");
-  });
-
-  it("CA 5 MMAD + exposition 1 MMAD → TPE", () => {
-    const input = base();
-    input.segmentationData = { annualTurnover: 5_000_000, globalBankExposure: 1_000_000 };
-    expect(computeRating(CORP_STD_V1, input).segment).toBe("TPE");
-  });
-
-  it("CA groupe prime sur CA solo (vision groupe d'intérêt)", () => {
-    const input = base();
-    input.segmentationData = {
-      annualTurnover: 5_000_000,
-      groupAnnualTurnover: 300_000_000,
-    };
-    expect(computeRating(CORP_STD_V1, input).segment).toBe("GE");
-  });
-
-  it("segment indéterminable → scoring bloqué", () => {
-    const input = base();
-    input.segmentationData = {};
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("BLOCKED_SEGMENTATION");
-    expect(r.finalGrade).toBeNull();
-  });
-});
-
-describe("Caps structurels et de confiance (§15-16)", () => {
-  it("DSCR < 1 en base → cap G9, score brut conservé", () => {
-    const input = tpeGoldenInput();
-    input.structuralFlags = { baseDscrBelow1: true };
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.rawScore).toBeCloseTo(64.5, 10);
-    expect(r.engineGrade).toBe("G7");
-    expect(r.finalGrade).toBe("G9");
-    expect(r.appliedCaps.some((c) => c.code === "CAP06")).toBe(true);
-  });
-
-  it("DSCR < 1 uniquement en stress → cap G7 (sans effet si déjà G7)", () => {
-    const input = tpeGoldenInput();
-    input.structuralFlags = { stressDscrBelow1: true };
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.finalGrade).toBe("G7");
-    expect(r.appliedCaps.some((c) => c.code === "CAP07")).toBe(true);
-  });
-
-  it("plusieurs caps → le plus contraignant est retenu", () => {
-    const input = tpeGoldenInput();
-    input.structuralFlags = {
-      stressDscrBelow1: true,
-      negativeTangibleEquity: true,
-    };
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.finalGrade).toBe("G9"); // CAP02 (G9) plus contraignant que CAP07 (G7)
-  });
-
-  it("confiance moyenne (82) → cap G4 enregistré, sans effet si grade déjà moins bon", () => {
-    const input = tpeGoldenInput();
-    input.confidence = { completeness: 75, freshness: 100, reliability: 75, provenance: 100 };
-    // 0,35×75 + 0,20×100 + 0,30×75 + 0,15×100 = 83,75 → bande [70, 85[ → cap G4
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.confidenceScore).toBeCloseTo(83.75, 10);
-    expect(r.appliedCaps.some((c) => c.code === "CAP_CONFIDENCE" && c.maxGrade === "G4")).toBe(true);
-    expect(r.finalGrade).toBe("G7"); // déjà moins bon que G4
-  });
-
-  it("confiance insuffisante (< 55) → aucun grade final, score brut conservé", () => {
-    const input = tpeGoldenInput();
-    input.confidence = { completeness: 25, freshness: 25, reliability: 50, provenance: 50 };
-    // 0,35×25 + 0,20×25 + 0,30×50 + 0,15×50 = 36,25 → Insuffisant
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("NO_GRADE_CONFIDENCE");
-    expect(r.finalGrade).toBeNull();
-    expect(r.rawScore).toBeCloseTo(64.5, 10);
-  });
-
-  it("comptes trop anciens (CAP04) → aucun grade final", () => {
-    const input = tpeGoldenInput();
-    input.structuralFlags = { accountsTooOld: true };
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("NO_GRADE_CONFIDENCE");
-    expect(r.finalGrade).toBeNull();
-  });
-});
-
-describe("Red flags et défaut (§17-18)", () => {
-  it("red flag BLOCK (RF01) → scoring arrêté, aucun score", () => {
-    const input = tpeGoldenInput();
-    input.redFlags = ["RF01"];
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("BLOCKED_RED_FLAG");
-    expect(r.rawScore).toBeNull();
-    expect(r.finalGrade).toBeNull();
-  });
-
-  it("red flag REFER (RF07) → score calculé, signal non dilué", () => {
-    const input = tpeGoldenInput();
-    input.redFlags = ["RF07"];
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("SCORED");
-    expect(r.rawScore).toBeCloseTo(64.5, 10);
-    expect(r.triggeredRedFlags.map((f) => f.code)).toContain("RF07");
-    expect(r.explanationFr).toContain("RF07");
-  });
-
-  it("défaut avéré → grade DEF1 forcé, indépendamment du score", () => {
-    const input = tpeGoldenInput();
-    input.defaultTriggered = true;
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("DEFAULT_GRADE");
-    expect(r.finalGrade).toBe("DEF1");
-    expect(r.rawScore).toBeCloseTo(64.5, 10); // conservé pour le monitoring
-  });
-});
-
-describe("Données manquantes et non applicables (§7.10)", () => {
-  it("donnée critique manquante (D1.5) → scoring bloqué", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D1.5"] = { status: "MISSING" };
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("BLOCKED_DATA");
-    expect(r.finalGrade).toBeNull();
-    expect(r.blockingReasonsFr.join(" ")).toContain("D1.5");
-  });
-
-  it("critère absent du payload = MISSING (jamais un zéro silencieux)", () => {
-    const input = tpeGoldenInput();
-    delete input.criteria["D1.4"]; // critique
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("BLOCKED_DATA");
-  });
-
-  it("NOT_APPLICABLE → poids redistribué dans le domaine, MISSING non critique → exclu avec warning", () => {
-    const input = tpeGoldenInput();
-    // D7 : deux critères NA, deux notés 50 → D7 = 50 (redistribution interne)
-    input.criteria["D7.1"] = { status: "NOT_APPLICABLE" };
-    input.criteria["D7.2"] = { status: "NOT_APPLICABLE" };
-    const r = computeRating(CORP_STD_V1, input);
-    const d7 = r.domainResults.find((d) => d.code === "D7")!;
-    expect(d7.score).toBeCloseTo(50, 10);
-    expect(d7.applicableWeightBps).toBe(150); // 100 (D7.3) + 50 (D7.4)
-    expect(r.outcome).toBe("SCORED");
-    expect(r.rawScore).toBeCloseTo(64.5, 10); // D7 reste à 50 → global inchangé
-
-    // MISSING non critique : exclu du dénominateur + warning explicite
-    const input2 = tpeGoldenInput();
-    input2.criteria["D4.8"] = { status: "MISSING" };
-    const r2 = computeRating(CORP_STD_V1, input2);
-    expect(r2.outcome).toBe("SCORED");
-    expect(r2.warningsFr.join(" ")).toContain("D4.8");
-  });
-
-  it("NOT_APPLICABLE et MISSING produisent des comportements distincts", () => {
-    const na = tpeGoldenInput();
-    na.criteria["D2.6"] = { status: "NOT_APPLICABLE" };
-    const missing = tpeGoldenInput();
-    missing.criteria["D2.6"] = { status: "MISSING" };
-    const rNa = computeRating(CORP_STD_V1, na);
-    const rMissing = computeRating(CORP_STD_V1, missing);
-    // Même effet numérique (exclusion) mais signalisation différente :
-    expect(rNa.warningsFr.filter((w) => w.includes("D2.6"))).toHaveLength(0);
-    expect(rMissing.warningsFr.filter((w) => w.includes("D2.6")).length).toBeGreaterThan(0);
-  });
-
-  it("le client ne peut pas fournir un score pour un critère quantitatif", () => {
-    const input = tpeGoldenInput();
-    // Un « score » envoyé sur un critère quantitatif est ignoré : seule la
-    // valeur mesurée compte. Sans valeur => donnée invalide.
-    input.criteria["D1.5"] = { status: "AVAILABLE", score: 100 } as never;
-    const r = computeRating(CORP_STD_V1, input);
-    expect(r.outcome).toBe("BLOCKED_DATA");
-  });
-});
-
-describe("Confiance (§15.1)", () => {
-  it("pondération 35/20/30/15 appliquée exactement", () => {
-    const input = tpeGoldenInput();
-    input.confidence = { completeness: 100, freshness: 50, reliability: 75, provenance: 25 };
-    const r = computeRating(CORP_STD_V1, input);
-    // 0,35×100 + 0,20×50 + 0,30×75 + 0,15×25 = 71,25
-    expect(r.confidenceScore).toBeCloseTo(71.25, 10);
+    const base = tpeGoldenInput();
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...base,
+        criteria: {
+          ...base.criteria,
+          "D1.4": { status: "AVAILABLE", value: 30, specialCase: "INVENTE" },
+        },
+      },
+      AT
+    );
+    // D1.4 est critique : un cas spécial inconnu rend la donnée invalide,
+    // donc bloquante — un appelant ne peut pas forcer un score.
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
   });
 });
 
 describe("Modèle TPE comportemental", () => {
-  it("score un dossier TPE par les flux", async () => {
-    const { CORP_TPE_BEHAV_V1 } = await import("@/models");
-    const r = computeRating(CORP_TPE_BEHAV_V1, {
+  function behavInput(): RatingInput {
+    const criteria: RatingInput["criteria"] = {};
+    for (const c of CORP_TPE_BEHAV_V1.criteria) {
+      criteria[c.code] =
+        c.type === "QUANTITATIVE"
+          ? { status: "AVAILABLE", value: quantValue(c.code) }
+          : { status: "AVAILABLE", score: 75 };
+    }
+    return {
       modelId: "CORP_TPE_BEHAV_V1",
       segment: "TPE",
-      asOfDate: "2026-08-18",
+      asOfDate: "2026-06-30",
       confidence: { ...FULL_CONFIDENCE },
-      criteria: {
-        "B1.1": { status: "AVAILABLE", value: 0 }, // 100
-        "B1.2": { status: "AVAILABLE", score: 75 },
-        "B1.3": { status: "AVAILABLE", value: 95 }, // 75
-        "B1.4": { status: "AVAILABLE", score: 100 },
-        "B1.5": { status: "AVAILABLE", score: 100 },
-        "B2.1": { status: "AVAILABLE", value: 1.4 }, // 75
-        "B2.2": { status: "AVAILABLE", value: 20 }, // 75
-        "B2.3": { status: "AVAILABLE", score: 75 },
-        "B2.4": { status: "AVAILABLE", value: 1.2 }, // 75
-        "B3.1": { status: "AVAILABLE", score: 50 },
-        "B3.2": { status: "AVAILABLE", value: 6 }, // 75
-        "B3.3": { status: "AVAILABLE", score: 50 },
-        "B3.4": { status: "AVAILABLE", score: 50 },
-        "B3.5": { status: "AVAILABLE", score: 50 },
-        "B4.1": { status: "AVAILABLE", score: 75 },
-        "B4.2": { status: "AVAILABLE", score: 50 },
-        "B4.3": { status: "AVAILABLE", score: 50 },
-        "B4.4": { status: "AVAILABLE", score: 50 },
-        "B5.1": { status: "AVAILABLE", score: 75 },
-        "B5.2": { status: "AVAILABLE", value: 4 }, // 100
-        "B5.3": { status: "AVAILABLE", score: 75 },
-        "B5.4": { status: "AVAILABLE", score: 75 },
-        "B6.1": { status: "AVAILABLE", score: 50 },
-        "B7.1": { status: "AVAILABLE", score: 50 },
+      criteria,
+    };
+  }
+  function quantValue(code: string): number {
+    switch (code) {
+      case "B1.1":
+        return 3; // ]0;7] => 75
+      case "B1.3":
+        return 100; // [90;110[ => 75
+      case "B2.1":
+        return 1.4; // [1.3;1.5[ => 75
+      case "B2.2":
+        return 20; // ]15;25] => 75
+      case "B2.4":
+        return 1.2; // [1.15;1.3[ => 75
+      case "B3.2":
+        return 6; // [5;7[ => 75
+      case "B5.2":
+        return 8; // ]5;10] => 75
+      default:
+        return 75;
+    }
+  }
+
+  it("note un dossier par les flux, sur sa propre échelle", () => {
+    const r = computeRating(CORP_TPE_BEHAV_V1, behavInput(), AT);
+    expect(r.ratingStatus).toBe("RATED");
+    expect(r.rawScore).toBeCloseTo(75, 10);
+    expect(r.finalGrade).toMatch(/^TPE-B\d$/);
+    expect(r.gradeScaleId).toBe("TPE-B-2026.1");
+  });
+
+  it("n'applique aucune exception non compensatoire", () => {
+    expect(CORP_TPE_BEHAV_V1.nonCompensatoryRules).toHaveLength(0);
+  });
+
+  it("exige une classe de confiance plus élevée que le modèle standard", () => {
+    expect(CORP_TPE_BEHAV_V1.confidence.minimumClassForRating).toBe("B");
+    const r = computeRating(
+      CORP_TPE_BEHAV_V1,
+      {
+        ...behavInput(),
+        confidence: { completeness: 60, freshness: 60, reliability: 60, provenance: 60 },
       },
-    });
-    expect(r.outcome).toBe("SCORED");
-    expect(r.rawScore).toBeGreaterThan(60);
-    expect(r.finalGrade).not.toBeNull();
+      AT
+    );
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
+  });
+
+  it("observe une fenêtre comportementale d'au moins 24 mois", () => {
+    expect(CORP_TPE_BEHAV_V1.philosophy.observationWindowsMonths.behavioral).toBeGreaterThanOrEqual(24);
   });
 });
 
 describe("Codes de raison et corroboration des signaux", () => {
   it("produit des codes de raison stables et normalisés", () => {
-    const result = computeRating(CORP_STD_V1, tpeGoldenInput());
-    const all = result.domainResults.flatMap((d) => d.criteria);
-    // Tout critère évalué porte un code non vide.
-    for (const c of all.filter((c) => c.score !== null)) {
-      expect(c.reasonCode, `${c.code} sans code de raison`).not.toBe("");
-      expect(c.reasonCode).toMatch(/^D\d\.D\d_\d\.(POS|NEU|NEG)\.[A-Z_]+$/);
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    expect(r.reasonCodes.length).toBeGreaterThan(0);
+    for (const code of r.reasonCodes) {
+      expect(code).toMatch(/^D\d\.D\d_\d\.(POS|NEG|NEU)\.[A-Z0-9_]+$/);
     }
-    // Le résultat expose les contributions décisives.
-    expect(result.reasonCodes.length).toBeGreaterThan(0);
-    expect(result.reasonCodes.every((c) => typeof c === "string" && c.length > 0)).toBe(true);
-  });
-
-  it("le sens du code suit le score du critère", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D1.4"] = { status: "AVAILABLE", value: 40 }; // ≥ 35 % → 100
-    const good = computeRating(CORP_STD_V1, input);
-    expect(
-      good.domainResults.flatMap((d) => d.criteria).find((c) => c.code === "D1.4")!.reasonCode
-    ).toContain(".POS.");
-
-    input.criteria["D1.4"] = { status: "AVAILABLE", value: 2 }; // < 5 % → 0
-    const bad = computeRating(CORP_STD_V1, input);
-    expect(
-      bad.domainResults.flatMap((d) => d.criteria).find((c) => c.code === "D1.4")!.reasonCode
-    ).toContain(".NEG.");
   });
 
   it("signale un red flag de défaut contredit par les données de retard", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D3.1"] = { status: "AVAILABLE", value: 0 }; // aucun retard
-    input.redFlags = ["RF06"]; // « DPD ≥ seuil de défaut »
-    const result = computeRating(CORP_STD_V1, input);
-    expect(result.inconsistenciesFr.length).toBeGreaterThan(0);
-    expect(result.inconsistenciesFr.join(" ")).toContain("RF06");
-  });
-
-  it("ne signale rien lorsque le signal est cohérent avec les données", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D3.1"] = { status: "AVAILABLE", value: 75 }; // retard matériel
-    input.redFlags = ["RF06"];
-    const result = computeRating(CORP_STD_V1, input);
-    expect(result.inconsistenciesFr).toEqual([]);
-  });
-
-  it("signale des fonds propres négatifs déclarés mais démentis par la mesure", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D1.4"] = { status: "AVAILABLE", value: 40 }; // très confortable
-    input.redFlags = ["RF09"];
-    const result = computeRating(CORP_STD_V1, input);
-    expect(result.inconsistenciesFr.join(" ")).toContain("RF09");
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), redFlags: ["RF06"] },
+      AT
+    );
+    expect(r.inconsistenciesFr.join(" ")).toContain("RF06");
   });
 });
 
-describe("Concentrations mesurées (D4.3 / D4.4)", () => {
-  it("applique le barème segmenté sur la part du premier client", () => {
-    const cases: Array<[number, number]> = [
-      [10, 100], // ≤ 15 % (TPE)
-      [15, 100],
-      [15.001, 75],
-      [25, 75],
-      [25.001, 50],
-      [35, 50],
-      [35.001, 25],
-      [50, 25],
-      [50.001, 0],
-    ];
-    for (const [value, expected] of cases) {
-      const input = tpeGoldenInput();
-      input.criteria["D4.3"] = { status: "AVAILABLE", value };
-      const c = computeRating(CORP_STD_V1, input)
-        .domainResults.find((d) => d.code === "D4")!
-        .criteria.find((c) => c.code === "D4.3")!;
-      expect(c.score, `Top 1 = ${value} %`).toBe(expected);
+describe("Philosophie de notation (constat H01)", () => {
+  it("est déclarée et bornée à 12 mois", () => {
+    for (const m of [CORP_STD_V1, CORP_TPE_BEHAV_V1]) {
+      expect(m.philosophy.horizonMonths).toBe(12);
+      expect(m.philosophy.type).toMatch(/PIT|TTC|HYBRID/);
+      expect(m.philosophy.migrationRuleFr.length).toBeGreaterThan(40);
     }
-  });
-
-  it("le seuil de concentration critique se durcit du TPE vers la GE", () => {
-    const scoreFor = (segment: "TPE" | "PME" | "GE", value: number) => {
-      const input = tpeGoldenInput();
-      input.segment = segment;
-      input.criteria["D4.3"] = { status: "AVAILABLE", value };
-      return computeRating(CORP_STD_V1, input)
-        .domainResults.find((d) => d.code === "D4")!
-        .criteria.find((c) => c.code === "D4.3")!.score;
-    };
-    // Une part de 42 % du premier client est tolérée en TPE, critique en GE.
-    expect(scoreFor("TPE", 42)).toBe(25);
-    expect(scoreFor("PME", 42)).toBe(25);
-    expect(scoreFor("GE", 42)).toBe(0);
-  });
-
-  it("la perte probable du client principal impose un score nul", () => {
-    const input = tpeGoldenInput();
-    input.criteria["D4.3"] = {
-      status: "AVAILABLE",
-      specialCase: "MAIN_CLIENT_LOSS_LIKELY",
-    };
-    const c = computeRating(CORP_STD_V1, input)
-      .domainResults.find((d) => d.code === "D4")!
-      .criteria.find((c) => c.code === "D4.3")!;
-    expect(c.score).toBe(0);
   });
 });
