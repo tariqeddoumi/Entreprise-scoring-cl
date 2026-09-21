@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { audit } from "@/lib/audit";
+import { auditWithin } from "@/lib/audit";
 import { counterpartySchema } from "@/lib/schemas";
 import { getSessionIdentity } from "@/lib/session";
 
@@ -39,14 +39,22 @@ export async function createCounterpartyAction(
   }
 
   try {
-    const created = await prisma.counterparty.create({ data: parsed.data });
-    await audit({
-      actor: session.identity.name,
-      actorRole: session.identity.role,
-      action: "COUNTERPARTY_CREATED",
-      resourceType: "Counterparty",
-      resourceId: created.id,
-      detail: { name: created.name, ice: created.ice },
+    // Création et audit dans une seule transaction : une contrepartie ne doit
+    // pas pouvoir exister sans l'événement qui en trace l'auteur. Hors
+    // transaction, un échec de l'audit laissait la contrepartie enregistrée
+    // mais l'appelant en erreur — une reprise butait alors sur un conflit
+    // d'ICE portant sur sa propre écriture.
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.counterparty.create({ data: parsed.data });
+      await auditWithin(tx, {
+        actor: session.identity.name,
+        actorRole: session.identity.role,
+        action: "COUNTERPARTY_CREATED",
+        resourceType: "Counterparty",
+        resourceId: row.id,
+        detail: { name: row.name, ice: row.ice },
+      });
+      return row;
     });
     revalidatePath("/counterparties");
     return { ok: true, id: created.id };

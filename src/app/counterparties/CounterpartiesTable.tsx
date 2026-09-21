@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { GradeBadge } from "../ui-helpers";
+import { csvLine } from "@/lib/csv";
 
 export interface CounterpartyRow {
   id: string;
@@ -15,17 +16,11 @@ export interface CounterpartyRow {
 
 const SEGMENTS = ["TPE", "PME", "GE"] as const;
 
-/** Échappement CSV minimal : guillemets doublés, champ entre guillemets si besoin. */
-function csvField(value: string): string {
-  if (/[",\n;]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
-}
-
 function downloadCsv(rows: CounterpartyRow[]) {
   const header = ["Nom", "ICE", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
   const lines = rows.map((c) => {
     const last = c.ratingRuns[0];
-    return [
+    return csvLine([
       c.name,
       c.ice ?? "",
       c.segment ?? "",
@@ -33,13 +28,11 @@ function downloadCsv(rows: CounterpartyRow[]) {
       last?.rawScore ? Number(last.rawScore).toFixed(2) : "",
       last?.finalGrade ?? "",
       last?.asOfDate ?? "",
-    ]
-      .map((v) => csvField(String(v)))
-      .join(";");
+    ]);
   });
   // Point-virgule : Excel FR ouvre correctement sans étape d'import manuelle.
   // BOM UTF-8 en tête : préserve les accents à l'ouverture directe dans Excel.
-  const csv = `﻿${[header.join(";"), ...lines].join("\n")}`;
+  const csv = `﻿${[csvLine(header), ...lines].join("\r\n")}`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

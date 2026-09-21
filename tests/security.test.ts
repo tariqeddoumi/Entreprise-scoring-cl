@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checkOutboundUrl } from "@/lib/url-safety";
+import { csvField, csvLine } from "@/lib/csv";
 import { checkRateLimit, resetRateLimits } from "@/lib/rate-limit";
 import { config, resetConfigCache } from "@/lib/env";
 import { buildCsp } from "@/middleware";
@@ -302,5 +303,49 @@ describe("Droits d'usage et exposition de la PD (constats C02 et M01)", () => {
     expect(r.usageRights.permittedUsesFr.length).toBeGreaterThan(0);
     expect(r.usageRights.restrictionsFr.length).toBeGreaterThan(0);
     expect(r.usageRights.restrictionsFr.join(" ")).toMatch(/IFRS 9/);
+  });
+});
+
+/**
+ * Export CSV — neutralisation des formules de tableur.
+ *
+ * Le nom et l'ICE d'une contrepartie sont saisis par un utilisateur. Excel et
+ * LibreOffice exécutent tout champ commençant par `=`, `+`, `-`, `@`, une
+ * tabulation ou un retour chariot : sans neutralisation, l'export d'une liste
+ * de contreparties devient un vecteur d'exécution chez celui qui l'ouvre.
+ */
+describe("export CSV", () => {
+  it("neutralise les amorces de formule", () => {
+    for (const payload of [
+      '=HYPERLINK("http://exemple.invalide","cliquer")',
+      "+1+1",
+      "-2+3",
+      "@SUM(A1:A9)",
+      "\tinjection",
+      "\rinjection",
+    ]) {
+      const field = csvField(payload);
+      expect(field.replace(/^"/, "").startsWith("'")).toBe(true);
+    }
+  });
+
+  it("laisse intacte une valeur ordinaire", () => {
+    expect(csvField("Société Atlas")).toBe("Société Atlas");
+    expect(csvField("001234567890123")).toBe("001234567890123");
+  });
+
+  it("échappe séparateurs, guillemets et sauts de ligne", () => {
+    expect(csvField('Dupont;"Fils"')).toBe('"Dupont;""Fils"""');
+    expect(csvField("ligne1\nligne2")).toBe('"ligne1\nligne2"');
+  });
+
+  it("neutralise ET échappe quand les deux s'appliquent", () => {
+    // Le guillemet englobant ne neutralise rien par lui-même : l'apostrophe
+    // doit rester à l'intérieur du champ.
+    expect(csvLine(["=1;2"])).toBe(`"'=1;2"`);
+  });
+
+  it("n'altère pas l'ordre ni le nombre de colonnes", () => {
+    expect(csvLine(["a", null, undefined, 3])).toBe("a;;;3");
   });
 });

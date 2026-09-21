@@ -9,6 +9,7 @@ import type {
   RatingResult,
   Segment,
 } from "@/core/types";
+import { CAP_TRIGGER_TO_FLAG, RETIRED_CAP_OBSERVATIONS } from "@/core/structural-flags";
 import { RedFlagLevelBadge } from "../ui-helpers";
 import { runScoringAction } from "./actions";
 import { ResultPanel } from "./ResultPanel";
@@ -77,6 +78,22 @@ export function ScoringForm({ model, counterparties }: Props) {
   const [redFlags, setRedFlags] = useState<string[]>([]);
   const [defaultTriggered, setDefaultTriggered] = useState(false);
   const [pending, setPending] = useState(false);
+
+  // Les cases d'exception sont dérivées du modèle chargé, jamais recopiées :
+  // une liste figée avait survécu au passage en V3 et proposait encore cinq
+  // plafonds que le moteur n'évalue plus.
+  const exceptionFlags = useMemo(
+    () =>
+      model.nonCompensatoryRules
+        .map((rule) => {
+          const key = CAP_TRIGGER_TO_FLAG[rule.trigger];
+          return key
+            ? { key: key as string, code: rule.code, label: rule.labelFr, maxGrade: rule.maxGrade }
+            : null;
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null),
+    [model]
+  );
   const [result, setResult] = useState<RatingResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -150,8 +167,8 @@ export function ScoringForm({ model, counterparties }: Props) {
       confidence,
       structuralFlags: {
         ...Object.fromEntries(Object.entries(flags).filter(([, v]) => v)),
-        // L'ancienneté conditionne le cap CAP01 : sans elle, ce cap ne peut
-        // jamais se déclencher depuis l'interface.
+        // L'ancienneté commande le routage « jeune entreprise » : sans elle, un
+        // dossier hors grille ne peut pas être détecté depuis l'interface.
         ...(companyAgeYears !== "" && !Number.isNaN(Number(companyAgeYears))
           ? { companyAgeYears: Number(companyAgeYears) }
           : {}),
@@ -428,23 +445,63 @@ export function ScoringForm({ model, counterparties }: Props) {
       </section>
 
       <section className="card no-print" style={{ padding: 16 }}>
-        <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Caps structurels</h2>
+        <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Exceptions non compensatoires</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Politique interne : un cap plafonne le grade final sans jamais modifier le
-          score brut. Le plus contraignant s&apos;applique.
+          Ces constats plafonnent le grade sans jamais modifier le score brut ; le plus
+          contraignant s&apos;applique. La liste est celle du modèle chargé : elle ne peut
+          donc pas proposer une exception que le moteur n&apos;évalue pas.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
-          {CAP_FLAGS.map((f) => (
-            <label key={f.key} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        {exceptionFlags.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>
+            Ce modèle ne définit aucune exception non compensatoire.
+          </p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+            {exceptionFlags.map((f) => (
+              <label key={f.key} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 16, marginTop: 3 }}
+                  checked={flags[f.key] ?? false}
+                  onChange={(e) =>
+                    setFlags((prev) => ({ ...prev, [f.key]: e.target.checked }))
+                  }
+                />
+                <span style={{ fontSize: 13 }}>
+                  <strong>{f.code}</strong> — {f.label}{" "}
+                  <span className="muted">(plafond {f.maxGrade})</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card no-print" style={{ padding: 16 }}>
+        <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Constats structurels enregistrés</h2>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          Ces constats sont conservés dans le dossier et alimentent les red flags, la
+          porte de couverture et les travaux de calibration. Ils ne plafonnent{" "}
+          <strong>pas</strong> le grade : leur contribution est déjà portée par le critère
+          indiqué. Les cocher n&apos;est donc pas un garde-fou — c&apos;est une information.
+        </p>
+        <div style={{ display: "grid", gap: 8 }}>
+          {RETIRED_CAP_OBSERVATIONS.map((o) => (
+            <label key={o.flag} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <input
                 type="checkbox"
                 style={{ width: 16, marginTop: 3 }}
-                checked={flags[f.key] ?? false}
+                checked={flags[o.flag] ?? false}
                 onChange={(e) =>
-                  setFlags((prev) => ({ ...prev, [f.key]: e.target.checked }))
+                  setFlags((prev) => ({ ...prev, [o.flag]: e.target.checked }))
                 }
               />
-              <span style={{ fontSize: 13 }}>{f.label}</span>
+              <span style={{ fontSize: 13 }}>
+                {o.labelFr}
+                <span className="muted" style={{ display: "block", fontSize: 11 }}>
+                  {o.treatmentFr}
+                </span>
+              </span>
             </label>
           ))}
         </div>
@@ -546,18 +603,6 @@ const buttonGhostStyle = {
   color: "var(--text)",
   fontSize: 12,
 } as const;
-
-const CAP_FLAGS = [
-  { key: "negativeTangibleEquity", label: "Fonds propres tangibles négatifs (CAP02)" },
-  { key: "goingConcernMaterialUncertainty", label: "Incertitude sur la continuité (CAP03)" },
-  { key: "accountsTooOld", label: "Comptes annuels trop anciens (CAP04)" },
-  { key: "ebitdaNegativeTwoOfThreeYears", label: "EBITDA négatif 2 années sur 3 (CAP05)" },
-  { key: "baseDscrBelow1", label: "DSCR < 1,0× en base (CAP06)" },
-  { key: "stressDscrBelow1", label: "DSCR < 1,0× en stress seulement (CAP07)" },
-  { key: "singleClientDependencyUnmitigated", label: "Dépendance client unique non mitigée (CAP08)" },
-  { key: "activeRestructuringForbearance", label: "Restructuration / forbearance active (CAP09)" },
-  { key: "materialGroupFileIncomplete", label: "Dossier groupe matériel incomplet (CAP10)" },
-];
 
 function CriterionRow({
   criterion,

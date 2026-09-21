@@ -126,7 +126,7 @@ async function main() {
       rawScore: result.rawScore,
       confidenceScore: result.confidence.score,
       engineGrade: result.engineGrade,
-      cappedGrade: result.standaloneGrade,
+      cappedGrade: result.finalGrade, // grade moteur, support groupe compris
       finalGrade: result.finalGrade,
       inputSnapshot: stableStringify(input),
       resultSnapshot: stableStringify(result),

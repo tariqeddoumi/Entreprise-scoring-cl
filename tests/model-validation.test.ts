@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "@/models";
 import { validateModel, domainWeightBps } from "@/core/validate-model";
 import { checkBins } from "@/core/binning";
+import {
+  CAP_TRIGGER_TO_FLAG,
+  RETIRED_CAP_OBSERVATIONS,
+  unmappedTriggers,
+} from "@/core/structural-flags";
+import { ratingRequestSchema } from "@/lib/schemas";
 
 describe("Validation des configurations de modèle", () => {
   it("CORP_STD_V1 est valide", () => {
@@ -73,5 +79,65 @@ describe("Validation des configurations de modèle", () => {
   it("la PD est marquée UNCALIBRATED sur les deux seeds", () => {
     expect(CORP_STD_V1.pdStatus).toBe("UNCALIBRATED");
     expect(CORP_TPE_BEHAV_V1.pdStatus).toBe("UNCALIBRATED");
+  });
+});
+
+/**
+ * Cohérence entre les cases du formulaire et ce que le moteur évalue.
+ *
+ * L'assistant de notation proposait encore cinq plafonds retirés en V3 :
+ * les cocher ne changeait ni le grade ni le résultat, et rien ne le signalait.
+ * Un analyste pouvait croire avoir posé un garde-fou structurel. La liste des
+ * exceptions est désormais dérivée du modèle chargé ; ces tests interdisent que
+ * les deux inventaires divergent de nouveau.
+ */
+describe("Exceptions non compensatoires et constats retirés", () => {
+  const MODELS = [CORP_STD_V1, CORP_TPE_BEHAV_V1];
+
+  it("chaque exception du modèle est saisissable depuis l'interface", () => {
+    for (const model of MODELS) {
+      for (const rule of model.nonCompensatoryRules) {
+        expect(
+          CAP_TRIGGER_TO_FLAG[rule.trigger],
+          `${model.modelId} / ${rule.code} : le déclencheur ${rule.trigger} n'est porté par aucun champ d'entrée`
+        ).toBeDefined();
+      }
+    }
+    expect(unmappedTriggers(MODELS.flatMap((m) => m.nonCompensatoryRules.map((r) => r.trigger)))).toEqual([]);
+  });
+
+  it("aucun constat déclaré retiré n'est en réalité encore évalué", () => {
+    const activeTriggers = new Set(
+      MODELS.flatMap((m) => m.nonCompensatoryRules.map((r) => r.trigger))
+    );
+    for (const observation of RETIRED_CAP_OBSERVATIONS) {
+      expect(
+        activeTriggers.has(observation.trigger),
+        `${observation.trigger} est présenté comme sans effet alors qu'un modèle l'évalue`
+      ).toBe(false);
+      expect(observation.treatmentFr.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("aucun constat n'apparaît à la fois comme exception et comme observation", () => {
+    const observed = RETIRED_CAP_OBSERVATIONS.map((o) => o.flag);
+    const active = Object.values(CAP_TRIGGER_TO_FLAG);
+    expect(observed.filter((f) => active.includes(f))).toEqual([]);
+  });
+
+  it("les constats retirés restent des entrées connues du schéma", () => {
+    // Retirer l'effet sur le grade n'est pas retirer l'information : elle reste
+    // enregistrée avec le dossier et alimente red flags et calibration.
+    const parsed = ratingRequestSchema.safeParse({
+      modelId: "CORP_STD_V1",
+      segment: "TPE",
+      asOfDate: "2026-01-31",
+      criteria: {},
+      confidence: { completeness: 80, freshness: 80, reliability: 80, provenance: 80 },
+      structuralFlags: Object.fromEntries(
+        RETIRED_CAP_OBSERVATIONS.map((o) => [o.flag, true])
+      ),
+    });
+    expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
   });
 });

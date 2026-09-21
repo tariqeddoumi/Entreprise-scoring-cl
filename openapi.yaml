@@ -213,6 +213,11 @@ paths:
         valable même si la version de modèle a évolué depuis. Deux runs de
         modèles ou de segments différents sont déclarés non comparables plutôt
         que rapprochés à tort.
+
+        Un instantané produit par un moteur antérieur n'a pas la structure que
+        l'attribution parcourt. Il est refusé en 422 avec le motif, plutôt que
+        converti : reconstituer une couverture ou une classe de confiance
+        absentes à la date de la notation reviendrait à inventer la donnée.
       requestBody:
         required: true
         content:
@@ -244,7 +249,10 @@ paths:
                       redFlagChangesFr: { type: array, items: { type: string } }
                       summaryFr: { type: string }
         "404": { $ref: "#/components/responses/NotFound" }
-        "422": { description: Runs de contreparties différentes }
+        "422":
+          description: >-
+            Runs de contreparties différentes, ou instantanés de structures
+            incompatibles (moteur antérieur).
 
   /rating-runs/{id}:
     get:

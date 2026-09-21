@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeRating } from "@/core/engine";
-import { areComparable } from "@/core/grades";
+import { areComparable, gradeRank } from "@/core/grades";
 import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "@/models";
 import type { RatingInput } from "@/core/types";
 import { FULL_CONFIDENCE, tpeGoldenInput } from "./fixtures";
@@ -366,6 +366,45 @@ describe("Support groupe (constat H05)", () => {
     expect(r.groupSupport!.notchesApplied).toBe(2); // plafond
     expect(r.standaloneGrade).toBe("STD-P5");
     expect(r.finalGrade).toBe("STD-P3");
+  });
+
+  /**
+   * Référence d'une dérogation.
+   *
+   * La colonne `cappedGrade` d'un run porte la note sur laquelle une
+   * dérogation est mesurée. Elle recevait la note AUTONOME : sur un dossier
+   * relevé par support groupe, un déplacement d'un cran depuis la note
+   * effectivement produite était alors compté pour trois et refusé, et le
+   * `fromGrade` enregistré désignait une note que personne n'avait attribuée.
+   * La référence est la note produite par le moteur, support compris.
+   */
+  it("mesure une dérogation depuis la note produite, pas depuis la note autonome", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...base,
+        groupSupport: {
+          claimed: true,
+          capacityDocumented: true,
+          willingnessDocumented: true,
+          legallyBinding: true,
+          fundsTransferable: true,
+          requestedNotches: 4,
+        },
+      },
+      AT
+    );
+    const scale = CORP_STD_V1.gradeScale;
+    const target = "STD-P2";
+
+    const fromProduced = Math.abs(gradeRank(scale, target) - gradeRank(scale, r.finalGrade!));
+    const fromStandalone = Math.abs(
+      gradeRank(scale, target) - gradeRank(scale, r.standaloneGrade!)
+    );
+
+    expect(fromProduced).toBe(1); // recevable : sous la limite ordinaire de 2 crans
+    expect(fromStandalone).toBe(3); // ce que l'ancienne référence comptait, à tort
+    expect(fromProduced).not.toBe(fromStandalone);
   });
 });
 

@@ -72,7 +72,9 @@ model RatingRun {
 
   rawScore        Decimal? @db.Decimal(9, 4)
   confidenceScore Decimal? @db.Decimal(9, 4)
-  engineGrade     String?
+  engineGrade     String? // grade issu du score, avant exception non compensatoire
+  // Grade produit par le moteur — exceptions non compensatoires ET support
+  // groupe compris. Immuable : c'est la référence d'une dérogation.
   cappedGrade     String?
   finalGrade      String? // après override approuvé le cas échéant
 

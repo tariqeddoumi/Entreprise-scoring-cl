@@ -10,7 +10,11 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { tiedGrades, validateCalibration } from "../src/core/calibration.js";
-import { CAP_TRIGGER_TO_FLAG, unmappedTriggers } from "../src/core/structural-flags.js";
+import {
+  CAP_TRIGGER_TO_FLAG,
+  RETIRED_CAP_OBSERVATIONS,
+  unmappedTriggers,
+} from "../src/core/structural-flags.js";
 import { CORP_STD_V1, listModels } from "../src/models/index.js";
 
 let failures = 0;
@@ -167,18 +171,42 @@ if (hardcoded.length > 0) {
   ok("aucun code de critère écrit en dur — le formulaire dérive de la version de modèle");
 }
 
-// Un déclencheur peut être exposé par une case à cocher, un champ de saisie
-// ou une valeur calculée : on cherche le nom du drapeau partout dans le
-// formulaire, pas seulement dans la liste des cases.
-const capFlags = [...form.matchAll(/\b(\w+)\b/g)].map((m) => m[1]);
+// Les exceptions proposées par le formulaire doivent être celles que le moteur
+// évalue. Une liste recopiée y parvient tant que personne ne modifie le modèle,
+// puis dérive en silence : c'est ainsi que cinq plafonds retirés en V3 sont
+// restés cochables sans le moindre effet. Le contrôle porte donc sur le
+// MÉCANISME — le formulaire dérive-t-il sa liste du modèle chargé — et non plus
+// sur la présence de chaque nom, qu'une liste figée satisfait tout aussi bien.
 const engineFlags = CORP_STD_V1.nonCompensatoryRules.map((c) => c.trigger);
 const orphelins = unmappedTriggers(engineFlags);
 if (orphelins.length > 0) fail(`déclencheurs sans champ d'entrée : ${orphelins.join(", ")}`);
-const uncovered = engineFlags.filter((t) => !capFlags.includes(CAP_TRIGGER_TO_FLAG[t]));
-if (uncovered.length) {
-  fail(`caps non proposés dans le formulaire : ${uncovered.join(", ")}`);
+
+const derivesExceptions =
+  form.includes("CAP_TRIGGER_TO_FLAG") && form.includes("model.nonCompensatoryRules");
+if (derivesExceptions) {
+  ok(
+    `les ${engineFlags.length} exceptions non compensatoires sont dérivées du modèle chargé`
+  );
 } else {
-  ok(`${engineFlags.length} caps structurels tous accessibles depuis l'interface`);
+  // Repli : si la dérivation disparaît, on exige au moins que chaque nom de
+  // drapeau soit présent quelque part dans le formulaire.
+  const capFlags = [...form.matchAll(/\b(\w+)\b/g)].map((m) => m[1]);
+  const uncovered = engineFlags.filter((t) => !capFlags.includes(CAP_TRIGGER_TO_FLAG[t]));
+  if (uncovered.length) {
+    fail(`exceptions non proposées dans le formulaire : ${uncovered.join(", ")}`);
+  } else {
+    fail(
+      "le formulaire ne dérive plus ses exceptions du modèle : la liste redeviendra obsolète à la prochaine version"
+    );
+  }
+}
+
+// Les constats retirés restent saisissables, mais doivent être présentés comme
+// sans effet sur le grade — sinon l'analyste croit poser un garde-fou.
+if (form.includes("RETIRED_CAP_OBSERVATIONS")) {
+  ok(`${RETIRED_CAP_OBSERVATIONS.length} constats retirés présentés comme sans effet sur le grade`);
+} else {
+  fail("les constats structurels retirés ne sont plus distingués des exceptions dans le formulaire");
 }
 
 // --- Documentation : la note méthodologique décrit-elle le modèle appliqué ? --

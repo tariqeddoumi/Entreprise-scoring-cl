@@ -183,6 +183,48 @@
 
 ---
 
+# 2 bis. Décisions issues de la revue automatisée de la V3
+
+Une revue automatisée de la pull request de refonte a relevé cinq constats. Les cinq ont été reproduits dans le code avant d'être traités ; aucun n'a été écarté.
+
+## D-17 — Les instantanés d'un moteur antérieur sont reconnus, jamais convertis — **MÉTHODE**
+
+*Constat :* les composants de la V3 déréférencent `coverage`, `confidence`, `usageRights` et `appliedRules`. Un instantané produit par le moteur v1 ne porte aucun de ces champs : la consultation d'une notation d'archive et l'attribution d'écart échouaient, et le jeu de démonstration livré contenait treize instantanés v1.
+
+*Décision :* la forme d'un instantané est reconnue **structurellement** avant tout usage (`src/lib/snapshot-compat.ts`). Un instantané ancien est affiché comme archive, avec les champs qu'il contient réellement ; la comparaison le refuse en 422 en indiquant pourquoi.
+
+*Motif du refus de convertir :* une conversion devrait fabriquer un taux de couverture et une classe de confiance qui n'existaient pas au moment de la notation. Donner à une archive l'apparence d'une notation courante est précisément ce qu'un contrôle a posteriori ne doit pas pouvoir confondre. La reconnaissance ne s'appuie pas sur le numéro de version : une version peut être mal renseignée, une structure non.
+
+## D-18 — Une dérogation se mesure depuis la note produite, support groupe compris — **MÉTHODE**
+
+*Constat :* la colonne `cappedGrade` recevait la note **autonome**. Sur un dossier relevé de deux crans par support groupe, un déplacement d'un cran depuis la note réellement attribuée était compté pour trois et refusé ; le `fromGrade` enregistré désignait une note que personne n'avait attribuée. L'affichage faisait en outre passer un simple relèvement de groupe pour une dérogation approuvée.
+
+*Décision :* `cappedGrade` porte la note produite par le moteur, exceptions non compensatoires **et** support groupe compris. Elle est immuable ; `finalGrade` reste la seule colonne qu'une décision de dérogation réécrit.
+
+*Ce qui n'a pas été retenu :* prendre `finalGrade` comme référence, comme le suggérait la revue. Cette colonne porte déjà le résultat d'une dérogation approuvée : elle aurait permis d'enchaîner les dérogations et de dépasser la limite de deux crans par accumulation.
+
+## D-19 — Le formulaire dérive ses exceptions du modèle chargé — **TECHNIQUE**
+
+*Constat :* l'assistant de notation proposait encore, sous le titre « Caps structurels », cinq plafonds retirés par l'inventaire C08. Les cocher ne changeait ni le grade ni le résultat, et rien ne le signalait : un analyste pouvait croire avoir posé un garde-fou structurel.
+
+*Décision :* la liste des exceptions est dérivée de `model.nonCompensatoryRules` et ne peut donc plus proposer ce que le moteur n'évalue pas. Les constats retirés restent saisissables — ils alimentent les red flags, la porte de couverture et la calibration — mais dans une section distincte qui énonce, pour chacun, par quel mécanisme il est réellement pris en compte.
+
+*Garde-fou :* le vérificateur d'alignement contrôle désormais le mécanisme de dérivation, et non plus la présence de chaque nom : une liste recopiée satisfaisait l'ancien contrôle jusqu'au jour où elle divergeait.
+
+## D-20 — Une écriture métier et son audit sont indissociables — **TECHNIQUE**
+
+*Constat :* la création d'une contrepartie écrivait la ligne puis l'audit hors transaction. Un échec de l'audit laissait la contrepartie enregistrée mais l'appelant en erreur ; une reprise butait alors sur un conflit d'ICE portant sur sa propre écriture.
+
+*Décision :* les deux voies de création — action serveur de l'interface et `POST /api/v1/counterparties` — passent par une transaction unique. La règle était déjà énoncée dans le module d'audit ; elle n'était pas appliquée.
+
+## D-21 — L'export CSV neutralise les formules de tableur — **TECHNIQUE**
+
+*Constat :* le nom et l'ICE d'une contrepartie sont saisis par un utilisateur. Un champ commençant par `=`, `+`, `-`, `@`, une tabulation ou un retour chariot est exécuté à l'ouverture dans Excel ou LibreOffice ; l'échappement par guillemets n'y change rien.
+
+*Décision :* neutralisation par apostrophe en tête, distincte de l'échappement de séparateur. La sérialisation est isolée dans un module pur afin d'être testable sans rendu.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.
@@ -193,6 +235,7 @@
 6. **Granularité définitive des échelles** — résultat de la calibration, pas choix de présentation.
 7. **Maintien ou suppression des quatre exceptions conservées** — sur tests d'ablation.
 8. **Correspondance entre les deux échelles** — condition de toute master scale commune.
+9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Leur reprise éventuelle suppose une table de correspondance validée, ou une renotation.
 
 ---
 

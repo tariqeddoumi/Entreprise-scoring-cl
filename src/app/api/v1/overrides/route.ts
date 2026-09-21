@@ -18,6 +18,12 @@ const MAX_NOTCHES = 2;
  * Le résultat moteur n'est jamais écrasé : la dérogation est un objet
  * distinct, appliqué au grade final seulement après approbation par un
  * second acteur.
+ *
+ * RÉFÉRENCE — l'écart en crans se mesure depuis `cappedGrade`, qui porte le
+ * grade produit par le moteur, support groupe compris. Deux raisons de ne pas
+ * prendre `finalGrade` : il porte déjà le résultat d'une dérogation approuvée,
+ * ce qui permettrait d'enchaîner les dérogations et de dépasser la limite par
+ * accumulation ; et il doit rester la seule colonne qu'une décision réécrit.
  */
 export async function POST(req: NextRequest) {
   const g = guard(req, "RISK_MANAGER");

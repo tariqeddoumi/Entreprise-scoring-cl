@@ -100,7 +100,7 @@ for (const r of RUNS) {
 
   const id = `seed_run_${slug(r.counterpartyKey)}_${r.asOfDate.replace(/-/g, "")}`;
   runId.set(`${r.counterpartyKey}:${r.asOfDate}`, id);
-  cappedByRun.set(id, result.standaloneGrade);
+  cappedByRun.set(id, result.finalGrade);
   if (result.segment) segmentByCp.set(r.counterpartyKey, result.segment);
 
   w(`-- ${r.purposeFr}`);
@@ -118,7 +118,9 @@ for (const r of RUNS) {
         lit(result.rawScore),
         lit(result.confidence.score),
         lit(result.engineGrade),
-        lit(result.standaloneGrade),
+        // cappedGrade porte le grade moteur, support groupe compris : même
+        // convention que rating-service et le seed applicatif.
+        lit(result.finalGrade),
         lit(result.finalGrade),
         lit(stable(input)),
         lit(stable(result)),

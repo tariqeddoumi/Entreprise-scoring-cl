@@ -104,7 +104,12 @@ export async function executeRatingRun(
           rawScore: result.rawScore,
           confidenceScore: result.confidence.score,
           engineGrade: result.engineGrade,
-          cappedGrade: result.standaloneGrade,
+          // Grade produit par le moteur, support groupe compris : c'est la note
+          // sur laquelle porte une dérogation, et elle n'est jamais réécrite.
+          // Y stocker la note autonome faussait l'écart en crans dès qu'un
+          // support groupe s'appliquait, et faisait passer un simple relèvement
+          // de groupe pour une dérogation approuvée à l'affichage.
+          cappedGrade: result.finalGrade,
           finalGrade: result.finalGrade,
           inputSnapshot: stableStringify(input),
           resultSnapshot: stableStringify(result),
