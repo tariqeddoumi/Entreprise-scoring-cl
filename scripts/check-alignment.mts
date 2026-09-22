@@ -112,6 +112,17 @@ const outcomeEngine = enumFrom(types, /export type RatingStatus =\s*([\s\S]*?);/
 const outcomeSpec = [...openapi.matchAll(/^ {12}- (RATED|DEFAULTED|NO_RATING_\w+)$/gm)].map((m) => m[1]);
 compare("RatingStatus (moteur vs OpenAPI)", outcomeEngine, outcomeSpec);
 
+// Le schéma Prisma documente le vocabulaire écrit dans `rating_runs.outcome`.
+// Ce commentaire est ce que lit quiconque écrit une requête SQL, un état de
+// gestion ou un tableau de bord hors application : il avait gardé le
+// vocabulaire V1 (SCORED, BLOCKED_*) alors que le moteur écrit déjà RATED et
+// NO_RATING_* — un filtre écrit d'après le schéma ne ramenait rien.
+const prismaSchema = readFileSync("prisma/schema.template.prisma", "utf8");
+const outcomeDoc = [
+  ...prismaSchema.matchAll(/\b(RATED|DEFAULTED|NO_RATING_[A-Z_]+)\b/g),
+].map((m) => m[1]);
+compare("RatingStatus (moteur vs schéma Prisma)", outcomeEngine, outcomeDoc);
+
 const eventsZod = enumFrom(schemas, /events: z\s*\.array\(\s*z\.enum\(\[([\s\S]*?)\]\)/);
 const eventsCode = enumFrom(readFileSync("src/lib/webhooks.ts", "utf8"), /export type WebhookEventType =\s*([\s\S]*?);/);
 compare("Événements webhook", [...eventsCode, "*"], eventsZod);

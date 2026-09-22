@@ -68,7 +68,13 @@ model RatingRun {
   engineVersion String
   asOfDate      String // date d'arrêté ISO (temps métier, distinct du temps système)
   segment       String?
-  outcome       String // SCORED | BLOCKED_* | DEFAULT_GRADE | NO_GRADE_CONFIDENCE
+  // Statut de notation, recopié tel quel depuis `RatingResult.ratingStatus`.
+  // Vocabulaire V3 : RATED | DEFAULTED | NO_RATING_INSUFFICIENT_DATA |
+  // NO_RATING_SEGMENT_UNDETERMINED | NO_RATING_ROUTED_OTHER_MODEL.
+  // Les lignes produites par le moteur v1 portent l'ancien vocabulaire
+  // (SCORED, BLOCKED_*, DEFAULT_GRADE, NO_GRADE_CONFIDENCE) : un filtre SQL
+  // écrit pour l'un ne ramène rien sur l'autre.
+  outcome       String
 
   rawScore        Decimal? @db.Decimal(9, 4)
   confidenceScore Decimal? @db.Decimal(9, 4)

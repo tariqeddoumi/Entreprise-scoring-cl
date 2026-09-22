@@ -4,7 +4,7 @@ import { compareRuns } from "@/core/compare";
 import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
-import { GradeBadge } from "@/app/ui-helpers";
+import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -191,7 +191,9 @@ export default async function CounterpartyPage({
                       <span className="muted" style={{ fontSize: 11 }}> (dérogé)</span>
                     )}
                   </td>
-                  <td className="muted" style={{ fontSize: 12 }}>{r.outcome}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>
+                    <OutcomeLabel outcome={r.outcome} />
+                  </td>
                   <td className="muted" style={{ fontSize: 12 }}>{r.requestedBy}</td>
                   <td>
                     <Link href={`/rating-runs/${r.id}`} style={{ color: "var(--brand)" }}>

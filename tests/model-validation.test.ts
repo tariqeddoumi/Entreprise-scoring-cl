@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "@/models";
 import { validateModel, domainWeightBps } from "@/core/validate-model";
+import { gradeRank } from "@/core/grades";
+import { DEFAULT_GRADES } from "@/reference/default-policy";
 import { checkBins } from "@/core/binning";
 import {
   CAP_TRIGGER_TO_FLAG,
@@ -140,4 +142,45 @@ describe("Exceptions non compensatoires et constats retirés", () => {
     });
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
   });
+});
+
+/**
+ * Ordre des grades — invariant d'affichage.
+ *
+ * Le tableau de bord classait les grades avec une copie locale du rang, écrite
+ * pour l'échelle G1…G10 : elle lisait le nombre après la première lettre. Sur
+ * « STD-P5 » elle ne lisait rien et repliait sur une valeur unique, si bien que
+ * tous les grades performants devenaient ex æquo — et que les grades de défaut,
+ * eux correctement numérotés, passaient DEVANT. Un tableau de risque affichait
+ * donc les défauts en tête, à la place des meilleures notes.
+ *
+ * Le rang vient désormais de l'échelle publiée. Ces tests fixent l'ordre que
+ * tout affichage doit respecter.
+ */
+describe("Ordre des grades dans une échelle", () => {
+  for (const model of [CORP_STD_V1, CORP_TPE_BEHAV_V1]) {
+    it(`${model.modelId} — le rang suit l'ordre déclaré de l'échelle`, () => {
+      const ranks = model.gradeScale.bands.map((b) => gradeRank(model.gradeScale, b.grade));
+      expect(ranks).toEqual([...ranks].sort((a, b) => a - b));
+      expect(new Set(ranks).size).toBe(ranks.length); // aucun ex æquo
+    });
+
+    it(`${model.modelId} — tout grade de défaut est pire que tout grade performant`, () => {
+      const worstPerforming = Math.max(
+        ...model.gradeScale.bands.map((b) => gradeRank(model.gradeScale, b.grade))
+      );
+      for (const def of DEFAULT_GRADES) {
+        expect(
+          gradeRank(model.gradeScale, def.grade),
+          `${def.grade} doit se classer après le dernier grade performant`
+        ).toBeGreaterThan(worstPerforming);
+      }
+    });
+
+    it(`${model.modelId} — un grade d'une autre échelle est refusé, jamais classé`, () => {
+      // Un grade d'archive (G5) ne doit pas recevoir un rang silencieux : un
+      // affichage qui le rangerait lui donnerait un sens qu'il n'a plus.
+      expect(() => gradeRank(model.gradeScale, "G5")).toThrow();
+    });
+  }
 });

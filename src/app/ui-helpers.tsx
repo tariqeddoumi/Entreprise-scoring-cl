@@ -78,3 +78,58 @@ export function redFlagAccent(level: string): string {
 export function RedFlagLevelBadge({ level }: { level: string }) {
   return <span style={badgeStyle(redFlagAccent(level), 11)}>{level}</span>;
 }
+
+/**
+ * Libellé d'un statut de notation persisté.
+ *
+ * Une base en exploitation contient deux vocabulaires : celui du moteur
+ * courant (RATED, NO_RATING_*) et celui des moteurs antérieurs (SCORED,
+ * BLOCKED_*). Les afficher bruts, côte à côte dans la même colonne, oblige le
+ * lecteur à savoir lequel est lequel — et laisse croire que « SCORED » et
+ * « RATED » sont deux états différents alors qu'ils nomment le même.
+ *
+ * Le libellé est donc traduit, et l'origine ancienne est signalée plutôt que
+ * masquée : une notation d'archive n'a pas été produite par les règles
+ * d'aujourd'hui.
+ */
+const OUTCOME_LABELS: Record<string, string> = {
+  // Vocabulaire courant (RatingResult.ratingStatus).
+  RATED: "Notation produite",
+  DEFAULTED: "Grade de défaut constaté",
+  NO_RATING_INSUFFICIENT_DATA: "Aucun grade — information insuffisante",
+  NO_RATING_SEGMENT_UNDETERMINED: "Aucun grade — segment indéterminable",
+  NO_RATING_ROUTED_OTHER_MODEL: "Dossier routé hors de cette grille",
+};
+
+const LEGACY_OUTCOME_LABELS: Record<string, string> = {
+  // Vocabulaire des moteurs antérieurs, conservé en base par immuabilité.
+  SCORED: "Notation produite",
+  DEFAULT_GRADE: "Grade de défaut constaté",
+  BLOCKED_DATA: "Aucun grade — information insuffisante",
+  BLOCKED_RED_FLAG: "Aucun grade — signal bloquant",
+  BLOCKED_SEGMENTATION: "Aucun grade — segment indéterminable",
+  NO_GRADE_CONFIDENCE: "Aucun grade — qualité de données insuffisante",
+};
+
+export function isLegacyOutcome(outcome: string): boolean {
+  return !(outcome in OUTCOME_LABELS) && outcome in LEGACY_OUTCOME_LABELS;
+}
+
+export function OutcomeLabel({ outcome }: { outcome: string }) {
+  const current = OUTCOME_LABELS[outcome];
+  if (current) return <span>{current}</span>;
+
+  const legacy = LEGACY_OUTCOME_LABELS[outcome];
+  if (legacy) {
+    return (
+      <span>
+        {legacy}{" "}
+        <span className="muted" style={{ fontSize: 11 }} title={`Statut « ${outcome} » d'un moteur antérieur`}>
+          (archive)
+        </span>
+      </span>
+    );
+  }
+  // Statut inconnu des deux vocabulaires : affiché tel quel, jamais deviné.
+  return <span className="muted">{outcome}</span>;
+}

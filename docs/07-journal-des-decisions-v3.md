@@ -225,6 +225,48 @@ Une revue automatisée de la pull request de refonte a relevé cinq constats. Le
 
 ---
 
+# 2 ter. Vérification d'alignement base / back-end / front-end
+
+Contrôle demandé après la mise en service : la base réellement déployée dit-elle la même chose que le code qui l'écrit et que les écrans qui la lisent ?
+
+**Ce qui était conforme.** Les six tables et leurs soixante-dix colonnes correspondent exactement au schéma Prisma — types, nullabilité, `Decimal(9,4)`, deux contraintes d'unicité, huit index, trois clés étrangères. Le durcissement PostgreSQL est appliqué : aucune table lisible par les rôles exposés, piste d'audit protégée en ajout seul par déclencheur. Aucune requête SQL brute dans l'application : l'alignement colonne par colonne y est donc tenu par le compilateur.
+
+**Ce qui ne l'était pas.** Trois divergences, toutes héritées du passage en V3.
+
+## D-22 — Le schéma documentait un vocabulaire de statut abandonné — **TECHNIQUE**
+
+*Constat :* le commentaire de `rating_runs.outcome` annonçait `SCORED | BLOCKED_* | DEFAULT_GRADE | NO_GRADE_CONFIDENCE`, alors que le moteur y écrit `RATED`, `DEFAULTED` et `NO_RATING_*` depuis la V3. Le schéma est ce que lit quiconque écrit une requête SQL, un état de gestion ou un tableau de bord hors application : un filtre écrit d'après lui ne ramenait rien.
+
+*Décision :* commentaire corrigé, et les deux vocabulaires y sont désormais nommés — les lignes d'archive portent l'ancien. Le vérificateur d'alignement confronte le schéma Prisma au type `RatingStatus` du moteur ; la dérive ne peut plus passer.
+
+## D-23 — Le tableau de bord classait les défauts avant les meilleures notes — **TECHNIQUE**
+
+*Constat :* le tableau de bord portait sa propre copie du calcul de rang, écrite pour l'échelle `G1…G10` : elle lisait le nombre après la première lettre. Sur `STD-P5` elle ne lisait rien et repliait sur une valeur unique, si bien que **tous** les grades performants devenaient ex æquo — et que les grades de défaut, eux correctement numérotés, se classaient **devant** eux. Sur un tableau de risque lu du meilleur au pire, les défauts apparaissaient en tête.
+
+*Décision :* le rang vient de l'échelle publiée du modèle (`gradeRank(scale, grade)`), seule autorité sur l'ordre. Un grade inconnu de l'échelle courante n'est plus classé par défaut : il est écarté et signalé. Quatre tests fixent l'invariant — rangs strictement ordonnés, sans ex æquo, tout grade de défaut après le dernier grade performant, et refus explicite d'un grade étranger à l'échelle.
+
+## D-24 — Une distribution unique additionnait deux échelles non comparables — **MÉTHODE**
+
+*Constat :* la distribution des grades regroupait sur le seul `finalGrade`, tous modèles confondus. Un `STD-P3` et un `TPE-B3` tombaient donc dans la même ligne, alors que le moteur refuse explicitement de les comparer (constat C03) et que la recalibration a montré qu'ils ne portent pas le même risque.
+
+*Décision :* une distribution par modèle, chacune sous l'identifiant de son échelle. Les grades d'archive sont comptés à part, avec la raison : les ranger dans l'échelle courante leur donnerait un sens qu'ils n'ont pas.
+
+## D-25 — Deux vocabulaires de statut s'affichaient bruts dans la même colonne — **TECHNIQUE**
+
+*Décision :* libellés français partagés, et l'origine ancienne signalée plutôt que masquée. La correspondance est unique : le panneau de résultat en portait une seconde copie, supprimée.
+
+## D-26 — Le contrôle de base ne vérifiait que la présence des tables — **TECHNIQUE**
+
+*Constat :* `npm run db:check` contrôlait six tables, pas leurs colonnes. Une colonne absente ne se découvrait qu'à la première requête qui la touche, en production. Le script échouait en outre sur SQLite, le dialecte de développement, faute d'`information_schema`.
+
+*Décision :* les colonnes attendues sont dérivées du schéma Prisma — lues, jamais recopiées — et confrontées au catalogue. Le contrôle fonctionne sur PostgreSQL comme sur SQLite. Il dénombre en outre les notations persistées au format d'une version antérieure, sans les traiter comme une anomalie : un instantané est immuable, une base en exploitation en contient forcément.
+
+**Sur l'état des données.** Les treize notations de la base de production ont toutes été produites par le moteur v1 : grades de l'échelle retirée, vocabulaire de statut antérieur, instantanés sans couverture ni droits d'usage. Avant le correctif D-17, la consultation de chacune de ces treize fiches échouait. Elles s'affichent désormais en archive. Elles ne sont comparables à aucune notation courante, et le resteront tant qu'aucune table de correspondance n'aura été validée — ou tant que les contreparties n'auront pas été renotées.
+
+**Sur la piste d'audit.** Les treize notations et les trois dérogations de la base de production ne portent aucun événement d'audit : le jeu de démonstration est inséré par script SQL, hors application, et n'en produit pas. C'est cohérent pour une démonstration, mais aucune de ces lignes ne satisfait la règle « une écriture métier et son audit sont indissociables » (D-20). Un jeu de démonstration ne doit pas servir de référence pour juger de la complétude de la piste d'audit.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

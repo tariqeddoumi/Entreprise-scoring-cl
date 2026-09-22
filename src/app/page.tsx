@@ -1,15 +1,36 @@
 import Link from "next/link";
-import { listModels } from "@/models";
+import { getModel, listModels } from "@/models";
+import { gradeRank } from "@/core/grades";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
-import { GradeBadge } from "./ui-helpers";
+import { GradeBadge, OutcomeLabel } from "./ui-helpers";
 
-/** Rang numérique d'un grade pour un tri correct (G10 après G9, jamais après G1). */
-function gradeRank(grade: string | null): number {
-  if (!grade) return 999;
-  if (grade.startsWith("DEF")) return 100 + (Number(grade.slice(3)) || 0);
-  const n = Number(grade.slice(1));
-  return Number.isFinite(n) ? n : 999;
+/**
+ * Rang d'un grade DANS L'ÉCHELLE DE SON MODÈLE.
+ *
+ * Une version locale de ce calcul vivait ici, écrite pour l'échelle G1…G10 :
+ * elle lisait le numéro après la première lettre. Sur les échelles V3 elle
+ * renvoyait la même valeur de repli pour tous les grades performants, et
+ * plaçait les grades de défaut AVANT eux — un tableau de risque qui affichait
+ * les défauts en tête, à la place des meilleures notes. Le rang vient
+ * désormais de l'échelle publiée du modèle, seule autorité sur l'ordre.
+ */
+function rankInModel(modelId: string, grade: string | null): number {
+  if (!grade) return Number.MAX_SAFE_INTEGER;
+  const model = getModel(modelId);
+  if (!model) return Number.MAX_SAFE_INTEGER;
+  try {
+    return gradeRank(model.gradeScale, grade);
+  } catch {
+    // Grade inconnu de l'échelle courante : notation d'archive, produite par
+    // une version antérieure. Rejetée en fin de liste plutôt que classée à tort.
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
+/** Un grade appartient-il encore à l'échelle publiée du modèle qui l'a produit ? */
+function isCurrentScale(modelId: string, grade: string | null): boolean {
+  return grade !== null && rankInModel(modelId, grade) !== Number.MAX_SAFE_INTEGER;
 }
 
 export const dynamic = "force-dynamic";
@@ -28,8 +49,12 @@ export default async function DashboardPage() {
           take: 10,
           include: { counterparty: { select: { name: true } } },
         }),
+        // Groupé PAR MODÈLE : deux modèles portent deux échelles que rien ne
+        // déclare comparables (constat C03). Les additionner dans une seule
+        // distribution reviendrait à traiter un STD-P3 et un TPE-B3 comme le
+        // même risque, ce que le moteur refuse explicitement par ailleurs.
         prisma.ratingRun.groupBy({
-          by: ["finalGrade"],
+          by: ["modelId", "finalGrade"],
           _count: { _all: true },
           where: { finalGrade: { not: null } },
         }),
@@ -48,7 +73,11 @@ export default async function DashboardPage() {
         finalGrade: string | null;
         counterparty: { name: string };
       }>;
-      gradeRows: Array<{ finalGrade: string | null; _count: { _all: number } }>;
+      gradeRows: Array<{
+        modelId: string;
+        finalGrade: string | null;
+        _count: { _all: number };
+      }>;
     }
   );
 
@@ -92,46 +121,96 @@ export default async function DashboardPage() {
       </section>
 
       <section className="card" style={{ padding: 16 }}>
-        <h2 style={{ fontWeight: 600, marginBottom: 10 }}>Distribution des grades finaux</h2>
+        <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Distribution des grades finaux</h2>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          Une distribution par modèle. Les échelles ne sont pas comparables entre elles
+          tant qu&apos;aucune correspondance sur probabilités de défaut n&apos;a été
+          validée : les additionner produirait un histogramme qui ne mesure rien.
+        </p>
         {stats.gradeRows.length === 0 ? (
           <p className="muted">Aucune notation enregistrée.</p>
         ) : (
           (() => {
-            const sorted = [...stats.gradeRows].sort(
-              (a, b) => gradeRank(a.finalGrade) - gradeRank(b.finalGrade)
+            const current = stats.gradeRows.filter((g) =>
+              isCurrentScale(g.modelId, g.finalGrade)
             );
-            const max = Math.max(...sorted.map((g) => g._count._all));
+            const archived = stats.gradeRows.filter(
+              (g) => !isCurrentScale(g.modelId, g.finalGrade)
+            );
+            const byModel = new Map<string, typeof current>();
+            for (const row of current) {
+              const list = byModel.get(row.modelId) ?? [];
+              list.push(row);
+              byModel.set(row.modelId, list);
+            }
+            const archivedTotal = archived.reduce((acc, g) => acc + g._count._all, 0);
+
             return (
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Grade</th>
-                    <th>Nombre</th>
-                    <th style={{ width: "50%" }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((g) => (
-                    <tr key={g.finalGrade}>
-                      <td>
-                        <GradeBadge grade={g.finalGrade} />
-                      </td>
-                      <td>{g._count._all}</td>
-                      <td>
-                        <div
-                          style={{
-                            height: 8,
-                            borderRadius: 4,
-                            width: `${Math.max(4, (g._count._all / max) * 100)}%`,
-                            background: "var(--brand)",
-                            opacity: 0.6,
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ display: "grid", gap: 18 }}>
+                {[...byModel.entries()].map(([modelId, rows]) => {
+                  const sorted = [...rows].sort(
+                    (a, b) =>
+                      rankInModel(modelId, a.finalGrade) -
+                      rankInModel(modelId, b.finalGrade)
+                  );
+                  const max = Math.max(...sorted.map((g) => g._count._all));
+                  const scaleId = getModel(modelId)?.gradeScale.scaleId ?? "—";
+                  return (
+                    <div key={modelId}>
+                      <h3 style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
+                        {modelId}{" "}
+                        <span className="muted" style={{ fontWeight: 400 }}>
+                          — échelle {scaleId}
+                        </span>
+                      </h3>
+                      <table className="data">
+                        <thead>
+                          <tr>
+                            <th>Grade</th>
+                            <th>Nombre</th>
+                            <th style={{ width: "50%" }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sorted.map((g) => (
+                            <tr key={`${modelId}:${g.finalGrade}`}>
+                              <td>
+                                <GradeBadge grade={g.finalGrade} />
+                              </td>
+                              <td>{g._count._all}</td>
+                              <td>
+                                <div
+                                  style={{
+                                    height: 8,
+                                    borderRadius: 4,
+                                    width: `${Math.max(4, (g._count._all / max) * 100)}%`,
+                                    background: "var(--brand)",
+                                    opacity: 0.6,
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })}
+
+                {archivedTotal > 0 && (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    <strong>{archivedTotal}</strong> notation(s) portent un grade qui
+                    n&apos;appartient à aucune échelle publiée —{" "}
+                    {archived
+                      .map((g) => `${g.finalGrade} (${g._count._all})`)
+                      .join(", ")}
+                    . Produites par une version antérieure du moteur, elles restent
+                    consultables mais ne sont pas classées ici : les ranger dans
+                    l&apos;échelle courante leur donnerait un sens qu&apos;elles
+                    n&apos;ont pas.
+                  </p>
+                )}
+              </div>
             );
           })()
         )}
@@ -173,7 +252,9 @@ export default async function DashboardPage() {
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore ? Number(r.rawScore).toFixed(2) : "—"}</td>
                   <td><GradeBadge grade={r.finalGrade} /></td>
-                  <td className="muted">{r.outcome}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>
+                    <OutcomeLabel outcome={r.outcome} />
+                  </td>
                 </tr>
               ))}
             </tbody>

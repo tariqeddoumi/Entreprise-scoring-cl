@@ -2,15 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { ModelConfig, RatingResult } from "@/core/types";
-import { GradeBadge } from "../ui-helpers";
-
-const STATUS_LABELS: Record<string, string> = {
-  RATED: "Notation produite",
-  DEFAULTED: "Grade de défaut constaté",
-  NO_RATING_INSUFFICIENT_DATA: "Aucun grade — information insuffisante",
-  NO_RATING_SEGMENT_UNDETERMINED: "Aucun grade — segment indéterminable",
-  NO_RATING_ROUTED_OTHER_MODEL: "Dossier routé hors de cette grille",
-};
+import { GradeBadge, OutcomeLabel } from "../ui-helpers";
 
 const PURPOSE_LABELS: Record<string, string> = {
   PRODUCTION_RATING: "Notation de production",
@@ -40,7 +32,7 @@ export function ResultPanel({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-          {STATUS_LABELS[result.ratingStatus] ?? result.ratingStatus}
+          <OutcomeLabel outcome={result.ratingStatus} />
         </h2>
         <button
           type="button"
