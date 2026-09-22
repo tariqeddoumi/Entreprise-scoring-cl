@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { RatingResult } from "@/core/types";
 import { getModel } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
+import { GradeBadge } from "@/app/ui-helpers";
+import { readResultSnapshot } from "@/lib/snapshot-compat";
+import { LegacyResultPanel } from "./LegacyResultPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,9 @@ export default async function RatingRunPage({
   if (!run) notFound();
 
   const model = getModel(run.modelId);
-  const result = JSON.parse(run.resultSnapshot) as RatingResult;
+  // L'instantané persisté peut provenir d'un moteur antérieur : sa forme n'est
+  // pas garantie, il est donc reconnu avant d'être passé aux composants V3.
+  const snapshot = readResultSnapshot(run.resultSnapshot);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -95,8 +99,8 @@ export default async function RatingRunPage({
               {run.overrides.map((o) => (
                 <tr key={o.id}>
                   <td>{o.status}</td>
-                  <td>{o.fromGrade}</td>
-                  <td>{o.toGrade}</td>
+                  <td><GradeBadge grade={o.fromGrade} /></td>
+                  <td><GradeBadge grade={o.toGrade} /></td>
                   <td className="muted">{o.reasonCode}</td>
                   <td className="muted">{o.requestedBy}</td>
                   <td className="muted">{o.decidedBy ?? "—"}</td>
@@ -107,16 +111,22 @@ export default async function RatingRunPage({
           </table>
           {run.finalGrade !== run.cappedGrade && (
             <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-              Le grade final ({run.finalGrade}) diffère du grade moteur après caps (
-              {run.cappedGrade}) : une dérogation approuvée s&apos;applique. Le résultat
+              Le grade final ({run.finalGrade}) diffère du grade produit par le moteur
+              ({run.cappedGrade}) : une dérogation approuvée s&apos;applique. Le résultat
               moteur ci-dessous reste celui d&apos;origine, jamais réécrit.
             </p>
           )}
         </section>
       )}
 
-      {model ? (
-        <ResultPanel result={result} model={model} />
+      {snapshot.kind === "UNREADABLE" ? (
+        <div className="card" style={{ padding: 16 }}>
+          <span className="muted">{snapshot.reasonFr}</span>
+        </div>
+      ) : snapshot.kind === "LEGACY" ? (
+        <LegacyResultPanel raw={snapshot.raw} reasonFr={snapshot.reasonFr} />
+      ) : model ? (
+        <ResultPanel result={snapshot.result} model={model} />
       ) : (
         <div className="card" style={{ padding: 16 }}>
           <span className="muted">

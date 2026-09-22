@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checkOutboundUrl } from "@/lib/url-safety";
+import { csvField, csvLine } from "@/lib/csv";
 import { checkRateLimit, resetRateLimits } from "@/lib/rate-limit";
 import { config, resetConfigCache } from "@/lib/env";
+import { buildCsp } from "@/middleware";
 import { signPayload, verifySignature } from "@/lib/webhooks";
 import {
   ratingRequestSchema,
@@ -240,5 +242,110 @@ describe("Configuration", () => {
     setEnv("CORS_ALLOWED_ORIGINS", undefined);
     resetConfigCache();
     expect(config().corsAllowedOrigins).toEqual([]);
+  });
+
+  it("n'admet 'unsafe-eval' que hors production", () => {
+    // En développement, next dev enveloppe chaque module dans un eval(...) :
+    // sans cette exception, aucun composant client n'hydrate (voir le
+    // commentaire de buildCsp). En production, l'exception doit rester
+    // fermée — c'est la seule chose que ce test protège vraiment.
+    expect(buildCsp(true)).not.toMatch(/unsafe-eval/);
+    expect(buildCsp(false)).toMatch(/script-src[^;]*'unsafe-eval'/);
+  });
+
+  it("traite une variable Vercel déclarée mais laissée vide comme absente, pas comme invalide", () => {
+    // Une case laissée vide dans l'interface Vercel envoie une chaîne vide,
+    // jamais `undefined` : `?? "postgresql"` ne s'y applique pas. Constaté en
+    // production — le middleware refusait alors absolument toutes les routes.
+    for (const raw of ["", "   ", "\t"]) {
+      setEnv("DATABASE_PROVIDER", raw);
+      resetConfigCache();
+      expect(config().dbProvider).toBe("postgresql");
+    }
+  });
+});
+
+describe("Droits d'usage et exposition de la PD (constats C02 et M01)", () => {
+  it("refuse le démarrage si la PD simulée est autorisée en production", () => {
+    setEnv("NODE_ENV", "production");
+    setEnv("DATABASE_PROVIDER", "postgresql");
+    setEnv("ALLOW_SYNTHETIC_PD", "1");
+    resetConfigCache();
+    expect(() => config()).toThrow(/ALLOW_SYNTHETIC_PD/);
+  });
+
+  it("la dérogation reste fermée par défaut", () => {
+    setEnv("ALLOW_SYNTHETIC_PD", undefined);
+    resetConfigCache();
+    expect(config().allowSyntheticPd).toBe(false);
+  });
+
+  it("aucune PD numérique ne sort du moteur sans dérogation explicite", async () => {
+    const { computeRating } = await import("@/core/engine");
+    const { CORP_STD_V1 } = await import("@/models");
+    const { tpeGoldenInput } = await import("./fixtures");
+
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), { nowIso: "2026-09-17T00:00:00Z" });
+    // Le statut de calibration reste visible : le système aval sait POURQUOI la
+    // valeur est absente, ce qui vaut mieux qu'un champ nul sans explication.
+    expect(r.pd12m).toBeNull();
+    expect(r.pdStatus).toBe("CALIBRATED_SYNTHETIC");
+    expect(r.usageRights.pdDisclosed).toBe(false);
+    expect(JSON.stringify(r)).not.toMatch(/"pd12m":\s*0\.\d/);
+  });
+
+  it("le résultat porte toujours ses usages autorisés et ses restrictions", async () => {
+    const { computeRating } = await import("@/core/engine");
+    const { CORP_STD_V1 } = await import("@/models");
+    const { tpeGoldenInput } = await import("./fixtures");
+
+    const r = computeRating(CORP_STD_V1, tpeGoldenInput(), { nowIso: "2026-09-17T00:00:00Z" });
+    expect(r.usageRights.permittedUsesFr.length).toBeGreaterThan(0);
+    expect(r.usageRights.restrictionsFr.length).toBeGreaterThan(0);
+    expect(r.usageRights.restrictionsFr.join(" ")).toMatch(/IFRS 9/);
+  });
+});
+
+/**
+ * Export CSV — neutralisation des formules de tableur.
+ *
+ * Le nom et l'ICE d'une contrepartie sont saisis par un utilisateur. Excel et
+ * LibreOffice exécutent tout champ commençant par `=`, `+`, `-`, `@`, une
+ * tabulation ou un retour chariot : sans neutralisation, l'export d'une liste
+ * de contreparties devient un vecteur d'exécution chez celui qui l'ouvre.
+ */
+describe("export CSV", () => {
+  it("neutralise les amorces de formule", () => {
+    for (const payload of [
+      '=HYPERLINK("http://exemple.invalide","cliquer")',
+      "+1+1",
+      "-2+3",
+      "@SUM(A1:A9)",
+      "\tinjection",
+      "\rinjection",
+    ]) {
+      const field = csvField(payload);
+      expect(field.replace(/^"/, "").startsWith("'")).toBe(true);
+    }
+  });
+
+  it("laisse intacte une valeur ordinaire", () => {
+    expect(csvField("Société Atlas")).toBe("Société Atlas");
+    expect(csvField("001234567890123")).toBe("001234567890123");
+  });
+
+  it("échappe séparateurs, guillemets et sauts de ligne", () => {
+    expect(csvField('Dupont;"Fils"')).toBe('"Dupont;""Fils"""');
+    expect(csvField("ligne1\nligne2")).toBe('"ligne1\nligne2"');
+  });
+
+  it("neutralise ET échappe quand les deux s'appliquent", () => {
+    // Le guillemet englobant ne neutralise rien par lui-même : l'apostrophe
+    // doit rester à l'intérieur du champ.
+    expect(csvLine(["=1;2"])).toBe(`"'=1;2"`);
+  });
+
+  it("n'altère pas l'ordre ni le nombre de colonnes", () => {
+    expect(csvLine(["a", null, undefined, 3])).toBe("a;;;3");
   });
 });

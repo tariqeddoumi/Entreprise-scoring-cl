@@ -1,432 +1,221 @@
-# Note méthodologique — Modèle et outil de notation interne des entreprises
+# Note méthodologique — Modèle de notation interne des entreprises, version 3
 
 ## Contreparties TPE, PME et Grandes Entreprises — contexte bancaire marocain
 
-**Version :** 2.0 · **Date :** 19 août 2026
+**Version :** 3.0 · **Date :** 17 septembre 2026
+**Remplace :** version 2.0 du 19 août 2026
 **Destinataires :** Direction générale, Direction des Risques, Comité modèles, Validation indépendante, Finance et IFRS 9, Conformité et Juridique, Direction des Systèmes d'Information
 **Classification :** usage interne
 
 ---
 
-> **Statut du document.** Les pondérations, seuils et barèmes présentés constituent une proposition experte complète permettant de démarrer un pilote et de collecter des données homogènes. Ce ne sont **ni des seuils réglementaires de Bank Al-Maghrib, ni des probabilités de défaut calibrées, ni une validation de modèle**. Avant tout usage de décision automatisée, de tarification, d'application d'IFRS 9 ou de calcul de capital réglementaire, ils doivent être challengés sur l'historique de la banque, calibrés, validés indépendamment et approuvés par les instances compétentes.
+> **Statut du document.** Cette version répond au diagnostic indépendant du 16 septembre 2026. Elle corrige des défauts de CONCEPTION ; elle ne produit aucune preuve empirique nouvelle. Le modèle reste un seed expert non calibré sur défauts observés et non validé indépendamment. Les pondérations, seuils et barèmes ne sont ni des règles Bank Al-Maghrib, ni des paramètres IFRS 9, ni des probabilités de défaut utilisables.
 >
-> Ce document ne constitue ni un avis juridique ni une attestation de conformité. Les paramètres réglementaires, dates d'effet, articles, seuils, taux de provision et traitements des garanties doivent être extraits des textes officiels applicables à l'établissement et revus par la Conformité et le Juridique.
+> **Position d'usage inchangée :** pilote en mode fantôme autorisé, usage décisionnel ou réglementaire refusé. Ce qui change est que cette position est désormais **techniquement imposée** par le dispositif, et non seulement affirmée dans une note.
 
 ---
 
-# Sommaire
-
-**Partie I — Note à l'attention de la Direction générale**
-1. Message exécutif
-2. Décisions sollicitées
-3. Proposition de valeur
-4. Choix structurants
-5. Risques de mise en œuvre et réponses
-6. Feuille de route
-
-**Partie II — Méthodologie du modèle**
-7. Objectifs et philosophie
-8. Périmètre, unité de notation et segmentation
-9. Architecture de calcul
-10. Justification économique des sept domaines
-11. Qualité des données et niveau de confiance
-12. Caps, red flags et dérogations
-13. Séparation avec la classification réglementaire, IFRS 9 et le capital
-14. Exemples de calcul complets
-
-**Partie III — Grilles détaillées** *(générées depuis le moteur)*
-15. Modèle standard CORP_STD_V1
-16. Modèle TPE comportemental CORP_TPE_BEHAV_V1
-
-**Partie IV — L'outil**
-17. Principes d'architecture
-18. Le moteur de calcul
-19. Interface de programmation bidirectionnelle
-20. Persistance et compatibilité multi-bases
-21. Sécurité, habilitations et piste d'audit
-22. Parcours utilisateur
-23. Déploiement et exploitation
-24. Stratégie de tests et preuves d'exécution
-
-**Partie V — Gouvernance**
-25. Calibration statistique et passage au modèle challenger
-26. Validation indépendante et surveillance
-27. Fréquences de revue
-28. Décisions du comité modèles avant pilote
-
-**Annexes**
-A. Vecteurs de contrôle chiffrés
-B. Registre des écarts et travaux futurs
-
----
-
-# Partie I — Note à l'attention de la Direction générale
+# Partie I — Ce que cette version change, et pourquoi
 
 ## 1. Message exécutif
 
-La banque dispose aujourd'hui d'outils de notation dédiés au financement de projets et à la promotion immobilière, mais pas d'un dispositif homogène pour ses contreparties entreprises de droit commun — qui constituent l'essentiel du portefeuille corporate. L'appréciation du risque y repose largement sur le jugement de l'analyste, avec trois conséquences : une variabilité d'appréciation entre chargés d'affaires et entre agences, une difficulté à démontrer au régulateur la reproductibilité d'une décision passée, et l'absence de données structurées permettant de construire ultérieurement une probabilité de défaut calibrée.
+Le diagnostic indépendant a relevé vingt-six constats : huit critiques, quatorze élevés, quatre moyens. Il concluait à une maturité de 2,1 sur 5 — prototype avancé, admissible en pilote fantôme, non prêt pour la production.
 
-Le dispositif présenté répond à ces trois points. Il propose un **modèle expert transparent** couvrant 45 critères répartis en sept domaines, pondérés différemment selon le segment TPE, PME ou Grande Entreprise, et un **outil qui exécute ce modèle de façon déterministe**, conserve la preuve complète de chaque calcul et expose une interface de programmation permettant l'échange dans les deux sens avec le système d'information.
+Cette version traite **dix-neuf constats dans le code exécuté**, dont les huit critiques. Les sept restants ne dépendent pas du modèle mais de décisions, de données ou d'infrastructures qui appartiennent à la banque ; ils sont listés en annexe B avec le motif de non-prise en charge et la condition de levée. Aucun n'a été écarté pour raison de difficulté.
 
-Deux caractéristiques méritent l'attention de la Direction générale.
+Trois changements structurants méritent l'attention de la Direction générale, parce qu'ils modifient ce que l'outil affiche et ce que les métiers en verront.
 
-**Le modèle ne prétend pas prédire une probabilité de défaut.** Il produit un classement ordinal fiable et explicable. La calibration actuellement attachée est établie sur des données **simulées** : elle porte un statut distinct, `CALIBRATED_SYNTHETIC`, et l'outil signale son origine partout où la probabilité est restituée. L'usage de ce score pour IFRS 9, la tarification ou le capital réglementaire reste exclu jusqu'à une calibration sur défauts observés, validée indépendamment. C'est une position volontairement prudente : un score expert présenté comme une probabilité de défaut exposerait l'établissement à une critique immédiate de la validation indépendante et du superviseur. La calibration viendra de l'historique que ce dispositif permettra précisément de constituer.
+**La qualité de l'information ne déforme plus la mesure du risque.** La version 2 traduisait une information incomplète en plafond de grade. Sur le portefeuille simulé, ce mécanisme déplaçait 55 à 65 % des dossiers de deux grades et concentrait la moitié du portefeuille sur deux grades, au point que le score moyen d'un grade dépassait celui du grade censé lui être supérieur. La version 3 sépare les deux : le grade mesure le risque, une classe de confiance A/B/C/U décrit la robustesse de l'estimation, et sous un seuil de couverture minimal **aucun grade n'est produit**. Un dossier insuffisamment documenté n'est plus un dossier moyen : c'est un dossier non notable, et la réponse attendue est de le compléter.
 
-**Les cinq finalités restent séparées.** La notation de la contrepartie, la décision de crédit, la classification réglementaire, le staging IFRS 9 et le calcul de capital sont cinq moteurs distincts. Une garantie peut réduire la perte en cas de défaut, sécuriser une décision ou modifier une pondération prudentielle ; elle ne rend jamais l'emprunteur intrinsèquement meilleur. Cette séparation, structurante pour l'architecture, est la principale différence avec des outils de place qui agrègent tout dans un score unique.
+**Chaque modèle porte désormais sa propre échelle.** Le modèle standard produit des grades STD-P1 à STD-P8, le modèle TPE comportemental des grades TPE-B1 à TPE-B6. Les deux grilles n'observent pas la même chose — états financiers d'un côté, flux bancaires de l'autre — et la calibration le confirme : sur données simulées, le meilleur grade du modèle standard porte une probabilité de défaut de 0,16 % contre 0,48 % pour le meilleur grade du modèle comportemental. Afficher « G1 » dans les deux cas revenait à affirmer une équivalence que rien n'établissait.
 
-À ce stade, la notation interne est opérationnelle et testée. Les quatre autres moteurs sont spécifiés et attendent la validation du corpus réglementaire pour être implémentés — aucune règle réglementaire n'a été codée sans preuve documentaire.
+**Aucune probabilité de défaut ne sort de l'environnement de simulation.** La version 2 exposait une probabilité issue de données simulées, protégée par un simple libellé de statut. La version 3 la rend techniquement inaccessible : en production, la valeur est nulle, la finalité déclarée du résultat est « pilote fantôme », et l'application refuse de démarrer si la dérogation de bac à sable est posée en production. Le statut de calibration reste visible, pour que le système aval sache *pourquoi* la valeur est absente.
 
-## 2. Décisions sollicitées
+## 2. Traitement des vingt-six constats
 
-| # | Décision | Instance | Impact si différée |
-|---|---|---|---|
-| 1 | Approuver le périmètre : contreparties entreprises non financières, hors financements spécialisés et entités à dynamique de défaut différente | Comité modèles | Risque de noter des contreparties avec un modèle inadapté |
-| 2 | Confirmer les seuils de segmentation TPE / PME / GE depuis le corpus applicable | Risques et Conformité | La segmentation reste une hypothèse ; les pondérations par segment ne sont pas opposables |
-| 3 | Approuver la définition du défaut, les règles de guérison et de rechute | Risques et Finance | Bloque la calibration et la cohérence avec IFRS 9 |
-| 4 | Valider les formules financières et les retraitements | Risques et Finance | Les ratios ne sont pas comparables entre dossiers |
-| 5 | Challenger pondérations et seuils sur le portefeuille existant | Risques et Validation | Le modèle reste une opinion experte non testée |
-| 6 | Arbitrer entre modèle TPE standard et modèle TPE comportemental | Comité modèles | Les TPE mal documentées reçoivent un traitement inadapté |
-| 7 | Approuver caps, red flags et politique de données manquantes | Risques | Les garde-fous restent des propositions |
-| 8 | Valider l'échelle interne et les règles de dérogation | Comité modèles | Pas de référentiel commun de communication du risque |
-| 9 | Approuver le plan de calibration et de validation indépendante | Comité modèles | Le statut non calibré ne pourra jamais évoluer |
-| 10 | Autoriser un pilote en mode fantôme avant tout usage contraignant | Direction générale | Mise en production sans mesure d'impact |
+Le détail figure dans le journal des décisions, document distinct. Synthèse :
 
-## 3. Proposition de valeur
+| Gravité | Constats | Traités dans le code | Traités partiellement | Hors du périmètre du modèle |
+|---|---|---|---|---|
+| Critique | C01 – C08 | 6 | 2 | 0 |
+| Élevée | H01 – H14 | 10 | 2 | 2 |
+| Moyenne | M01 – M04 | 1 | 1 | 2 |
+| **Total** | **26** | **17** | **5** | **4** |
 
-**Homogénéité.** Un dossier identique produit la même note quel que soit l'analyste, l'agence ou la date, dès lors que les données et la version de modèle sont identiques. Cette propriété est garantie par construction et vérifiée par des tests automatisés.
+« Traité partiellement » signifie que la structure, les contrôles et les points d'accroche existent dans le code, mais que le contenu suppose une donnée ou une décision qui n'appartient pas au modèle : le référentiel sectoriel est construit mais vide, la matrice article-règle-test est spécifiée mais non alimentée, le paquet de preuve est généré mais la revue indépendante reste à conduire.
 
-**Explicabilité.** Chaque note se décompose en sept scores de domaine, puis en 45 contributions élémentaires, chacune accompagnée de la valeur source, de la bande retenue, du poids appliqué et d'une explication en langue naturelle. Un analyste peut justifier une note ligne à ligne devant un client, un comité ou un auditeur.
+## 3. Ce que cette version ne change pas
 
-**Traçabilité.** Chaque exécution enregistre un instantané immuable des données d'entrée, les versions de modèle et de moteur, la date d'arrêté, l'identité du demandeur et le résultat complet. Une décision vieille de trois ans peut être rejouée avec la règle exacte alors en vigueur.
+Elle ne produit aucune probabilité de défaut utilisable, aucune validation indépendante, aucun moteur réglementaire, aucune certification de base de données sur instance réelle. Elle ne remplace pas la lecture du corpus Bank Al-Maghrib applicable, qui reste la première porte du programme. Le score reste un classement ordinal expert, dont la valeur principale est de standardiser le jugement et de constituer l'historique qui rendra la calibration possible.
 
-**Constitution de l'historique.** En imposant une collecte structurée des mêmes 45 critères sur l'ensemble du portefeuille, le dispositif construit la base de données qui rendra possible, dans dix-huit à vingt-quatre mois, l'estimation d'une probabilité de défaut propre à la banque.
-
-**Détection précoce.** Le domaine comportemental, prépondérant sur la TPE et la PME, s'appuie sur des données bancaires disponibles mensuellement, alors que les états financiers arrivent avec plusieurs mois de décalage.
-
-**Ouverture.** L'interface de programmation permet au système bancaire central d'alimenter l'outil et de récupérer les notations, sans double saisie ni interface manuelle.
-
-## 4. Choix structurants
-
-| Choix | Alternative écartée | Motif |
-|---|---|---|
-| Modèle expert transparent avant modèle statistique | Apprentissage automatique d'emblée | L'historique structuré n'existe pas encore ; un modèle appris sur des données non homogènes reproduirait les biais des pratiques passées |
-| Statut de probabilité de défaut non calibré, techniquement bloquant | Publier une correspondance grade–PD indicative | Une PD non calibrée utilisée en IFRS 9 ou en tarification constitue une faiblesse majeure en validation |
-| Cinq moteurs séparés | Score unique agrégeant tout | Un score qui mêle risque intrinsèque, garanties et classe réglementaire n'est ni auditable ni conforme |
-| Score sur 0–100, 100 = meilleur | Échelle inversée | Convention plus lisible pour les métiers ; cohérente avec les outils existants de la banque |
-| Scores élémentaires discrets 0/25/50/75/100 | Score continu | Réduit la fausse précision, force l'ancrage sur des preuves observables, facilite la revue par un tiers |
-| Caps plafonnant le grade sans modifier le score brut | Pénalités soustraites du score | Conserve la mesure brute pour le contrôle a posteriori et rend l'effet du cap explicite et réversible |
-| Poids en points de base entiers | Pourcentages en virgule flottante | Élimine toute dérive d'arrondi ; la somme à 100 % est vérifiable exactement |
-| Formulaire généré depuis la version de modèle | Écrans codés en dur | Une modification de modèle ne nécessite aucune modification d'interface, donc aucune divergence possible |
-
-## 5. Profil de pondération
-
-Le poids relatif des domaines varie selon le segment, selon une logique défendable devant un validateur.
-
-| Domaine | TPE | PME | GE | Logique |
-|---|---:|---:|---:|---|
-| D1 — Performance financière | 25 % | 30 % | 30 % | L'information comptable gagne en fiabilité et en richesse avec la taille |
-| D2 — Capacité de remboursement et stress | 10 % | 15 % | 20 % | Le pilotage prévisionnel et les données de cash-flow ne sont exploitables qu'à partir d'une certaine sophistication |
-| D3 — Comportement bancaire | 25 % | 20 % | 10 % | Sur la TPE, le compte bancaire est le signal le plus fiable et le plus fréquent ; sur la GE, il est dilué par la multibancarisation |
-| D4 — Activité et secteur | 15 % | 15 % | 15 % | Le risque sectoriel affecte toutes les tailles de façon comparable |
-| D5 — Management et gouvernance | 15 % | 12 % | 15 % | Fort sur la TPE par dépendance à l'homme-clé ; fort sur la GE par complexité de gouvernance et enjeux de groupe |
-| D6 — Transparence et conformité | 7 % | 5 % | 5 % | Le risque d'information incomplète est structurellement plus élevé sur la TPE |
-| D7 — ESG et climat | 3 % | 3 % | 5 % | Matérialité financière croissante avec la taille, l'exposition réglementaire et l'international |
-
-**Contrôle du double comptage.** Un même phénomène n'est pénalisé dans deux domaines que si les preuves sont distinctes et le mécanisme économique différent. Une baisse du chiffre d'affaires affecte D1 ; elle n'affecte D4 que si elle traduit également une dégradation structurelle de la position de marché, établie par une preuve différente — perte de parts documentée, sortie d'un référencement, obsolescence d'une offre.
-
-## 6. Risques de mise en œuvre et réponses
-
-| Risque | Probabilité | Réponse intégrée au dispositif |
-|---|---|---|
-| Les seuils experts s'avèrent mal calibrés sur le portefeuille réel | Élevée | Tous les seuils sont des paramètres versionnés, modifiables sans livraison de code ; pilote en mode fantôme obligatoire avant usage contraignant |
-| Données comptables insuffisantes sur la TPE | Élevée | Modèle TPE comportemental distinct, avec identifiant, poids et calibration propres ; aucune note moyenne attribuée par défaut |
-| Le score expert est utilisé comme une probabilité de défaut | Moyenne | Statut de calibration distinct et propagé au contrat d'interface, à l'instantané persisté et à l'écran de résultat ; toute probabilité issue de données simulées est marquée `CALIBRATED_SYNTHETIC` et accompagnée de son avertissement |
-| Dérive des pratiques de dérogation | Moyenne | Double validation, limite de crans, motifs codifiés, suivi des taux et contrôle a posteriori des grades brut et final |
-| Divergence entre la documentation et le calcul réel | Moyenne | Les grilles de la Partie III sont **générées depuis le code du moteur** ; toute modification se répercute à la régénération |
-| Dépendance à un fournisseur de base de données ou de cloud | Moyenne | Source de schéma unique générant quatre dialectes ; déploiement local en une commande ; aucune dépendance à un service en ligne |
-| Corpus réglementaire non disponible en temps voulu | Élevée | Les moteurs réglementaires sont spécifiés mais non implémentés ; aucune règle n'est codée sans preuve documentaire |
-| Résistance des métiers à la saisie de 45 critères | Moyenne | Formulaire généré, ancrages visibles, préremplissage depuis les connecteurs, distinction claire entre critères critiques et secondaires |
-
-## 7. Feuille de route
-
-| Vague | Contenu | Durée indicative | Condition de sortie |
-|---|---|---|---|
-| **1 — Socle et TPE/PME en mode fantôme** | Données, groupe, modèle expert, parcours analyste, interface de programmation, audit | 3 à 4 mois | Notes produites en parallèle des décisions existantes, écarts analysés |
-| **2 — Grandes entreprises et calibration** | Modèle GE, support groupe, référentiel sectoriel, premiers travaux de probabilité de défaut | 4 à 6 mois | Historique suffisant pour une première estimation, validation indépendante engagée |
-| **3 — Moteurs réglementaires** | Classification, IFRS 9, capital prudentiel — subordonnés à la validation du corpus | 4 à 6 mois | Matrice de traçabilité approuvée, tests réglementaires verts |
-| **4 — Industrialisation** | Alerte précoce, traitement de masse, challengers statistiques, surveillance, certification multi-bases | 3 à 4 mois | Objectifs de niveau de service tenus, certification des bases retenues |
-
-Le facteur de réussite n'est pas le nombre d'écrans, mais l'accord explicite sur la définition du défaut, la qualité et le lignage des données, l'indépendance des cinq moteurs et la capacité à reproduire un résultat historique avec sa règle exacte.
+La maturité ne se décrète pas depuis le code : elle sera réévaluée par la validation indépendante, sur pièces.
 
 ---
 
-# Partie II — Méthodologie du modèle
+# Partie II — Méthodologie du modèle, version 3
 
-## 8. Objectifs et philosophie
+## 4. Philosophie de notation
 
-### 8.1 Ce que le modèle produit
+Le diagnostic relevait que la philosophie n'était pas formalisée, et que calibration, backtesting et IFRS 9 travailleraient dès lors sur des horizons implicitement différents. Elle est désormais déclarée dans la configuration de chaque modèle, contrôlée au chargement, et restituée dans l'interface.
 
-Le modèle mesure la qualité de crédit intrinsèque d'une contrepartie entreprise et produit un score brut de 0 à 100, sept scores de domaine, un grade interne ordinal, les contributions détaillées de chaque critère, les facteurs favorables et défavorables classés par contribution, le niveau de confiance dans la note, les red flags et caps applicables, le grade moteur avant dérogation, le grade final après dérogation approuvée, et une probabilité de défaut à 12 mois **uniquement** lorsque la table grade–PD est empiriquement calibrée.
-
-### 8.2 Ce que le modèle ne fait pas
-
-| Sortie | Objet | Effet des garanties et collatéraux |
+| Paramètre | Modèle standard | Modèle TPE comportemental |
 |---|---|---|
-| Note emprunteur et PD | Risque intrinsèque de défaut de la contrepartie | Aucun effet direct sur la PD, sauf support d'un tiers juridiquement et économiquement démontré |
-| Décision de crédit | Acceptation, conditions, délégation, limites | Oui, selon la politique de crédit |
-| Classification réglementaire | Classe et provision | Oui, uniquement selon l'éligibilité et les règles du régime applicable |
-| IFRS 9 | Stage et pertes attendues | Oui, dans la perte en cas de défaut, les flux de récupération et l'exposition |
-| Actifs pondérés | Exposition pondérée et réduction du risque | Oui, selon la reconnaissance prudentielle |
+| Type | Hybride assumé | Point-in-time assumé |
+| Horizon | 12 mois | 12 mois |
+| Fenêtre — états financiers | 36 mois | sans objet |
+| Fenêtre — comportement | 24 mois, cible 36 | 24 mois, cible 36 |
+| Fenêtre — secteur | 60 mois | 60 mois |
 
-Une bonne garantie ne transforme pas un mauvais emprunteur en bon emprunteur : elle réduit éventuellement la perte en cas de défaut, ou sécurise la décision.
+**Traitement du cycle.** Aucune correction de cycle n'est appliquée : l'historique ne permet pas de l'estimer. La sensibilité au point du cycle est donc une limitation documentée, pas une propriété revendiquée.
 
-### 8.3 Critères de sélection d'une variable
+**Règle de migration.** Une notation reste valide jusqu'à son terme sauf événement significatif : impayé, restructuration, perte d'un client vital, changement de contrôle, arrivée d'états financiers plus récents. La migration n'est jamais lissée.
 
-Une variable n'entre dans le modèle que si elle satisfait six conditions cumulatives : un **lien économique** avec le risque de défaut explicable en une phrase à un comité ; une **disponibilité** effective pour la majorité de la population cible ; une **mesurabilité** objective à partir d'une source identifiable ; une **résistance à la manipulation** raisonnable, ou l'existence d'un contrôle de cohérence ; une **non-redondance** avec les autres variables retenues ; une **stabilité** temporelle suffisante pour ne pas produire de volatilité artificielle de la note.
+**Événements postérieurs à l'arrêté.** Un événement postérieur à la date d'arrêté ne modifie jamais rétroactivement une notation produite : il déclenche une nouvelle notation, à une nouvelle date d'arrêté. C'est la condition du rejeu historique.
 
-Les variables qui échouent sur la disponibilité sur un segment donné y reçoivent un poids nul plutôt qu'une valeur imputée : c'est le cas de plusieurs indicateurs de cash-flow sur la TPE.
+## 5. Pipeline canonique
 
-### 8.4 Approche de pondération
+La version 2 décrivait un ordre de calcul que ses propres exemples contredisaient : les plafonds y figuraient avant le grade moteur, alors que le texte et les illustrations les appliquaient après. Une divergence d'implémentation était inévitable. L'ordre ci-dessous est désormais unique, implémenté tel quel et couvert par des tests de précédence.
 
-Les poids initiaux résultent d'un jugement expert structuré, non d'une optimisation statistique — impossible en l'absence d'historique. Ils suivent trois principes : le poids d'un domaine reflète sa **valeur informationnelle attendue** compte tenu de la qualité de la donnée disponible sur le segment ; aucun critère élémentaire ne dépasse 6 % du score global dans le modèle standard, afin qu'aucune variable isolée ne détermine la note — le modèle TPE comportemental admet un plafond de 8 %, la mesure des retards de paiement y étant la variable la plus discriminante disponible ; la somme est vérifiée à exactement 100,00 % par segment, contrôle automatisé qui fait échouer le démarrage de l'application en cas d'écart.
+| Étape | Fonction | Ce que le moteur garantit |
+|---|---|---|
+| 01 | Identité, groupe, arrêté | En amont du moteur : service d'identité ICE/RC/IF, groupe économique, date métier |
+| 02 | Routage | Segment déterminé par un référentiel effectif-daté, puis éligibilité du modèle. Un modèle non publié pour le segment refuse de noter |
+| 03 | Contrôles de relation | Statut conformité produit séparément ; il n'annule jamais la notation d'une exposition existante |
+| 04 | Défaut | Constat reçu d'un moteur amont ; force le grade de défaut quel que soit le score |
+| 05 | Qualité et couverture | Classe de confiance et seuils de couverture observée ; ouvre ou ferme la porte, sans déformer l'échelle |
+| 06 | Caractéristiques | Résolution des critères : barèmes, ancrages, cas spéciaux, catégorie « information absente », transferts de non-applicabilité |
+| 07 | Score brut | Agrégation à **poids total constant** |
+| 08 | Grade moteur | Application de l'échelle propre au modèle |
+| 09 | Exceptions non compensatoires | **Après** le grade moteur, jamais avant |
+| 10 | Grade autonome | Conservé séparément du grade final |
+| 11 | Support groupe | Relèvement plafonné et conditionné ; la note autonome reste la mesure du risque intrinsèque |
+| 12 | Dérogation | Hors moteur : maker-checker, motif codifié, preuve, expiration |
+| 13 | Persistance et diffusion | Hors moteur : instantané, versions, droits d'usage |
 
-Ces poids sont des hypothèses documentées, destinées à être challengées sur le portefeuille de la banque, puis remplacées par des coefficients estimés lors du passage au modèle challenger.
+Le moteur est une fonction pure : aucune entrée-sortie, aucune lecture d'environnement, aucune horloge implicite. La décision d'exposer ou non une probabilité de défaut est prise à la frontière applicative et transmise explicitement.
 
-## 9. Périmètre, unité de notation et segmentation
+## 6. Données manquantes et non applicables
 
-### 9.1 Contreparties incluses
+C'était le constat critique le plus lourd de conséquences. La version 2 retirait du dénominateur un critère sans donnée : deux dossiers cessaient d'être comparables, et l'absence d'une information défavorable pouvait **améliorer** un score.
 
-Sociétés non financières marocaines ; entrepreneurs individuels assimilés à une entreprise selon la politique de la banque ; holdings opérationnelles lorsque les flux et le support peuvent être analysés ; contreparties appartenant à un groupe, avec note autonome et analyse groupe distinctes.
+La version 3 supprime le mécanisme. Deux issues seulement pour une donnée indisponible :
 
-### 9.2 Modèles dédiés ou hors périmètre
+| État de la donnée | Traitement | Effet sur la couverture |
+|---|---|---|
+| `AVAILABLE` | Barème ou ancrage ordinaire | Compte comme observée |
+| `ESTIMATED` | Scoré normalement, signalé | **Ne compte pas** : une estimation n'est pas une observation |
+| `MISSING`, `INVALID`, `STALE` sur critère critique | Blocage : aucune notation, aucun score publié | — |
+| `MISSING`, `INVALID`, `STALE` sur critère non critique | Catégorie « information absente », score prudent déclaré par la grille | Ne compte pas |
+| `NOT_APPLICABLE` prévu par le modèle | Poids transféré au critère receveur **nommé** dans la configuration | Neutre |
+| `NOT_APPLICABLE` non prévu | Refusé : traité comme manquant, incohérence tracée | Ne compte pas |
 
-Établissements de crédit, sociétés financières et assurances ; souverains, collectivités et entités publiques ; financement de projets et financements spécialisés ; promotion immobilière et immobilier générateur de revenus ; startups sans historique financier suffisant ; associations et fondations ; contreparties en défaut, qui relèvent des grades défaut sans forcer un modèle de continuité d'exploitation.
+Le poids total appliqué vaut exactement 10 000 points de base dans tous les cas. Cette propriété est vérifiée par un test dédié, de même que l'impossibilité qu'une information absente améliore un score.
 
-Un cas hors modèle est routé avec motif tracé, ou bloqué. Il ne reçoit jamais une note neutre par défaut.
+**Porte de couverture.** Le modèle standard exige que 60 % du poids soit porté par une donnée observée, et 30 % par domaine ; le modèle comportemental, 70 % et 40 % — une grille entièrement fondée sur les flux ne tolère pas une information faible, car s'ils ne sont pas fiables il ne reste rien. Sous le seuil, le score brut est calculé et conservé pour la surveillance, mais aucun grade n'est produit.
 
-### 9.3 Segmentation
+## 7. Classe de confiance
 
-La segmentation est calculée sur la contrepartie et, lorsque requis, sur le groupe d'intérêt consolidé. Les seuils figurant en Partie III sont des paramètres versionnés, effectifs-datés, dont la source doit être confirmée dans le corpus applicable. Le chiffre d'affaires du groupe prime sur celui de l'entité lorsqu'il est disponible.
+La confiance combine complétude, fraîcheur, fiabilité et provenance, pondérées 35 / 20 / 30 / 15. Elle produit une classe :
 
-Si le segment ne peut être déterminé, **le scoring est bloqué** : aucun segment par défaut n'est appliqué, car le choix du segment détermine à la fois les pondérations et les barèmes.
+| Score | Classe | Effet |
+|---|---|---|
+| ≥ 85 | A — élevée | Grade produit, classe affichée à côté |
+| [70 ; 85[ | B — moyenne | Grade produit, classe affichée à côté |
+| [55 ; 70[ | C — faible | Grade produit, classe affichée à côté |
+| [0 ; 55[ | U — insuffisante | **Aucun grade** : dossier non notable en l'état |
 
-### 9.4 Variante TPE comportementale
+La classe minimale exigée est C pour le modèle standard, B pour le modèle comportemental. **La confiance ne plafonne jamais le grade.** Le champ `affectsGrade` du résultat vaut `false` et le rappelle explicitement à tout système aval.
 
-Une TPE dont les comptes sont insuffisamment fiables ne reçoit pas automatiquement une note moyenne. Elle est dirigée vers un modèle comportemental distinct si **toutes** les conditions minimales sont réunies : au moins douze mois d'historique de compte exploitable, chiffre d'affaires ou mouvements créditeurs raisonnablement vérifiés, encours, limites et incidents disponibles, identité et obligations documentaires validées, absence de red flag bloquant.
+## 8. Exceptions non compensatoires
 
-Ce modèle porte un identifiant distinct, ses propres poids et sa propre calibration. Les scores des deux modèles ne sont pas comparables sans table de correspondance validée.
+La version 2 comptait dix plafonds structurels, auxquels s'ajoutaient un plafond de confiance et des red flags. Un même phénomène — des fonds propres négatifs, une restructuration — pouvait agir jusqu'à quatre fois : score élémentaire, domaine transparence, plafond, signal. La conséquence n'est pas seulement une surpénalisation : l'effet marginal de chaque règle devient inisolable, donc la grille incalibrable.
 
-## 10. Architecture de calcul
+Un inventaire phénomène-règle a été construit. Chaque exception conservée doit déclarer le critère qui porte la contribution centrale du phénomène et justifier son effet incrémental ; une exception qui ne le fait pas **fait échouer le chargement du modèle**.
 
-### 10.1 Score d'un critère
+Résultat : de dix plafonds à **quatre exceptions** sur le modèle standard, et **aucune** sur le modèle comportemental.
 
-Chaque critère élémentaire reçoit un score parmi 0, 25, 50, 75 et 100. Pour une variable continue, une interpolation linéaire à l'intérieur d'une bande est possible mais désactivée par défaut : elle ne peut être activée qu'après validation, car elle introduit une précision que les seuils experts ne justifient pas.
+| Phénomène | Contribution centrale | Exception conservée | Ce qui a été retiré |
+|---|---|---|---|
+| Fonds propres tangibles négatifs | D1.4 (score nul imposé) | aucune | CAP02 — le score nul et le signal RF09 suffisaient |
+| Couverture du service de dette < 1 en base | D2.2 | NC01 | CAP07 — le stress est déjà mesuré par D2.5 |
+| Restructuration / forbearance | D3.6 | aucune | CAP09 — relève des moteurs défaut et IFRS 9 |
+| Concentration client | D4.3 | aucune | CAP08 — barème continu et RF13 suffisants |
+| Comptes anciens ou incohérents | D6.2 | aucune | CAP04 et le plafond de confiance — traités par la porte de couverture |
+| Identité, bénéficiaire effectif, sanctions | D6.5 (transparence résiduelle) | aucune | Le blocage total du scoring — la conformité porte son statut |
+| Entreprise de moins de deux ans | — | **route dédiée** | CAP01 — un plafond tenait lieu de modèle de millésime |
+| Continuité d'exploitation | D6.1 | NC02 | — |
+| Excédent brut négatif deux ans sur trois | D1.2 | NC03 | — |
+| Dossier groupe incomplet | D5.4 | NC04 | — |
 
-### 10.2 Agrégation
+**La route jeune entreprise** mérite une explication. Les entreprises de moins de deux ans représentent 98,5 % des créations au Maroc. Les plafonner à un grade médiocre revenait à refuser de les analyser tout en prétendant les noter. Elles sortent désormais des grilles publiées, avec un motif explicite. Cela met la banque devant une décision qu'un plafond masquait : construire une grille jeune entreprise, ou assumer un traitement à dire d'expert tracé.
 
-```
-Score_domaine = Σ(Score_critère × Poids_critère) / Σ(Poids applicables)
-Score_brut    = Σ(Score_domaine × Poids_domaine) / Σ(Poids de domaines applicables)
-```
+## 9. Support groupe
 
-La redistribution de poids n'est autorisée que pour un critère authentiquement **non applicable**, et uniquement à l'intérieur du même domaine. Une donnée manquante, invalide ou obsolète n'est jamais redistribuée silencieusement : elle déclenche la politique de qualité, un cap ou un blocage.
+La version 2 annonçait une méthode dédiée sans l'implémenter, tout en laissant un critère porter implicitement le soutien. La méthode existe désormais et elle est stricte :
 
-Les poids sont manipulés en points de base entiers ; l'arrondi n'intervient qu'à l'affichage.
+1. la note **autonome** est toujours calculée et conservée ;
+2. le relèvement n'est accordé que si les **quatre** conditions sont documentées — capacité financière du garant, volonté démontrée, engagement juridiquement contraignant, transférabilité effective des fonds ;
+3. il est plafonné à **deux crans** ;
+4. toute condition manquante est nommée dans le résultat.
 
-### 10.3 Ordre de calcul obligatoire
+Une garantie qui ne satisfait pas ces conditions n'est pas ignorée : elle appartient au moteur de décision et au calcul de la perte en cas de défaut. Elle ne rend simplement pas l'emprunteur intrinsèquement meilleur.
 
-1. identification et routage du modèle ;
-2. segmentation ;
-3. contrôles de complétude et de validité ;
-4. calcul des indicateurs ;
-5. détermination des bandes et scores élémentaires ;
-6. agrégation par domaine ;
-7. agrégation globale ;
-8. application des caps de qualité et de structure ;
-9. détection des red flags et routage ;
-10. grade moteur ;
-11. dérogation éventuelle sous double validation ;
-12. enregistrement de l'instantané, des explications et des versions.
+## 10. Défaut, guérison et rechute
 
-Les arrêts durs et la définition du défaut ne sont jamais dilués dans la moyenne pondérée : un red flag bloquant arrête le calcul **avant** toute agrégation, et un défaut avéré force un grade défaut quel que soit le score.
+Les grades DEF1, DEF2 et DEF3 restaient des libellés génériques. Ils sont définis, avec leurs critères d'entrée et leur règle de guérison — proposition à valider sur le corpus applicable, Risques et Finance conjointement. Ils demeurent **communs aux deux modèles** : un défaut est un état constaté selon une définition unique, pas une estimation produite par une grille. Deux modèles peuvent diverger sur l'estimation d'un risque ; ils ne peuvent pas diverger sur le constat d'un impayé de plus de quatre-vingt-dix jours.
 
-### 10.4 États de donnée
+Le moteur de notation n'évalue jamais lui-même la définition du défaut : il reçoit le constat et force le grade correspondant.
 
-Chaque champ porte l'un des états `AVAILABLE`, `MISSING`, `NOT_APPLICABLE`, `INVALID`, `STALE` ou `ESTIMATED`. **La valeur zéro est une valeur économique, jamais un code de donnée manquante.**
+## 11. Segmentation et routage
 
-Un ratio non calculable en raison d'un dénominateur nul ou négatif n'est pas automatiquement traité comme manquant : il reçoit le traitement économique défini dans la grille — par exemple, un excédent brut d'exploitation négatif conduit à un score nul sur le levier, ce qui est une information, pas une absence d'information.
+Le référentiel de segmentation est désormais **effectif-daté et versionné** (jeu `SEG-2026.1`), avec un statut de source explicite — `UNCONFIRMED_SEED` tant que la lecture du corpus Bank Al-Maghrib n'a pas été validée conjointement Risques, Conformité et Juridique. Aucun seuil n'est opposable en l'état, et le document le dit là où les seuils apparaissent.
 
-## 11. Justification économique des sept domaines
+Six axes de segmentation sont distingués et ne doivent jamais être dérivés l'un de l'autre : taille économique, segment commercial, catégorie prudentielle, portefeuille IFRS 9, segment modèle, groupe économique. Le module ne produit que le segment modèle.
 
-### D1 — Performance financière et structure bilancielle
+**Le routage est déterministe.** Le modèle applicable découle du segment, de la disponibilité d'états financiers exploitables et de la longueur de l'historique de compte. Un segment fourni par le référentiel amont est accepté mais **confronté au calcul** : une divergence est tracée plutôt que silencieusement acceptée. Sans cette règle, choisir son segment revient à choisir ses pondérations, et un dossier refusé par une grille peut être représenté à l'autre.
 
-Le domaine mesure la capacité de l'entreprise à générer un résultat, la solidité de sa structure de financement et la qualité de conversion de ce résultat en trésorerie.
+## 12. Cinq finalités, cinq statuts
 
-Le ratio de **fonds propres tangibles sur total bilan** est retenu comme mesure centrale de solvabilité parce qu'il capture la capacité d'absorption des pertes, après élimination des actifs incorporels et des non-valeurs. Une réévaluation non liquide ou une créance sur associé ne vaut pas recapitalisation en numéraire ; les comptes courants d'associés ne sont assimilés aux fonds propres que sous conditions juridiques de subordination, de blocage et de permanence approuvées.
+Chaque résultat porte cinq statuts distincts. Quatre restent `NOT_EVALUATED` : c'est une information, pas un oubli.
 
-Le **levier dette nette sur excédent brut d'exploitation** est l'indicateur de soutenabilité de l'endettement le plus discriminant sur la population corporate. Les seuils sont différenciés par segment : une PME supporte structurellement un levier plus faible qu'une grande entreprise à risque égal, faute d'accès au refinancement de marché.
+| Statut | Valeurs | Moteur |
+|---|---|---|
+| `ratingStatus` | RATED, DEFAULTED, NO_RATING_INSUFFICIENT_DATA, NO_RATING_SEGMENT_UNDETERMINED, NO_RATING_ROUTED_OTHER_MODEL | Implémenté |
+| `complianceStatus` | NOT_EVALUATED, CLEAR, REFER, BLOCKED | Amont, hors outil |
+| `decisionStatus` | NOT_EVALUATED | Non implémenté |
+| `regulatoryClassStatus` | NOT_EVALUATED | Non implémenté |
+| `ifrs9Status` | NOT_EVALUATED | Non implémenté |
 
-La **conversion de l'excédent brut d'exploitation en cash-flow opérationnel**, moyennée sur trois exercices avec des poids dégressifs, détecte les situations où le résultat comptable ne se traduit pas en trésorerie — signal classique de dégradation de la qualité des créances ou de gonflement des stocks. Son poids croît fortement sur le segment GE, où la qualité de l'information permet une lecture fiable du tableau de flux.
+Conséquence directe : **un blocage de conformité n'empêche plus de noter une exposition déjà au bilan.** Un contrôle de sanctions interdit une entrée en relation ou une opération ; il ne rend pas le risque d'un encours existant inconnaissable — et refuser de le noter reviendrait à refuser de le surveiller et de le provisionner.
 
-### D2 — Capacité de remboursement et résistance au stress
+L'échelle de grades ne porte plus de « décision indicative ». La décision de crédit tient compte de l'exposition, du produit, des garanties, de la rentabilité et de l'appétence : elle appartient à un moteur distinct, qui n'est pas implémenté ici.
 
-Là où D1 mesure un état, D2 mesure une capacité prospective. Le **ratio de couverture du service de la dette** rapporte les flux disponibles aux échéances contractuelles, en incluant le crédit-bail et la dette assimilée — omission fréquente qui flatte artificiellement le ratio.
+## 13. Droits d'usage attachés au résultat
 
-La **résistance au stress** applique un choc combiné adapté au secteur et mesure le ratio de couverture résiduel. Les chocs ne modifient jamais rétroactivement les comptes observés : ils produisent des métriques séparées, avec leur scénario, leur sévérité et leur effet documenté sur la décision.
+Chaque résultat transporte ses usages autorisés et ses restrictions, afin qu'aucun système aval n'ait à les deviner.
 
-La **liquidité disponible face au mur de dette** capture le risque de refinancement, distinct du risque de solvabilité : une entreprise solvable peut faire défaut sur un problème de calendrier.
+| Finalité | Conditions | Probabilité de défaut |
+|---|---|---|
+| `PRODUCTION_RATING` | Calibration sur défauts **observés** et modèle validé ou publié | Exposée |
+| `SIMULATION_ONLY` | Environnement bac à sable explicitement déclaré | Exposée, marquée simulée |
+| `PILOT_SHADOW` | Tout le reste — situation actuelle | **Nulle** |
 
-### D3 — Comportement bancaire et historique de crédit
+En production, la dérogation de bac à sable fait échouer le démarrage de l'application. La position sûre est le refus.
 
-Ce domaine est le plus prédictif à court terme sur les petites contreparties, pour trois raisons : les données sont disponibles mensuellement, elles sont produites par la banque elle-même donc difficilement manipulables, et un incident de paiement est un signal de tension de trésorerie qui précède souvent de plusieurs mois la dégradation comptable.
-
-Les **jours de retard** sont mesurés en maximum et en fréquence sur douze mois, complétés par vingt-quatre mois pour détecter la récidive. La définition du défaut et la classification réglementaire s'appliquent séparément et peuvent forcer un grade défaut.
-
-Les **mouvements créditeurs rapportés aux flux attendus** mesurent la part d'activité réellement domiciliée. Une baisse de ce ratio signale soit une perte d'activité, soit un transfert de flux vers un concurrent — deux informations de risque différentes, à instruire. Les virements circulaires et mouvements artificiels sont exclus du calcul.
-
-Une **absence de donnée externe n'est jamais assimilée à une absence d'incident.**
-
-### D4 — Activité, secteur et positionnement
-
-Le **risque sectoriel** provient d'un référentiel séparé, daté et approuvé, et n'est pas saisi librement par l'analyste — c'est une condition de comparabilité entre dossiers. Une entreprise performante dans un secteur faible conserve le score sectoriel de son secteur, mais peut obtenir de bons scores de position concurrentielle et de qualité de croissance.
-
-Les **concentrations clients et fournisseurs** sont mesurées après élimination des ventes liées et circulaires. Un contrat de long terme de haute qualité peut justifier un relèvement d'un cran au maximum, documenté.
-
-La **qualité de la croissance** distingue une croissance rentable financée par le cash-flow d'une expansion financée par la dette et le besoin en fonds de roulement — cette dernière étant une cause fréquente de défaillance d'entreprises par ailleurs profitables.
-
-### D5 — Management, gouvernance et groupe
-
-Sur la TPE et la PME familiale, la **dépendance à l'homme-clé** est un facteur de risque majeur et sous-évalué : l'indisponibilité du dirigeant peut compromettre immédiatement la relation client, la compétence technique et le pouvoir de signature.
-
-Le critère **actionnariat, groupe et soutien** évalue la structure actionnariale ; il ne porte **pas** le relèvement lié au support groupe, qui relève d'une méthode dédiée conservant la note autonome et exigeant capacité, volonté, cadre juridique et transférabilité des fonds.
-
-Les **transactions avec parties liées** sont surveillées comme vecteur principal de fuite de trésorerie dans les groupes non cotés.
-
-### D6 — Transparence et conformité
-
-Le domaine mesure un risque d'information, non une qualité morale. Le **délai de production** de l'information est un indicateur avancé reconnu : une dégradation du délai précède fréquemment l'annonce d'une mauvaise nouvelle.
-
-La **cohérence entre le chiffre d'affaires comptable, déclaratif, les flux bancaires annualisés et les informations commerciales** constitue le contrôle anti-manipulation le plus efficace du dispositif.
-
-Les contrôles de lutte contre le blanchiment, les sanctions et la connaissance client qui interdisent la relation sont des **contrôles bloquants**, jamais des points négatifs dilués dans un score.
-
-### D7 — ESG et climat
-
-Le domaine mesure un risque financier de crédit, pas une appréciation morale. Le **risque physique** est matériel au Maroc pour l'agriculture, l'agroalimentaire, le tourisme et les industries intensives en eau ; le **risque de transition** l'est pour les activités énergo-intensives et exportatrices vers des marchés à réglementation carbone.
-
-Le module est proportionné et son poids reste modéré, afin de ne pas créer une fausse précision. Une exposition élevée assortie d'un plan crédible obtient un score intermédiaire ; **une absence de donnée n'équivaut jamais à un risque faible.**
-
-## 12. Qualité des données et niveau de confiance
-
-Le score de confiance combine quatre composantes — complétude, fraîcheur, fiabilité et provenance — chacune notée sur la même échelle discrète, avec des pondérations figurant en Partie III.
-
-Le niveau de confiance ne modifie jamais le score brut : il plafonne le grade final. Un score de confiance insuffisant empêche la production d'un grade, le dossier étant alors déclaré incomplet ou routé vers un modèle alternatif. Le score brut reste calculé et conservé pour la surveillance du modèle.
-
-Ce mécanisme évite l'écueil le plus fréquent des dispositifs de notation : produire une note d'apparence normale sur un dossier dont l'information est insuffisante.
-
-## 13. Caps, red flags et dérogations
-
-### 13.1 Caps structurels
-
-Un cap signifie « le grade final ne peut pas être meilleur que ». Il ne remplace pas le score brut, qui reste conservé. L'application de plusieurs caps retient le plus contraignant. Chaque cap expose sa règle, sa version, la donnée déclenchante, le grade avant et après, et sa justification.
-
-Les caps de la Partie III sont des propositions de **politique interne**, explicitement qualifiées comme telles : ce ne sont pas des règles réglementaires.
-
-### 13.2 Red flags
-
-Cinq niveaux sont distingués : `BLOCK` arrête la décision automatisée et déclenche une escalade ; `DEFAULT_CHECK` impose l'évaluation immédiate de la définition de défaut et de la classification ; `REFER` impose un comité ou un niveau de délégation supérieur ; `WARNING` autorise le calcul mais exige une condition ou une justification ; `INFO` est explicatif.
-
-Chaque red flag porte sa **source** — réglementaire, IFRS 9, politique de crédit, conformité ou modèle. Un red flag interne n'est jamais présenté comme une exigence de Bank Al-Maghrib.
-
-### 13.3 Dérogations
-
-Le résultat moteur n'est jamais écrasé. L'outil conserve le score brut, le grade moteur, le grade après caps et le grade final. Une dérogation ordinaire est limitée à deux crans, exige un motif codifié, un commentaire, une preuve, un auteur et un valideur distinct, et porte une date d'expiration. L'amélioration d'un grade défaut est refusée hors processus formel de guérison. Les taux, sens, motifs et performance des dérogations font l'objet d'un suivi trimestriel.
-
-## 14. Séparation avec la classification réglementaire, IFRS 9 et le capital
-
-### 14.1 Classification réglementaire
-
-La classe réglementaire est calculée par un moteur séparé, à partir du régime applicable à la date d'arrêté, des arriérés, des critères qualitatifs, des restructurations, de la contagion, des garanties éligibles et des règles de provision. Elle peut imposer un grade défaut interne, mais **le score 0–100 ne choisit jamais seul la classe réglementaire.**
-
-L'outil conserve séparément le résultat de notation interne, le résultat de classification, la version du régime utilisé, le statut de rapprochement et les motifs de divergence.
-
-Les régimes réglementaires successifs sont représentés comme des régimes effectifs-datés distincts. Dates, articles, taux et règles transitoires ne sont injectés qu'après validation depuis les textes officiels.
-
-### 14.2 IFRS 9
-
-Le grade et la probabilité de défaut internes sont une **entrée** du dispositif d'augmentation significative du risque et de calcul des pertes attendues, pas le stage lui-même. Le staging tient compte de l'évolution depuis l'octroi, des critères qualitatifs, de la surveillance rapprochée, des restructurations et des seuils de sécurité approuvés.
-
-Une dégradation de deux crans peut constituer un indicateur paramétrable d'augmentation significative du risque, mais ne constitue pas une règle universelle sans politique validée.
-
-### 14.3 Prudentiel
-
-Une probabilité de défaut interne calibrée, une probabilité réglementaire en moyenne de long terme, une probabilité IFRS 9 ponctuelle et une fréquence de défaut observée **ne sont pas interchangeables**. De même, la perte en cas de défaut économique, celle d'IFRS 9 et celle en conditions dégradées sont stockées séparément, chacune avec son horizon, sa philosophie et son usage autorisé.
-
-## 15. Exemples de calcul complets
-
-### 15.1 TPE — cheminement complet
-
-Une TPE dispose de trois exercices fiables et ne présente aucun défaut. Ses scores élémentaires sur le domaine D1 sont les suivants.
-
-| Critère D1 | Score | Poids TPE (bps) | Contribution |
-|---|---:|---:|---:|
-| D1.1 Croissance | 75 | 300 | 22 500 |
-| D1.2 Marge EBITDA | 50 | 300 | 15 000 |
-| D1.3 Rentabilité | 50 | 200 | 10 000 |
-| D1.4 Fonds propres | 75 | 400 | 30 000 |
-| D1.5 Levier | 50 | 400 | 20 000 |
-| D1.6 Liquidité | 75 | 400 | 30 000 |
-| D1.7 BFR | 50 | 300 | 15 000 |
-| D1.8 Conversion cash | 50 | 200 | 10 000 |
-| **Total** | | **2 500** | **152 500** |
-
-`Score D1 = 152 500 / 2 500 = 61,00`
-
-Les autres domaines ressortent à D2 = 60, D3 = 82, D4 = 65, D5 = 70, D6 = 75 et D7 = 50.
-
-`Score brut = 61 × 25 % + 60 × 10 % + 82 × 25 % + 65 × 15 % + 70 × 15 % + 75 × 7 % + 50 × 3 % = 68,75`
-
-**Résultat : G6 — Acceptable.** Avec un niveau de confiance de 82, le cap « pas mieux que G4 » est enregistré mais reste sans effet, G6 étant déjà moins favorable. Un retard de paiement de 40 jours déclencherait néanmoins un signal `REFER` et l'analyse réglementaire et IFRS 9 indépendante.
-
-### 15.2 PME — effet d'un cap structurel
-
-| Domaine | Score | Poids PME | Contribution |
-|---|---:|---:|---:|
-| D1 | 72 | 30 % | 21,60 |
-| D2 | 68 | 15 % | 10,20 |
-| D3 | 75 | 20 % | 15,00 |
-| D4 | 60 | 15 % | 9,00 |
-| D5 | 65 | 12 % | 7,80 |
-| D6 | 80 | 5 % | 4,00 |
-| D7 | 50 | 3 % | 1,50 |
-| **Total** | | **100 %** | **69,10** |
-
-Résultat moteur : **G6**. Si le ratio de couverture du service de la dette est inférieur à 1,0 en scénario de base, le cap structurel limite le résultat à **G9**, alors même que le score brut demeure 69,10. Le score brut et le grade capé sont tous deux conservés : le premier alimente la surveillance du modèle, le second la décision.
-
-### 15.3 Grande entreprise
-
-| Domaine | Score | Poids GE | Contribution |
-|---|---:|---:|---:|
-| D1 | 78 | 30 % | 23,40 |
-| D2 | 75 | 20 % | 15,00 |
-| D3 | 80 | 10 % | 8,00 |
-| D4 | 70 | 15 % | 10,50 |
-| D5 | 75 | 15 % | 11,25 |
-| D6 | 90 | 5 % | 4,50 |
-| D7 | 60 | 5 % | 3,00 |
-| **Total** | | **100 %** | **75,65** |
-
-Résultat moteur : **G4 — Bon**. Un soutien de groupe ne modifie aucun score élémentaire ; un relèvement éventuel est calculé et approuvé séparément, la note autonome étant conservée.
 
 ---
 
 # Partie III — Grilles détaillées
 
-> **Section générée automatiquement depuis la configuration exécutée par le moteur** (`src/models/`), au moyen de `scripts/generate-model-doc.mts`. Toute modification d'un poids, d'un seuil ou d'un ancrage dans le code se répercute ici à la régénération. Cette section ne peut donc pas diverger du calcul réellement appliqué.
+> **Section générée automatiquement depuis la configuration exécutée par le moteur** (`src/models/`), au moyen de `scripts/generate-model-doc.mts`. Toute modification d'un poids, d'un seuil ou d'un ancrage dans le code se répercute ici à la régénération. Cette section ne peut donc pas diverger du calcul réellement appliqué — un vérificateur d'alignement le contrôle à chaque exécution.
+
+## 14. Lecture des grilles
+
+Chaque critère indique son poids par segment, sa nature, et la politique appliquée lorsque l'information est absente : **blocage** pour une donnée critique, **catégorie prudente** sinon, avec le score imposé. Les critères conditionnés à la matérialité indiquent le critère qui reçoit leur poids lorsqu'ils ne s'appliquent pas.
 
 ## Modèle standard — CORP_STD_V1
 
-Identifiant `CORP_STD_V1` · version 1.0.0 · statut DRAFT_EXPERT_SEED · date d'effet 2026-08-18.
+Identifiant `CORP_STD_V1` · version 3.0.0 · statut DRAFT_EXPERT_SEED · date d'effet 2026-09-17.
 
 Score 100 = risque le plus faible ; score 0 = risque le plus élevé.
 
@@ -499,7 +288,7 @@ Score 100 = risque le plus faible ; score 0 = risque le plus élevé.
 
 CAGR sur trois exercices, nombre d'années en baisse et volatilité vs secteur. Une croissance excessive financée par dette/BFR est examinée aussi en D4.8.
 
-**Poids :** TPE 3.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -515,7 +304,7 @@ CAGR sur trois exercices, nombre d'années en baisse et volatilité vs secteur. 
 
 EBITDA ajusté/CA, percentile sectoriel, tendance sur trois ans. Si l'EBITDA est non pertinent pour l'activité, utiliser un indicateur opérationnel équivalent validé.
 
-**Poids :** TPE 3.00 % · PME 4.00 % · GE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 4.00 % · GE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -531,7 +320,7 @@ EBITDA ajusté/CA, percentile sectoriel, tendance sur trois ans. Si l'EBITDA est
 
 Résultat opérationnel après impôt normatif / actifs économiques moyens, comparaison sectorielle et volatilité.
 
-**Poids :** TPE 2.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -559,7 +348,7 @@ FP tangibles / total bilan ajusté, en %. Une réévaluation non liquide ou une 
 
 | Code | Cas | Score imposé |
 |---|---|---:|
-| `NEGATIVE_TANGIBLE_EQUITY` | Fonds propres tangibles négatifs — déclenche également le cap CAP02 | 0 |
+| `NEGATIVE_TANGIBLE_EQUITY` | Fonds propres tangibles négatifs (contribution centrale du phénomène ; RF09 route la revue, aucun plafond ne s'y ajoute) | 0 |
 
 **Justificatifs requis :** Bilan et retraitements des incorporels/non-valeurs.
 
@@ -589,7 +378,7 @@ Dette nette négative : score 100 uniquement si trésorerie libre, durable, rapp
 
 Actif circulant réalisable CT / passif circulant exigible, stocks obsolètes et créances douteuses retraités. Secteurs à BFR structurellement négatif : sous-modèle cash/stress validé.
 
-**Poids :** TPE 4.00 % · PME 4.00 % · GE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · PME 4.00 % · GE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Segment | 100 | 75 | 50 | 25 | 0 |
 |---|---|---|---|---|---|
@@ -607,7 +396,7 @@ Actif circulant réalisable CT / passif circulant exigible, stocks obsolètes et
 
 DSO + DIO − DPO, évolution en jours et percentile sectoriel. Un DPO artificiellement élevé lié à des fournisseurs impayés est défavorable.
 
-**Poids :** TPE 3.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -623,7 +412,7 @@ Moyenne pondérée sur trois ans de CFO ajusté / EBITDA ajusté (50 % N, 30 % N
 
 **Formule :** `0,5×(CFO/EBITDA)_N + 0,3×(CFO/EBITDA)_N−1 + 0,2×(CFO/EBITDA)_N−2`
 
-**Poids :** TPE 2.00 % · PME 3.00 % · GE 5.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 3.00 % · GE 5.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -645,7 +434,7 @@ Moyenne pondérée sur trois ans de CFO ajusté / EBITDA ajusté (50 % N, 30 % N
 
 EBITDA ajusté / charges financières cash ajustées. Holding : cash-flow récurrent disponible / intérêts.
 
-**Poids :** TPE 1.50 % · PME 2.00 % · GE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 2.00 % · GE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Segment | 100 | 75 | 50 | 25 | 0 |
 |---|---|---|---|---|---|
@@ -657,7 +446,7 @@ EBITDA ajusté / charges financières cash ajustées. Holding : cash-flow récur
 
 CFADS / (intérêts + principal exigibles), service de dette complet y compris leasing et dette assimilée. Revolving sans amortissement : convention de conversion documentée.
 
-**Poids :** TPE 3.00 % · PME 4.00 % · GE 5.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 4.00 % · GE 5.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Segment | 100 | 75 | 50 | 25 | 0 |
 |---|---|---|---|---|---|
@@ -671,7 +460,7 @@ CFADS / (intérêts + principal exigibles), service de dette complet y compris l
 
 FCF récurrent / dette financière brute moyenne, en %. Un ratio élevé dû à des capex de maintien artificiellement faibles doit être retraité.
 
-**Poids :** TPE 1.00 % · PME 2.00 % · GE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 2.00 % · GE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -691,7 +480,7 @@ FCF récurrent / dette financière brute moyenne, en %. Un ratio élevé dû à 
 
 Cash libre + lignes confirmées disponibles rapportés aux besoins et échéances des 12 prochains mois.
 
-**Poids :** TPE 1.50 % · PME 2.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 2.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -705,7 +494,7 @@ Cash libre + lignes confirmées disponibles rapportés aux besoins et échéance
 
 DSCR minimal sous choc combiné seed (CA −10 %, marge −2 pts, taux +200 pb, DSO +15 j, change) — chocs définitifs calibrés sur l'historique et les stress BAM/internes (Directive 2/G/10).
 
-**Poids :** TPE 2.00 % · PME 3.00 % · GE 4.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 3.00 % · GE 4.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -723,7 +512,7 @@ DSCR minimal sous choc combiné seed (CA −10 %, marge −2 pts, taux +200 pb, 
 
 #### D2.6 — Covenants et marge de sécurité
 
-**Poids :** TPE 1.00 % · PME 2.00 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 2.00 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -762,7 +551,7 @@ Maximum de jours de retard sur 12 mois (fréquence et 24 mois pour récidive en 
 
 Sur 12 mois glissants.
 
-**Poids :** TPE 4.00 % · PME 3.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · PME 3.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -776,7 +565,7 @@ Sur 12 mois glissants.
 
 Moyenne, maximum, saisonnalité et variation de l'utilisation des lignes confirmées. Une utilisation moyenne saine se situe entre 20 % et 70 %.
 
-**Poids :** TPE 3.00 % · PME 2.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 2.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -790,7 +579,7 @@ Moyenne, maximum, saisonnalité et variation de l'utilisation des lignes confirm
 
 Mouvements créditeurs observés / flux attendus (%), tendance 12 mois et part des flux domiciliés. Virements circulaires et mouvements artificiels exclus.
 
-**Poids :** TPE 4.00 % · PME 3.00 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · PME 3.00 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -811,7 +600,7 @@ Mouvements créditeurs observés / flux attendus (%), tendance 12 mois et part d
 
 Sur 24 mois, sources autorisées (SCIP/centrale des incidents).
 
-**Poids :** TPE 4.00 % · PME 3.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · PME 3.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -823,7 +612,7 @@ Sur 24 mois, sources autorisées (SCIP/centrale des incidents).
 
 #### D3.6 — Restructuration et forbearance
 
-**Poids :** TPE 2.00 % · PME 2.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 2.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -837,7 +626,7 @@ Sur 24 mois, sources autorisées (SCIP/centrale des incidents).
 
 Données centrale des risques et vision groupe, dans les limites légales.
 
-**Poids :** TPE 2.00 % · PME 2.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 2.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -853,7 +642,7 @@ Données centrale des risques et vision groupe, dans les limites légales.
 
 Grade issu du référentiel sectoriel interne séparé, daté et approuvé (S1=100, S2=75, S3=50, S4=25, S5=0). Jamais saisi librement par l'analyste.
 
-**Poids :** TPE 3.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 3.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -867,7 +656,7 @@ Grade issu du référentiel sectoriel interne séparé, daté et approuvé (S1=1
 
 #### D4.2 — Position concurrentielle
 
-**Poids :** TPE 2.00 % · PME 2.50 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 2.50 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -883,7 +672,7 @@ Part du premier client (ou groupe client) dans le chiffre d'affaires, en %, apr�
 
 **Formule :** `CA_premier_client / CA_total`
 
-**Poids :** TPE 2.50 % · PME 2.00 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.50 % · PME 2.00 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Segment | 100 | 75 | 50 | 25 | 0 |
 |---|---|---|---|---|---|
@@ -905,7 +694,7 @@ Part du premier fournisseur dans les achats, en %. La substituabilité et le dé
 
 **Formule :** `achats_premier_fournisseur / achats_totaux`
 
-**Poids :** TPE 2.00 % · PME 1.50 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 1.50 % · GE 1.50 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -927,7 +716,7 @@ Part du premier fournisseur dans les achats, en %. La substituabilité et le dé
 
 Commandes : mois de CA sécurisé et qualité juridique du carnet. Récurrent : rétention/churn. Retail : historique comparable et saisonnalité.
 
-**Poids :** TPE 2.00 % · PME 2.00 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 2.00 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -941,7 +730,7 @@ Commandes : mois de CA sécurisé et qualité juridique du carnet. Récurrent : 
 
 Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/achats/CA.
 
-**Poids :** TPE 1.00 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -953,7 +742,7 @@ Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/
 
 #### D4.7 — Risque opérationnel, technologie et capex
 
-**Poids :** TPE 1.50 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -965,7 +754,7 @@ Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/
 
 #### D4.8 — Qualité et soutenabilité de la croissance
 
-**Poids :** TPE 1.00 % · PME 1.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 1.00 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -979,7 +768,7 @@ Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/
 
 #### D5.1 — Expérience et stabilité du management
 
-**Poids :** TPE 3.00 % · PME 2.50 % · GE 2.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · PME 2.50 % · GE 2.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -991,7 +780,7 @@ Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/
 
 #### D5.2 — Dépendance homme-clé et succession
 
-**Poids :** TPE 2.50 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.50 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1003,7 +792,7 @@ Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/
 
 #### D5.3 — Gouvernance et contrôle interne
 
-**Poids :** TPE 2.00 % · PME 2.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 2.00 % · GE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1017,7 +806,7 @@ Exposition nette après couverture juridiquement efficace, rapportée à EBITDA/
 
 Note standalone conservée. Le support groupe n'améliore le grade que via la méthode dédiée (capacité + volonté + cadre juridique), jamais dans ce critère.
 
-**Poids :** TPE 2.00 % · PME 1.50 % · GE 2.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 1.50 % · GE 2.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1029,7 +818,7 @@ Note standalone conservée. Le support groupe n'améliore le grade que via la m�
 
 #### D5.5 — Stratégie et qualité d'exécution
 
-**Poids :** TPE 2.00 % · PME 1.50 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 1.50 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1041,7 +830,7 @@ Note standalone conservée. Le support groupe n'améliore le grade que via la m�
 
 #### D5.6 — Transactions avec parties liées
 
-**Poids :** TPE 1.50 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 1.50 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1053,7 +842,7 @@ Note standalone conservée. Le support groupe n'améliore le grade que via la m�
 
 #### D5.7 — Pilotage financier et culture du risque
 
-**Poids :** TPE 2.00 % · PME 1.50 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · PME 1.50 % · GE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1067,7 +856,7 @@ Note standalone conservée. Le support groupe n'améliore le grade que via la m�
 
 #### D6.1 — Qualité / certification des états financiers
 
-**Poids :** TPE 1.50 % · PME 1.25 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 1.25 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1081,7 +870,7 @@ Note standalone conservée. Le support groupe n'améliore le grade que via la m�
 
 Jours entre la clôture et la réception d'un dossier exploitable.
 
-**Poids :** TPE 1.50 % · PME 1.00 % · GE 0.75 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 1.00 % · GE 0.75 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Segment | 100 | 75 | 50 | 25 | 0 |
 |---|---|---|---|---|---|
@@ -1099,7 +888,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 Écart inexpliqué (%) entre CA comptable, déclaratif/fiscal, flux bancaires annualisés et informations commerciales.
 
-**Poids :** TPE 1.50 % · PME 1.00 % · GE 1.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 1.00 % · GE 1.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -1117,7 +906,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 #### D6.4 — Situation juridique, fiscale et sociale
 
-**Poids :** TPE 1.50 % · PME 1.00 % · GE 0.75 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.50 % · PME 1.00 % · GE 0.75 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1129,7 +918,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 #### D6.5 — Transparence actionnariat et documents
 
-**Poids :** TPE 1.00 % · PME 0.75 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 0.75 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1143,7 +932,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 #### D7.1 — Risque climatique physique
 
-**Poids :** TPE 1.00 % · PME 1.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 1.00 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1155,7 +944,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 #### D7.2 — Risque de transition
 
-**Poids :** TPE 0.50 % · PME 0.75 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 0.50 % · PME 0.75 % · GE 1.50 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1167,7 +956,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 #### D7.3 — Conformité environnementale et sociale
 
-**Poids :** TPE 1.00 % · PME 0.75 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 1.00 % · PME 0.75 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1179,7 +968,7 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 
 #### D7.4 — Gouvernance ESG et plan d'adaptation
 
-**Poids :** TPE 0.50 % · PME 0.50 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 0.50 % · PME 0.50 % · GE 1.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1189,74 +978,79 @@ Jours entre la clôture et la réception d'un dossier exploitable.
 | 25 | Approche réactive, données faibles, plan non chiffré ou sans propriétaire |
 | 0 | Déni d'un risque matériel, aucune gouvernance, information trompeuse ou greenwashing démontré |
 
-### Échelle interne (master scale)
+### Échelle de grades propre au modèle — STD-P-2026.1
 
-| Grade | Score | Libellé | Décision indicative |
+Statut : provisoire. Aucune correspondance validée avec une autre échelle : ces grades ne sont comparables à ceux d'aucun autre modèle. L'échelle ne porte aucune décision indicative — la décision de crédit relève d'un moteur distinct.
+
+| Grade | Score | Libellé |
+|---|---|---|
+| STD-P1 | ≥ 88 | Très solide |
+| STD-P2 | [82 ; 88[ | Solide |
+| STD-P3 | [76 ; 82[ | Bon |
+| STD-P4 | [70 ; 76[ | Satisfaisant |
+| STD-P5 | [64 ; 70[ | Acceptable |
+| STD-P6 | [57 ; 64[ | Fragile |
+| STD-P7 | [48 ; 57[ | Faible |
+| STD-P8 | < 48 | Très faible |
+
+Grades de défaut, communs aux modèles (un défaut est un état constaté) :
+
+| Grade | Libellé | Critères d'entrée | Règle de guérison |
 |---|---|---|---|
-| G1 | ≥ 90 | Excellent | Délégation favorable sous contrôles usuels |
-| G2 | [85 ; 90[ | Très solide | Favorable |
-| G3 | [80 ; 85[ | Solide | Favorable |
-| G4 | [75 ; 80[ | Bon | Favorable avec conditions usuelles |
-| G5 | [70 ; 75[ | Satisfaisant | Analyse normale / conditions selon produit |
-| G6 | [65 ; 70[ | Acceptable | Conditions renforcées et suivi |
-| G7 | [60 ; 65[ | Fragile | Comité / revue renforcée, watchlist possible |
-| G8 | [55 ; 60[ | Faible | Exception très encadrée ou réduction du risque |
-| G9 | [45 ; 55[ | Très faible | Généralement défavorable, stratégie de réduction |
-| G10 | < 45 | Risque très élevé | Défavorable sauf décision exceptionnelle formelle |
-| DEF1 · DEF2 · DEF3 | définition de défaut déclenchée | Grades défaut internes | Recouvrement et classification par les dispositifs dédiés |
+| DEF1 | Défaut par retard de paiement | Arriéré supérieur au seuil de matérialité approuvé, persistant au-delà du nombre de jours retenu par la définition du défaut applicable (seuil seed : 90 jours). Aucun élément d'improbabilité de paiement au-delà du retard lui-même. | Retour en sain après régularisation intégrale de l'arriéré et période probatoire continue sans nouvel incident (durée seed : 3 mois). Une rechute pendant la période probatoire ramène en défaut sans nouvelle période de grâce. |
+| DEF2 | Défaut par improbabilité de paiement ou restructuration en difficulté | Improbabilité de paiement constatée : abandon de créance, provision spécifique matérielle, cession à perte, exécution de garantie. Restructuration accordée en raison de difficultés financières, ou seconde concession sur un même encours. Contagion appliquée selon la règle validée du régime applicable. | Retour en sain après période probatoire renforcée (durée seed : 12 mois) sans arriéré ni nouvelle concession, et suppression des éléments d'improbabilité de paiement. La décision de guérison est prise par l'instance de délégation compétente, jamais par le modèle. |
+| DEF3 | Défaut par procédure collective ou contentieux | Ouverture d'une procédure de redressement, de sauvegarde ou de liquidation. Cessation d'activité constatée, ou passage en recouvrement contentieux. | Pas de guérison automatique : sortie uniquement sur décision formelle après clôture de la procédure et reconstitution d'un historique de paiement approuvé par l'instance compétente. |
 
-### Caps structurels
+### Exceptions non compensatoires
 
-| Code | Situation | Plafond de grade | Source de la règle |
-|---|---|---|---|
-| CAP01 | Entreprise de moins de 2 ans, hors support groupe juridiquement robuste | pas mieux que G7 | CREDIT_POLICY |
-| CAP02 | Fonds propres tangibles négatifs sans recapitalisation ferme et réalisée | pas mieux que G9 | CREDIT_POLICY |
-| CAP03 | Incertitude matérielle sur la continuité d'exploitation | pas mieux que G9 | CREDIT_POLICY |
-| CAP04 | Comptes annuels trop anciens (au-delà du maximum segment) | aucun grade final | CREDIT_POLICY |
-| CAP05 | EBITDA négatif deux années sur trois | pas mieux que G9 | CREDIT_POLICY |
-| CAP06 | DSCR < 1,0× en scénario de base | pas mieux que G9 | CREDIT_POLICY |
-| CAP07 | DSCR < 1,0× uniquement en stress | pas mieux que G7 | CREDIT_POLICY |
-| CAP08 | Dépendance client unique sans contrat ferme ni mitigation | pas mieux que G8 | CREDIT_POLICY |
-| CAP09 | Restructuration active / forbearance | pas mieux que G8 | CREDIT_POLICY |
-| CAP10 | Dossier groupe incomplet alors que le groupe est matériel | pas mieux que G7 | CREDIT_POLICY |
+| Code | Situation | Plafond de grade | Contribution centrale | Source | Justification de l'effet incrémental |
+|---|---|---|---|---|---|
+| NC01 | Couverture du service de la dette inférieure à 1 en scénario de base | pas mieux que STD-P7 | D2.2 | CREDIT_POLICY | Une incapacité à couvrir le service de la dette en scénario de base n'est compensable ni par la gouvernance ni par un secteur porteur : le défaut survient par manque de trésorerie à l'échéance, quelles que soient les autres qualités du dossier. L'effet incrémental par rapport au score de D2.2 reste à mesurer sur défauts observés. |
+| NC02 | Incertitude matérielle sur la continuité d'exploitation | pas mieux que STD-P7 | D6.1 | CREDIT_POLICY | Une réserve d'auditeur sur la continuité d'exploitation porte une information que les ratios ne contiennent pas encore : elle synthétise un jugement professionnel sur des éléments prospectifs. Son pouvoir prédictif non linéaire est largement documenté ; l'effet incrémental reste à mesurer localement. |
+| NC03 | Excédent brut d'exploitation négatif deux années sur trois | pas mieux que STD-P7 | D1.2 | CREDIT_POLICY | La persistance distingue un accident d'exercice d'un modèle économique qui ne dégage pas d'excédent. Le critère D1.2 note le niveau du dernier exercice ; il ne capture pas la répétition, qui est précisément ce qui rend le redressement improbable sans apport externe. |
+| NC04 | Dossier groupe incomplet alors que le groupe est matériel | pas mieux que STD-P6 | D5.4 | CREDIT_POLICY | Contrairement aux autres insuffisances d'information, celle-ci porte sur un périmètre de consolidation entier et non sur une variable isolée : la porte de couverture, qui raisonne critère par critère, ne la détecte pas. Sans vision groupe, ni la contagion ni les sorties de trésorerie ne sont appréciables. |
 
-### Niveau de confiance et conséquence sur le grade
+### Classe de confiance et porte de couverture
 
 Confiance = 35 % complétude + 20 % fraîcheur + 30 % fiabilité + 15 % provenance.
 
-| Score de confiance | Niveau | Conséquence |
+La classe de confiance ne plafonne pas le grade : elle est restituée à côté de lui. Sous la classe minimale (C), aucun grade n'est produit.
+
+| Score de confiance | Classe | Effet |
 |---|---|---|
-| ≥ 85 | Élevé | aucun cap lié à la qualité des données |
-| [70 ; 85[ | Moyen | le grade final ne peut être meilleur que G4 |
-| [55 ; 70[ | Faible | le grade final ne peut être meilleur que G7 |
-| [0 ; 55[ | Insuffisant | aucun grade final : dossier incomplet ou modèle alternatif requis |
+| ≥ 85 | A — Élevée — estimation robuste | grade produit, classe restituée à côté du grade |
+| [70 ; 85[ | B — Moyenne — estimation utilisable avec réserve | grade produit, classe restituée à côté du grade |
+| [55 ; 70[ | C — Faible — estimation fragile, à compléter | grade produit, classe restituée à côté du grade |
+| [0 ; 55[ | U — Insuffisante — aucun grade produit | aucun grade produit : dossier non notable en l'état |
+
+Couverture minimale exigée : 60 % du poids total porté par une donnée observée, et 30 % par domaine. Une estimation ne compte pas comme une observation.
 
 ### Red flags
 
 | Code | Signal | Niveau | Source | Traitement |
 |---|---|---|---|---|
-| RF01 | Identité/UBO/pouvoirs impossibles à valider | BLOCK | COMPLIANCE | Stop KYC, pas de score final |
-| RF02 | Sanction ou interdiction issue du système conformité autoritatif | BLOCK | COMPLIANCE | Suivre la décision Conformité, jamais diluer dans le score |
-| RF03 | Fraude ou falsification documentaire confirmée | BLOCK | COMPLIANCE | Escalade fraude/juridique et audit |
-| RF04 | Activité interdite par politique ou loi | BLOCK | CREDIT_POLICY | Rejet/routage selon politique |
-| RF05 | Liquidation, cessation ou procédure incompatible avec le going concern | DEFAULT_CHECK | CREDIT_POLICY | Classe/grade défaut selon règles applicables |
-| RF06 | DPD ≥ seuil de défaut, UTP ou cross-default | DEFAULT_CHECK | CREDIT_POLICY | Évaluer défaut, contagion, IFRS 9 et BAM séparément |
-| RF07 | DPD 31–89 jours ou incident matériel récurrent | REFER | CREDIT_POLICY | Revue risque, watchlist/SICR éventuels |
-| RF08 | Échec de restructuration ou seconde concession | DEFAULT_CHECK | CREDIT_POLICY | Défaut/forbearance selon politique |
-| RF09 | Fonds propres négatifs et aucun plan ferme | REFER | CREDIT_POLICY | Cap G9, recapitalisation comme condition éventuelle |
-| RF10 | Opinion audit défavorable / refus de certifier | REFER | CREDIT_POLICY | Selon matérialité et fiabilité des comptes (peut devenir BLOCK) |
-| RF11 | Dette fiscale/sociale ou saisie matérielle | REFER | CREDIT_POLICY | Quantifier, vérifier plan et priorité de paiement |
+| RF01 | Identité/UBO/pouvoirs impossibles à valider | BLOCK | COMPLIANCE | Statut conformité BLOQUÉ : pas d'entrée en relation. La notation d'une exposition existante reste produite pour la surveillance. |
+| RF02 | Sanction ou interdiction issue du système conformité autoritatif | BLOCK | COMPLIANCE | Décision Conformité appliquée telle quelle, jamais diluée dans le score |
+| RF03 | Fraude ou falsification documentaire confirmée | BLOCK | COMPLIANCE | Escalade fraude/juridique et audit ; fiabilité des données à réexaminer intégralement |
+| RF04 | Activité interdite par politique ou loi | BLOCK | CREDIT_POLICY | Rejet/routage selon politique de crédit |
+| RF05 | Liquidation, cessation ou procédure incompatible avec le going concern | DEFAULT_CHECK | CREDIT_POLICY | Évaluation défaut DEF3 par le moteur dédié |
+| RF06 | DPD ≥ seuil de défaut, UTP ou cross-default | DEFAULT_CHECK | CREDIT_POLICY | Évaluer défaut, contagion, IFRS 9 et classification BAM séparément |
+| RF07 | DPD 31–89 jours ou incident matériel récurrent | REFER | CREDIT_POLICY | Revue risque, watchlist et augmentation significative du risque éventuelles |
+| RF08 | Échec de restructuration ou seconde concession | DEFAULT_CHECK | CREDIT_POLICY | Défaut DEF2 / forbearance selon la politique validée |
+| RF09 | Fonds propres négatifs et aucun plan ferme | REFER | CREDIT_POLICY | Revue ; la contribution au risque est portée par D1.4, sans plafond additionnel |
+| RF10 | Opinion audit défavorable / refus de certifier | REFER | CREDIT_POLICY | Selon matérialité et fiabilité des comptes |
+| RF11 | Dette fiscale/sociale ou saisie matérielle | REFER | CREDIT_POLICY | Quantifier, vérifier plan d'apurement et rang de paiement |
 | RF12 | Litige menaçant la continuité | REFER | CREDIT_POLICY | Scénario de perte et avis juridique |
-| RF13 | Perte d'un client/fournisseur/licence vital | REFER | CREDIT_POLICY | Reforecast et stress immédiats |
-| RF14 | Covenant rompu non régularisé | REFER | CREDIT_POLICY | Vérifier exigibilité et waiver |
-| RF15 | Transactions liées ou sortie de cash inexpliquée | REFER | CREDIT_POLICY | Investigation et cap selon impact |
-| RF16 | Information critique manquante/incohérente | REFER | MODEL | Appliquer la politique de complétude (peut devenir BLOCK) |
-| RF17 | Risque climatique/ESG avec fermeture probable | REFER | CREDIT_POLICY | Scénario, cap et plan d'adaptation |
+| RF13 | Perte d'un client/fournisseur/licence vital | REFER | CREDIT_POLICY | Reprévision et stress immédiats |
+| RF14 | Covenant rompu non régularisé | REFER | CREDIT_POLICY | Vérifier exigibilité anticipée et waiver |
+| RF15 | Transactions liées ou sortie de cash inexpliquée | REFER | CREDIT_POLICY | Investigation des flux avec parties liées |
+| RF16 | Information critique manquante/incohérente | REFER | MODEL | Traité par la porte de couverture : sous le seuil, aucun grade n'est produit |
+| RF17 | Risque climatique/ESG avec fermeture probable | REFER | CREDIT_POLICY | Scénario sectoriel et plan d'adaptation |
 | RF18 | Contagion groupe réglementaire/politique | DEFAULT_CHECK | REGULATORY | Appliquer uniquement la règle validée du régime applicable |
 
 ## Modèle TPE comportemental — CORP_TPE_BEHAV_V1
 
-Identifiant `CORP_TPE_BEHAV_V1` · version 1.0.0 · statut DRAFT_EXPERT_SEED · date d'effet 2026-08-18.
+Identifiant `CORP_TPE_BEHAV_V1` · version 3.0.0 · statut DRAFT_EXPERT_SEED · date d'effet 2026-09-17.
 
 Score 100 = risque le plus faible ; score 0 = risque le plus élevé.
 
@@ -1325,7 +1119,7 @@ Score 100 = risque le plus faible ; score 0 = risque le plus élevé.
 
 #### B1.2 — Dépassements et irrégularités
 
-**Poids :** TPE 6.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 6.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1351,7 +1145,7 @@ Mouvements créditeurs observés / flux attendus (%). Un compte secondaire ne pe
 
 #### B1.4 — Utilisation des lignes et marge disponible
 
-**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1363,7 +1157,7 @@ Mouvements créditeurs observés / flux attendus (%). Un compte secondaire ne pe
 
 #### B1.5 — Chèques/effets et incidents externes autorisés
 
-**Poids :** TPE 5.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 5.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1391,7 +1185,7 @@ Mouvements créditeurs observés / flux attendus (%). Un compte secondaire ne pe
 
 Coefficient de variation mensuel des encaissements (%), tendance ≥ 0.
 
-**Poids :** TPE 5.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 5.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -1410,7 +1204,7 @@ Coefficient de variation mensuel des encaissements (%), tendance ≥ 0.
 
 #### B2.3 — Solde minimum, jours débiteurs et liquidité
 
-**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1424,7 +1218,7 @@ Coefficient de variation mensuel des encaissements (%), tendance ≥ 0.
 
 Couverture du service de dette après choc de flux −20 %.
 
-**Poids :** TPE 4.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -1438,7 +1232,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B3.1 — Risque sectoriel
 
-**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1450,7 +1244,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B3.2 — Ancienneté et continuité de l'activité
 
-**Poids :** TPE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** quantitatif · **politique en cas d'absence : 25**
 
 | Score | Bande |
 |---:|---|
@@ -1464,11 +1258,11 @@ Couverture du service de dette après choc de flux −20 %.
 
 | Code | Cas | Score imposé |
 |---|---|---:|
-| `UNDER_2Y_NO_SUPPORT` | Moins de deux ans d'activité sans support ni contrat structurant — déclenche le cap CAP01 | 0 |
+| `UNDER_2Y_NO_SUPPORT` | Moins de deux ans d'activité sans support ni contrat structurant (le dossier est routé hors grille : voir la route jeune entreprise) | 0 |
 
 #### B3.3 — Concentration clients/fournisseurs
 
-**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1480,7 +1274,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B3.4 — Marge brute ou proxy vérifié
 
-**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1492,7 +1286,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B3.5 — Contrats, commandes et récurrence
 
-**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1506,7 +1300,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B4.1 — Expérience du dirigeant
 
-**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 4.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1518,7 +1312,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B4.2 — Dépendance homme-clé
 
-**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1530,7 +1324,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B4.3 — Organisation et contrôles minimums
 
-**Poids :** TPE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1542,7 +1336,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B4.4 — Succession / continuité
 
-**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1556,7 +1350,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B5.1 — Documents et autorisations
 
-**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1588,7 +1382,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B5.3 — Situation fiscale et sociale
 
-**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1600,7 +1394,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B5.4 — Actionnariat / UBO / KYC
 
-**Poids :** TPE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 2.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1614,7 +1408,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B6.1 — Groupe, garant et soutien démontré
 
-**Poids :** TPE 5.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 5.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1628,7 +1422,7 @@ Couverture du service de dette après choc de flux −20 %.
 
 #### B7.1 — Risques ESG/climat matériels
 
-**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : WARN**
+**Poids :** TPE 3.00 % · **Nature :** qualitatif ancré · **politique en cas d'absence : 25**
 
 | Score | Ancrage et preuves attendues |
 |---:|---|
@@ -1638,393 +1432,259 @@ Couverture du service de dette après choc de flux −20 %.
 | 25 | Exposition élevée, mitigation insuffisante |
 | 0 | Activité menacée à court terme sans solution viable |
 
-### Échelle interne (master scale)
+### Échelle de grades propre au modèle — TPE-B-2026.1
 
-| Grade | Score | Libellé | Décision indicative |
+Statut : provisoire. Aucune correspondance validée avec une autre échelle : ces grades ne sont comparables à ceux d'aucun autre modèle. L'échelle ne porte aucune décision indicative — la décision de crédit relève d'un moteur distinct.
+
+| Grade | Score | Libellé |
+|---|---|---|
+| TPE-B1 | ≥ 85 | Comportement très sain |
+| TPE-B2 | [76 ; 85[ | Comportement sain |
+| TPE-B3 | [68 ; 76[ | Comportement acceptable |
+| TPE-B4 | [60 ; 68[ | Tensions ponctuelles |
+| TPE-B5 | [50 ; 60[ | Tensions installées |
+| TPE-B6 | < 50 | Comportement très dégradé |
+
+Grades de défaut, communs aux modèles (un défaut est un état constaté) :
+
+| Grade | Libellé | Critères d'entrée | Règle de guérison |
 |---|---|---|---|
-| G1 | ≥ 90 | Excellent | Délégation favorable sous contrôles usuels |
-| G2 | [85 ; 90[ | Très solide | Favorable |
-| G3 | [80 ; 85[ | Solide | Favorable |
-| G4 | [75 ; 80[ | Bon | Favorable avec conditions usuelles |
-| G5 | [70 ; 75[ | Satisfaisant | Analyse normale / conditions selon produit |
-| G6 | [65 ; 70[ | Acceptable | Conditions renforcées et suivi |
-| G7 | [60 ; 65[ | Fragile | Comité / revue renforcée, watchlist possible |
-| G8 | [55 ; 60[ | Faible | Exception très encadrée ou réduction du risque |
-| G9 | [45 ; 55[ | Très faible | Généralement défavorable, stratégie de réduction |
-| G10 | < 45 | Risque très élevé | Défavorable sauf décision exceptionnelle formelle |
-| DEF1 · DEF2 · DEF3 | définition de défaut déclenchée | Grades défaut internes | Recouvrement et classification par les dispositifs dédiés |
+| DEF1 | Défaut par retard de paiement | Arriéré supérieur au seuil de matérialité approuvé, persistant au-delà du nombre de jours retenu par la définition du défaut applicable (seuil seed : 90 jours). Aucun élément d'improbabilité de paiement au-delà du retard lui-même. | Retour en sain après régularisation intégrale de l'arriéré et période probatoire continue sans nouvel incident (durée seed : 3 mois). Une rechute pendant la période probatoire ramène en défaut sans nouvelle période de grâce. |
+| DEF2 | Défaut par improbabilité de paiement ou restructuration en difficulté | Improbabilité de paiement constatée : abandon de créance, provision spécifique matérielle, cession à perte, exécution de garantie. Restructuration accordée en raison de difficultés financières, ou seconde concession sur un même encours. Contagion appliquée selon la règle validée du régime applicable. | Retour en sain après période probatoire renforcée (durée seed : 12 mois) sans arriéré ni nouvelle concession, et suppression des éléments d'improbabilité de paiement. La décision de guérison est prise par l'instance de délégation compétente, jamais par le modèle. |
+| DEF3 | Défaut par procédure collective ou contentieux | Ouverture d'une procédure de redressement, de sauvegarde ou de liquidation. Cessation d'activité constatée, ou passage en recouvrement contentieux. | Pas de guérison automatique : sortie uniquement sur décision formelle après clôture de la procédure et reconstitution d'un historique de paiement approuvé par l'instance compétente. |
 
-### Caps structurels
+### Exceptions non compensatoires
 
-| Code | Situation | Plafond de grade | Source de la règle |
-|---|---|---|---|
-| CAP01 | Entreprise de moins de 2 ans, hors support groupe juridiquement robuste | pas mieux que G7 | CREDIT_POLICY |
-| CAP03 | Incertitude matérielle sur la continuité d'exploitation | pas mieux que G9 | CREDIT_POLICY |
-| CAP04 | Comptes annuels trop anciens (au-delà du maximum segment) | aucun grade final | CREDIT_POLICY |
-| CAP09 | Restructuration active / forbearance | pas mieux que G8 | CREDIT_POLICY |
-| CAP10 | Dossier groupe incomplet alors que le groupe est matériel | pas mieux que G7 | CREDIT_POLICY |
+Aucune exception. Toutes les contributions sont continues : aucun effet marginal n'a à être isolé pour calibrer la grille.
 
-### Niveau de confiance et conséquence sur le grade
+### Classe de confiance et porte de couverture
 
 Confiance = 35 % complétude + 20 % fraîcheur + 30 % fiabilité + 15 % provenance.
 
-| Score de confiance | Niveau | Conséquence |
+La classe de confiance ne plafonne pas le grade : elle est restituée à côté de lui. Sous la classe minimale (B), aucun grade n'est produit.
+
+| Score de confiance | Classe | Effet |
 |---|---|---|
-| ≥ 85 | Élevé | aucun cap lié à la qualité des données |
-| [70 ; 85[ | Moyen | le grade final ne peut être meilleur que G4 |
-| [55 ; 70[ | Faible | le grade final ne peut être meilleur que G7 |
-| [0 ; 55[ | Insuffisant | aucun grade final : dossier incomplet ou modèle alternatif requis |
+| ≥ 85 | A — Élevée — estimation robuste | grade produit, classe restituée à côté du grade |
+| [70 ; 85[ | B — Moyenne — estimation utilisable avec réserve | grade produit, classe restituée à côté du grade |
+| [55 ; 70[ | C — Faible — estimation fragile, à compléter | grade produit, classe restituée à côté du grade |
+| [0 ; 55[ | U — Insuffisante — aucun grade produit | aucun grade produit : dossier non notable en l'état |
+
+Couverture minimale exigée : 70 % du poids total porté par une donnée observée, et 40 % par domaine. Une estimation ne compte pas comme une observation.
 
 ### Red flags
 
 | Code | Signal | Niveau | Source | Traitement |
 |---|---|---|---|---|
-| RF01 | Identité/UBO/pouvoirs impossibles à valider | BLOCK | COMPLIANCE | Stop KYC, pas de score final |
-| RF02 | Sanction ou interdiction issue du système conformité autoritatif | BLOCK | COMPLIANCE | Suivre la décision Conformité, jamais diluer dans le score |
-| RF03 | Fraude ou falsification documentaire confirmée | BLOCK | COMPLIANCE | Escalade fraude/juridique et audit |
-| RF04 | Activité interdite par politique ou loi | BLOCK | CREDIT_POLICY | Rejet/routage selon politique |
-| RF05 | Liquidation, cessation ou procédure incompatible avec le going concern | DEFAULT_CHECK | CREDIT_POLICY | Classe/grade défaut selon règles applicables |
-| RF06 | DPD ≥ seuil de défaut, UTP ou cross-default | DEFAULT_CHECK | CREDIT_POLICY | Évaluer défaut, contagion, IFRS 9 et BAM séparément |
-| RF07 | DPD 31–89 jours ou incident matériel récurrent | REFER | CREDIT_POLICY | Revue risque, watchlist/SICR éventuels |
-| RF08 | Échec de restructuration ou seconde concession | DEFAULT_CHECK | CREDIT_POLICY | Défaut/forbearance selon politique |
-| RF09 | Fonds propres négatifs et aucun plan ferme | REFER | CREDIT_POLICY | Cap G9, recapitalisation comme condition éventuelle |
-| RF10 | Opinion audit défavorable / refus de certifier | REFER | CREDIT_POLICY | Selon matérialité et fiabilité des comptes (peut devenir BLOCK) |
-| RF11 | Dette fiscale/sociale ou saisie matérielle | REFER | CREDIT_POLICY | Quantifier, vérifier plan et priorité de paiement |
+| RF01 | Identité/UBO/pouvoirs impossibles à valider | BLOCK | COMPLIANCE | Statut conformité BLOQUÉ : pas d'entrée en relation. La notation d'une exposition existante reste produite pour la surveillance. |
+| RF02 | Sanction ou interdiction issue du système conformité autoritatif | BLOCK | COMPLIANCE | Décision Conformité appliquée telle quelle, jamais diluée dans le score |
+| RF03 | Fraude ou falsification documentaire confirmée | BLOCK | COMPLIANCE | Escalade fraude/juridique et audit ; fiabilité des données à réexaminer intégralement |
+| RF04 | Activité interdite par politique ou loi | BLOCK | CREDIT_POLICY | Rejet/routage selon politique de crédit |
+| RF05 | Liquidation, cessation ou procédure incompatible avec le going concern | DEFAULT_CHECK | CREDIT_POLICY | Évaluation défaut DEF3 par le moteur dédié |
+| RF06 | DPD ≥ seuil de défaut, UTP ou cross-default | DEFAULT_CHECK | CREDIT_POLICY | Évaluer défaut, contagion, IFRS 9 et classification BAM séparément |
+| RF07 | DPD 31–89 jours ou incident matériel récurrent | REFER | CREDIT_POLICY | Revue risque, watchlist et augmentation significative du risque éventuelles |
+| RF08 | Échec de restructuration ou seconde concession | DEFAULT_CHECK | CREDIT_POLICY | Défaut DEF2 / forbearance selon la politique validée |
+| RF09 | Fonds propres négatifs et aucun plan ferme | REFER | CREDIT_POLICY | Revue ; la contribution au risque est portée par D1.4, sans plafond additionnel |
+| RF10 | Opinion audit défavorable / refus de certifier | REFER | CREDIT_POLICY | Selon matérialité et fiabilité des comptes |
+| RF11 | Dette fiscale/sociale ou saisie matérielle | REFER | CREDIT_POLICY | Quantifier, vérifier plan d'apurement et rang de paiement |
 | RF12 | Litige menaçant la continuité | REFER | CREDIT_POLICY | Scénario de perte et avis juridique |
-| RF13 | Perte d'un client/fournisseur/licence vital | REFER | CREDIT_POLICY | Reforecast et stress immédiats |
-| RF14 | Covenant rompu non régularisé | REFER | CREDIT_POLICY | Vérifier exigibilité et waiver |
-| RF15 | Transactions liées ou sortie de cash inexpliquée | REFER | CREDIT_POLICY | Investigation et cap selon impact |
-| RF16 | Information critique manquante/incohérente | REFER | MODEL | Appliquer la politique de complétude (peut devenir BLOCK) |
-| RF17 | Risque climatique/ESG avec fermeture probable | REFER | CREDIT_POLICY | Scénario, cap et plan d'adaptation |
+| RF13 | Perte d'un client/fournisseur/licence vital | REFER | CREDIT_POLICY | Reprévision et stress immédiats |
+| RF14 | Covenant rompu non régularisé | REFER | CREDIT_POLICY | Vérifier exigibilité anticipée et waiver |
+| RF15 | Transactions liées ou sortie de cash inexpliquée | REFER | CREDIT_POLICY | Investigation des flux avec parties liées |
+| RF16 | Information critique manquante/incohérente | REFER | MODEL | Traité par la porte de couverture : sous le seuil, aucun grade n'est produit |
+| RF17 | Risque climatique/ESG avec fermeture probable | REFER | CREDIT_POLICY | Scénario sectoriel et plan d'adaptation |
 | RF18 | Contagion groupe réglementaire/politique | DEFAULT_CHECK | REGULATORY | Appliquer uniquement la règle validée du régime applicable |
-
 
 ---
 
-# Partie IV — L'outil
+# Partie IV — Référentiels marocains
 
-## 17. Principes d'architecture
+Le diagnostic reprochait à la version 2 d'importer des libellés de référentiels étrangers — EBITDA, current ratio, dette nette — sans les relier au Code Général de Normalisation Comptable ni aux pratiques de financement réellement observées. Deux analystes pouvaient calculer deux ratios différents sur le même bilan.
 
-L'outil est un **monolithe modulaire, orienté interface de programmation et neutre vis-à-vis du cloud**, plutôt qu'un ensemble prématuré de microservices. Ce choix privilégie le déterminisme, la simplicité d'exploitation et la capacité à démontrer qu'un résultat provient d'un chemin de calcul unique.
+## 15. Dictionnaire comptable CGNC
 
-Quatre principes structurent l'implémentation.
+Sept grandeurs sont définies une fois pour toutes, consommées par les critères et **affichées à l'analyste au moment de la saisie** — la définition n'est plus enfouie dans une note. Statut : proposition à valider conjointement Finance et Risques.
 
-**Le noyau de risque est pur.** Le répertoire `src/core/` n'importe ni framework web, ni couche d'accès aux données, ni bibliothèque de fournisseur. Le moteur est une fonction du couple (configuration de modèle, données d'entrée) vers un résultat. Cette propriété rend les tests métier exécutables sans base ni réseau, et garantit qu'aucune dépendance d'infrastructure ne peut altérer un calcul.
-
-**Un seul moteur canonique par finalité.** Les dépôts examinés comptaient jusqu'à huit implémentations concurrentes de moteur de scoring, avec un risque de divergence selon le chemin d'appel. Ici, la notation possède un unique point d'entrée, dont la version est estampillée dans chaque résultat.
-
-**Les cinq finalités sont séparées.** Notation, décision, classification réglementaire, IFRS 9 et capital sont cinq moteurs distincts, composés par un orchestrateur, jamais couplés mathématiquement.
-
-**Aucune configuration n'est codée en dur.** Poids, seuils, barèmes, caps, red flags, échelle interne, pondérations de confiance et seuils de segmentation appartiennent à une version de modèle immuable, validée au chargement.
-
-## 18. Le moteur de calcul
-
-### 18.1 Validation d'une version de modèle
-
-Une version de modèle est refusée au chargement — l'application ne démarre pas — si l'un des contrôles suivants échoue : la somme des poids de critères diffère de 100,00 % pour un segment ; un critère référence un domaine inexistant ; un barème quantitatif présente un trou, un chevauchement ou une incohérence d'inclusivité à une frontière ; un critère quantitatif pondéré n'a pas de barème pour son segment ; un critère qualitatif ne possède pas exactement les cinq ancrages ; l'échelle interne ne couvre pas l'intervalle complet des scores ; les pondérations de confiance ne totalisent pas 100 ; les bandes de confiance présentent une discontinuité ; un cap référence un grade inexistant.
-
-Ce mécanisme rend structurellement impossible la mise en production d'un modèle dont les poids ne sommeraient pas à 100 % — défaut classique des dispositifs configurables.
-
-### 18.2 Déterminisme et reproductibilité
-
-Le moteur ne consulte ni horloge, ni générateur aléatoire, ni source externe. La date de calcul lui est fournie. Deux exécutions avec le même instantané et la même version produisent des résultats strictement identiques, propriété vérifiée par un test dédié.
-
-Les poids sont manipulés en entiers ; les montants et scores utilisent un type décimal en base ; l'arrondi n'intervient qu'à l'affichage.
-
-### 18.3 Traitement des situations dégradées
-
-| Situation | Comportement |
+| Grandeur | Point de vigilance marocain |
 |---|---|
-| Red flag bloquant | Calcul arrêté avant toute agrégation ; aucun score produit ; motif de blocage explicite |
-| Segment indéterminable | Scoring bloqué ; aucun segment par défaut |
-| Donnée critique manquante ou invalide | Scoring bloqué, avec le critère nommé dans le motif |
-| Donnée non critique manquante | Critère exclu du dénominateur, avertissement nommant le critère ; impact porté par le niveau de confiance |
-| Critère non applicable | Poids redistribué à l'intérieur du domaine, sans avertissement |
-| Cas spécial documenté | Score nul explicite, avec mention du cas dans l'explication |
-| Confiance insuffisante | Aucun grade final ; score brut conservé pour la surveillance |
-| Défaut avéré | Grade défaut forcé, indépendamment du score ; score brut conservé |
+| Excédent brut d'exploitation retraité | Réintégration des redevances de crédit-bail, rémunération normative du dirigeant, exclusion des produits non courants ; rapprochement avec la capacité d'autofinancement |
+| Comptes courants d'associés | **Trois catégories** : remboursable à vue, bloqué non subordonné, contractuellement subordonné. Seule la troisième vaut quasi-fonds propres. Ce poste représente 44,5 % du financement des micro-entreprises et 30,7 % de celui des TPE : son classement détermine à lui seul le levier et la solvabilité affichés |
+| Dette financière nette économique | Crédit-bail actualisé, affacturage avec recours, financements participatifs selon leur substance, dette système de la Centrale des Risques ; trésorerie nantie exclue |
+| Service de la dette à 12 mois | Échéances ballon et in fine comptées intégralement, convention documentée pour le revolving. Un service partiel est la première cause de surestimation de la capacité de remboursement |
+| Créances publiques et crédit de TVA | Isolées du poste clients, avec ancienneté, délai observé et décote de liquidité. Une créance certaine n'est pas un encaissement disponible |
+| Fonds propres tangibles | Déduction des non-valeurs, incorporels non cessibles, réévaluations non liquides et créances sur associés |
+| Flux bancaires nettoyés et taux de capture | Exclusion des décaissements de prêts, virements circulaires, apports d'associés, produit d'affacturage et transferts entre banques. Le taux de capture alimente la **fiabilité**, pas le score de risque |
 
-**À aucun moment une donnée absente n'est convertie en zéro ou en score neutre.**
+## 16. Référentiel sectoriel NMA 2010 × région
 
-### 18.4 Explicabilité
+La structure existe, avec ses contrôles : code NMA 2010, région, grade sectoriel S1–S5, effectif ayant servi à l'établir, période d'observation, source, date d'effet, percentiles de marge et de levier, et matérialité ESG par secteur.
 
-Chaque résultat porte, pour chaque critère : la valeur d'entrée, l'état de la donnée, la bande retenue avec ses bornes, le score attribué, le poids appliqué, la contribution au domaine et une explication en langue naturelle. Au niveau global : le score brut, les scores de domaine avec leur poids théorique et applicable, les caps appliqués avec leur source, les red flags avec leur niveau et leur traitement, les motifs de blocage, les avertissements, et les cinq principaux facteurs favorables et défavorables classés par contribution pondérée.
+Elle est livrée **non alimentée**, et c'est un choix assumé : le peuplement suppose les distributions OMTPME, celles du portefeuille de la banque et une gouvernance sectorielle — trois éléments qui n'appartiennent pas au code. Un effectif minimal de trente dossiers est exigé pour qu'un grade sectoriel soit opposable ; en deçà, un repli national explicite s'applique. Tant que le référentiel est vide, le grade sectoriel est traité comme une donnée indisponible et déclenche la catégorie prudente : l'absence devient visible au lieu de se dissoudre dans un score moyen.
 
-## 19. Interface de programmation bidirectionnelle
+## 17. Bibliothèque de scénarios de stress
 
-### 19.1 Principes contractuels
+La version 2 appliquait un choc combiné unique à toutes les contreparties : chiffre d'affaires −10 %, marge −2 points, taux +200 points de base. Un tel choc ne décrit ni une sécheresse pour un producteur du Souss, ni une saison touristique manquée à Marrakech, ni un retard de certification sur un marché public.
 
-L'interface est décrite en OpenAPI 3.1 (`openapi.yaml`). Quatre principes la gouvernent.
+Cinq familles de scénarios différenciés sont déclarées, avec leur périmètre d'application et leurs chocs : stress hydrique et rendement agricole ; choc de demande touristique ; allongement des délais sur marchés publics ; choc de change et d'énergie pour les importateurs ; contrainte carbone à l'export. La sévérité de chaque choc reste à calibrer sur l'historique — les scénarios portent le statut `SEED_A_CALIBRER`.
 
-**L'identité provient toujours du jeton**, jamais du corps de requête. Le champ identifiant l'auteur d'une exécution est renseigné par le serveur depuis le contexte de sécurité.
+## 18. Flux bancaires des TPE
 
-**Le client ne fournit jamais un poids, une formule ni un score final.** Il transmet des observations — valeurs mesurées et scores qualitatifs ancrés. Le serveur applique les poids et barèmes de la version publiée et recalcule intégralement.
+Trois changements issus du diagnostic :
 
-**Les créations et calculs sont idempotents.** Une clé d'idempotence identique retourne l'exécution existante plutôt que d'en créer une seconde, contradictoire.
+- **fenêtre d'observation portée de 12 à 24 mois, cible 36.** Douze mois ne couvrent qu'une seule saison : sur un hôtel, une exploitation agricole ou un commerce dépendant du Ramadan, un exercice observé sur douze mois glissants peut décrire une saison exceptionnelle ou une saison manquée sans qu'on puisse les distinguer ;
+- **règles de nettoyage explicites**, inscrites au dictionnaire CGNC ;
+- **taux de capture bancaire distingué du risque.** Une faible domiciliation n'est pas une faible activité : le taux de capture alimente la fiabilité de l'estimation, non le score.
 
-**Les erreurs suivent un format normalisé** (RFC 9457), sans trace d'exécution ni détail interne.
+## 19. Matérialité ESG
 
-### 19.2 Ressources exposées
+Le domaine ESG pesait de 3 à 5 % et s'appliquait uniformément. La version 3 conditionne les deux critères réellement dépendants de l'exposition — risque physique et risque de transition — à une **porte de matérialité** alimentée par le référentiel sectoriel et la localisation des sites, jamais par le jugement libre de l'analyste. Lorsque le risque n'est pas matériel, le poids est transféré au critère receveur nommé dans la configuration, et le poids total reste constant.
 
-| Domaine | Points d'entrée |
+La conformité environnementale et la gouvernance d'adaptation restent évaluées pour tous : elles sont universelles, contrairement à l'exposition.
+
+---
+
+# Partie V — L'outil
+
+## 20. Architecture et statuts
+
+Le noyau de risque reste pur : `src/core/` n'importe ni framework web, ni couche d'accès aux données, ni bibliothèque de fournisseur. La notation possède un point d'entrée unique, dont la version est estampillée dans chaque résultat.
+
+Cinq moteurs sont distingués ; **un seul est implémenté**. L'outil l'affirme dans le contrat d'interface, dans l'écran de résultat et dans la page méthodologie, plutôt que de laisser un champ vide suggérer un oubli.
+
+## 21. Interface de programmation
+
+| Contrôle | État en version 3 |
 |---|---|
-| Santé | `GET /health` — sans authentification, sans donnée sensible |
-| Modèles | `GET /models`, `GET /models/{modelId}` — configuration complète en lecture |
-| Contreparties | `GET`, `POST /counterparties` ; `GET`, `PATCH /counterparties/{id}` ; `GET /counterparties/{id}/rating-runs` |
-| Notation | `POST /rating-runs` (calcul persisté), `POST /rating-runs/simulate` (calcul sans effet de bord), `GET /rating-runs`, `GET /rating-runs/{id}` |
-| Dérogations | `POST /overrides` (demandeur), `POST /overrides/{id}/decision` (valideur distinct) |
-| Événements sortants | `GET`, `POST /webhook-subscriptions`, `DELETE /webhook-subscriptions/{id}` |
-
-La consultation détaillée d'une exécution restitue l'instantané des données d'entrée **et** le résultat complet, permettant de rejouer et de vérifier un calcul historique.
-
-### 19.3 Événements sortants
-
-Les notifications sont signées en HMAC SHA-256 sur la concaténation de l'horodatage et du corps brut. Chaque envoi porte un identifiant unique servant de protection contre le rejeu, un horodatage et le type d'événement. Le consommateur doit vérifier la signature, rejeter au-delà d'une fenêtre de trois cents secondes, mémoriser l'identifiant et rester idempotent, la livraison étant garantie au moins une fois.
-
-Chaque tentative est journalisée avec son statut, son nombre d'essais et son erreur éventuelle.
-
-Événements produits : `rating.completed`, `rating.blocked`, `rating.overridden`, `counterparty.updated`.
-
-## 20. Persistance et compatibilité multi-bases
-
-### 20.1 Source de schéma unique
-
-Le schéma possède une **source canonique unique** (`prisma/schema.template.prisma`) à partir de laquelle le schéma effectif est généré pour le dialecte cible. La génération est idempotente et réversible : appliquer successivement quatre dialectes puis revenir au premier restitue exactement le schéma d'origine, propriété vérifiée.
-
-### 20.2 Choix de portabilité
-
-| Choix | Motif |
-|---|---|
-| Identifiants textuels non séquentiels | Évite les collisions concurrentes et les fuites d'information par énumération ; supprime la dépendance aux séquences |
-| Aucun type énuméré natif | Les énumérations natives sont mal supportées et coûteuses à faire évoluer sur certains moteurs ; les valeurs sont validées applicativement |
-| Charges JSON stockées en texte | Supprime la dépendance à un type JSON natif propriétaire |
-| Montants et scores en décimal | Élimine les erreurs d'arrondi du flottant binaire sur des valeurs financières |
-| Horodatages en temps universel | Le fuseau métier est traité applicativement |
-| Date d'arrêté distincte de la date d'enregistrement | Sépare temps métier et temps système, condition du rejeu historique |
-
-### 20.3 Matrice de compatibilité
-
-| Moteur | Niveau | Preuve disponible |
-|---|---|---|
-| PostgreSQL 15+ | Cible de référence | Schéma validé, application construite et exécutée |
-| MySQL 8 / MariaDB 10.11+ | Schéma validé | Génération et validation du schéma vertes |
-| SQL Server 2022+ | Schéma validé | Génération et validation du schéma vertes |
-| Oracle 19c+ | À certifier | Nécessite une instance licenciée fournie par la banque |
-| SQLite | Développement uniquement | Ne gère pas la précision décimale ; exclu de la production |
-
-**Un dialecte n'est déclaré certifié qu'après exécution de la suite d'intégration complète sur une instance réelle de ce moteur.** La validation du schéma est une condition nécessaire, pas suffisante — cette distinction est maintenue explicitement, la déclaration de compatibilité sur la seule foi d'une abstraction d'ORM étant l'un des défauts relevés dans les dépôts audités.
-
-## 21. Sécurité, habilitations et piste d'audit
-
-### 21.1 Authentification et rôles
-
-L'authentification s'effectue par clé porteuse, destinée à être remplacée par OAuth 2.1 / OIDC avec le fournisseur d'identité de la banque — le contrat restant identique : identité et rôle dérivés du jeton.
-
-Quatre rôles hiérarchisés : lecteur, analyste, gestionnaire de risque, administrateur. Les clés sont conservées sous forme d'empreinte, jamais en clair, et comparées en temps constant.
-
-**Aucun secret par défaut.** En l'absence de configuration de clés, l'application refuse toute requête authentifiée et lève une erreur explicite au démarrage en production. Une clé de moins de seize caractères est refusée. Ce point répond directement à un défaut constaté dans le dépôt de référence, où un secret de repli littéral était présent dans le code.
-
-### 21.2 Séparation des tâches
-
-Une dérogation est proposée par un acteur et décidée par un autre. L'auto-approbation est refusée techniquement, non par convention. L'amélioration d'un grade défaut est refusée hors processus formel de guérison. L'ampleur ordinaire est plafonnée à deux crans.
-
-### 21.3 Audit transactionnel
-
-Pour toute écriture critique, l'événement d'audit est inscrit **dans la même transaction** que l'opération métier : si l'audit échoue, l'opération est annulée. Une opération ne peut jamais être considérée comme réussie sans sa trace.
-
-Ce point répond à un défaut constaté dans l'un des dépôts audités, où l'audit interceptait toute erreur et se limitait à un message en console, laissant l'opération métier réussir sans trace.
-
-Chaque événement enregistre l'acteur, son rôle, l'action, le type et l'identifiant de ressource, le détail sérialisé de façon stable, et un identifiant de corrélation.
-
-### 21.4 Validation des entrées
-
-Tous les payloads sont validés par schéma strict côté serveur, avec rejet des propriétés inconnues. Un score qualitatif hors de l'ensemble autorisé est refusé ; une valeur transmise sur un critère quantitatif est traitée comme une mesure, jamais comme un score.
+| Droits d'usage | `purpose`, `calibrationStatus`, `pdDisclosed`, usages autorisés et restrictions portés par chaque résultat et par chaque événement sortant |
+| Probabilité de défaut | `pd12m` nul hors bac à sable ; le statut de calibration reste visible pour expliquer l'absence |
+| Idempotence | Clé liée au **contenu** : une même clé présentée avec un payload différent lève un conflit explicite, au lieu de renvoyer silencieusement le résultat d'un autre dossier |
+| Échelles | `gradeScaleId` porté par le résultat ; deux grades d'échelles différentes ne sont pas comparables sans correspondance validée |
+| Statuts | Cinq statuts distincts exposés séparément |
+| Erreurs | Format normalisé RFC 9457, sans trace d'exécution |
 
 ## 22. Parcours utilisateur
 
-L'interface est intégralement consommatrice de la même logique que l'interface de programmation : aucun calcul n'est effectué dans le navigateur.
+Le formulaire reste **généré depuis la version de modèle publiée**. Il affiche désormais, pour chaque critère, la politique appliquée en cas d'information absente — blocage ou catégorie prudente — et la définition CGNC de la grandeur demandée.
 
-**Tableau de bord** — volumétrie, distribution des grades, dernières notations, modèles disponibles et leur statut de calibration.
+L'écran de résultat restitue séparément : le grade moteur, le grade autonome, le grade après support groupe, la classe de confiance, la couverture observée, les exceptions appliquées avec leur contribution centrale, les cinq statuts, et les droits d'usage.
 
-**Contreparties** — référentiel avec dernière notation connue, score et date d'arrêté.
+## 23. Sécurité et exploitation
 
-**Notation** — le formulaire est **généré depuis la version de modèle publiée**, jamais codé en dur. Chaque critère affiche son libellé, sa description, son poids pour le segment sélectionné, son état de donnée, le barème ou les cinq ancrages, et son caractère critique. Le changement de segment recompose immédiatement le formulaire avec les poids et barèmes correspondants.
+Les constats de sécurité relevés par le diagnostic — authentification par fournisseur d'identité, mTLS, contrôle d'accès par attributs, coffre à secrets, supervision, tests d'intrusion, registre des traitements — **n'ont pas été traités dans cette version** : ils relèvent de l'infrastructure de la banque et d'un programme de sécurité, non de la conception du modèle. Ils figurent en annexe B avec leur condition de levée. Le dispositif existant conserve ses garde-fous : aucun secret par défaut, empreintes de clés, comparaison en temps constant, audit transactionnel, validation stricte des entrées, limitation de débit.
 
-**Résultat** — score brut, grade moteur, grade après caps, niveau de confiance, statut de calibration, décomposition par domaine puis par critère, caps appliqués avec leur source, red flags avec leur traitement, avertissements et motifs de blocage.
+## 24. Tests et preuves d'exécution
 
-**Modèles** — consultation de la configuration exécutée : pondérations par domaine et par critère, échelle interne, caps et red flags. Ce que l'utilisateur consulte est exactement ce que le moteur applique.
+| Contrôle | Résultat |
+|---|---|
+| Contrôle de types | 0 erreur |
+| Analyse statique | 0 erreur |
+| Tests | 165 tests, 165 passés |
+| Vérificateur d'alignement base ↔ code ↔ contrat ↔ interface ↔ documentation | aucune divergence |
+| Construction de production | réussie |
 
-**Méthodologie** — rappel permanent de la séparation des cinq finalités, de l'ordre de calcul et du statut de calibration.
-
-Le bandeau de bas de page rappelle en permanence que le modèle est un seed expert non calibré et que ses seuils ne constituent ni des règles de Bank Al-Maghrib ni des paramètres IFRS 9.
-
-## 23. Déploiement et exploitation
-
-### 23.1 Modes de déploiement
-
-**Démonstration locale en une commande** — `docker compose up --build` démarre PostgreSQL auto-hébergé, exécute la migration comme tâche séparée et démarre l'application.
-
-**Sur site et cloud privé** — image conteneurisée exécutée sous un utilisateur non privilégié, avec sonde de santé intégrée, configurable par variables d'environnement sans reconstruction.
-
-**Hors ligne** — l'image ne dépend d'aucun service en ligne à l'exécution.
-
-Aucune dépendance obligatoire à un fournisseur de plateforme ou de base de données managée n'est introduite.
-
-### 23.2 Configuration
-
-Les secrets, la configuration technique, les politiques métier, les modèles validés et les référentiels sont séparés. L'application refuse de démarrer si un secret critique manque ou si un modèle publié est invalide.
-
-### 23.3 Intégration continue
-
-La chaîne exécute la génération du client de persistance, le contrôle de types, l'analyse statique, les tests, la construction, puis la validation du schéma sur les quatre dialectes cibles.
-
-Ce point répond à un défaut constaté dans le dépôt audité, où le workflow appelait un script inexistant : la chaîne était verte sans avoir jamais exécuté le contrôle de types.
-
-## 24. Stratégie de tests et preuves d'exécution
-
-### 24.1 Couverture actuelle
-
-Quarante-six tests couvrent : la validation des configurations de modèle (sommes de poids par segment et par domaine, exhaustivité des barèmes, détection de trous et d'incohérences d'inclusivité) ; les vecteurs d'agrégation exacts ; les bornes de barème une à une, y compris les valeurs immédiatement inférieure et supérieure ; la monotonie ; la segmentation dans tous ses cas de figure, y compris la primauté du chiffre d'affaires groupe et le blocage sur segment indéterminable ; les caps structurels et de confiance, isolés et combinés ; les red flags bloquants et non bloquants ; le défaut forcé ; la distinction entre non applicable et manquant ; le refus d'un score fourni par le client sur un critère quantitatif ; la reproductibilité.
-
-### 24.2 Preuves d'exécution
-
-| Contrôle | Commande | Résultat |
-|---|---|---|
-| Contrôle de types | `npm run type-check` | 0 erreur |
-| Tests | `npm test` | 46 tests, 46 passés |
-| Construction | `npm run build` | 20 routes compilées |
-| Schéma PostgreSQL | `DATABASE_PROVIDER=postgresql npx prisma validate` | valide |
-| Schéma MySQL | `DATABASE_PROVIDER=mysql npx prisma validate` | valide |
-| Schéma SQL Server | `DATABASE_PROVIDER=sqlserver npx prisma validate` | valide |
-| Schéma SQLite | `DATABASE_PROVIDER=sqlite npx prisma validate` | valide |
-| Idempotence du générateur de schéma | cycle sur quatre dialectes | annotations intégralement restaurées |
-
-### 24.3 Tests restant à produire
-
-Tests d'intégration sur instances réelles pour chaque base cible ; tests de contrat d'interface ; tests de charge sur les objectifs de latence et de traitement de masse ; tests de sécurité automatisés sur la matrice d'habilitations, l'accès horizontal, le rejeu de notification et d'idempotence ; tests réglementaires, conditionnés à la validation du corpus.
+La suite de tests couvre désormais explicitement les constats : constance du poids total, impossibilité qu'une information absente améliore un score, refus d'une non-applicabilité non déclarée, porte de couverture, indépendance du grade et de la confiance, précédence des exceptions après le grade moteur, routage, séparation des statuts, non-comparabilité des échelles, non-exposition de la probabilité de défaut, méthode de support groupe, matérialité ESG.
 
 ---
 
-# Partie V — Gouvernance
+# Partie VI — Calibration sur portefeuille simulé
 
-## 25. Calibration statistique et passage au modèle challenger
+## 25. Ce que l'exercice établit, et ce qu'il n'établit pas
 
-### 25.1 Construction du jeu de données
+La chaîne de calibration a été réexécutée intégralement sur les échelles de la version 3, pour les deux modèles. **L'objet n'est pas d'obtenir des probabilités** : il est de vérifier que la chaîne fonctionne, que l'échelle ordonne correctement le risque, et que la batterie de validation sait détecter un défaut de calibration. Les scores ne sont pas simulés : le simulateur produit des données d'entrée, et c'est le moteur réel qui en tire un score et un grade.
 
-Constituer un jeu de données par date d'observation, avec une performance mesurée à douze mois selon une définition de défaut approuvée. Conserver au minimum des échantillons de développement, de validation et hors période. Documenter les changements de politique et les biais d'acceptation.
+## 26. Résultats
 
-Analyser séparément les segments TPE, PME et GE, puis tester si un regroupement avec interactions est plus robuste.
+| Modèle standard | Effectif | PD | | Modèle comportemental | Effectif | PD |
+|---|---:|---:|---|---|---:|---:|
+| STD-P1 | 1 448 | 0,158 % | | TPE-B1 | 1 645 | 0,479 % |
+| STD-P2 | 1 964 | 0,325 % | | TPE-B2 | 2 112 | 1,263 % |
+| STD-P3 | 2 688 | 0,708 % | | TPE-B3 | 2 046 | 2,888 % |
+| STD-P4 | 2 962 | 1,304 % | | TPE-B4 | 1 602 | 5,474 % |
+| STD-P5 | 2 853 | 2,266 % | | TPE-B5 | 1 304 | 9,726 % |
+| STD-P6 | 2 668 | 4,002 % | | TPE-B6 | 910 | 24,698 % |
+| STD-P7 | 2 458 | 7,893 % | | | | |
+| STD-P8 | 1 923 | 16,110 % | | | | |
 
-### 25.2 Étapes du passage
+Pouvoir discriminant : Gini 0,618 en développement, 0,619 hors échantillon, 0,642 hors période pour le modèle standard ; 0,623 / 0,584 / 0,592 pour le modèle comportemental.
 
-1. tester la qualité, le taux de valeurs manquantes et la stabilité de chaque variable ;
-2. mesurer le pouvoir discriminant univarié et vérifier le sens économique ;
-3. construire des bandes monotones et stables ;
-4. tester corrélations et colinéarité ;
-5. estimer une grille de score logistique transparente ;
-6. comparer au score expert et expliquer les divergences ;
-7. calibrer la tendance centrale et les probabilités par grade ;
-8. ajouter une marge de prudence documentée ;
-9. réaliser la validation indépendante et le passage en comité modèles ;
-10. déployer d'abord en challenger, en mode fantôme.
+## 27. Trois enseignements
 
-### 25.3 Segment des grandes entreprises
+**Les points de masse ont disparu.** En version 2, deux grades concentraient la moitié du portefeuille et le score moyen n'était pas monotone dans l'échelle, parce que le plafond de confiance y déversait des dossiers bien notés. La suppression de ce plafond et la réduction du nombre de grades produisent une distribution régulière et une progression de probabilité de défaut strictement monotone sur les deux modèles.
 
-Le segment GE produit structurellement trop peu de défauts pour une estimation classique. Traiter explicitement ce cas par regroupement avec test d'homogénéité, information externe validée avec justification de transposabilité, approche hiérarchique ou bayésienne, estimation par intervalle avec borne haute prudente, et marge de prudence croissante avec l'incertitude.
+**Plus aucun grade n'est indistinguable.** La version 2 fusionnait G6 et G7 sur le modèle comportemental : la régression isotone leur attribuait la même probabilité, et la comparaison des deux proportions ne rejetait pas l'égalité. Sur les échelles de la version 3, aucune fusion n'apparaît — le contrôle est automatisé et vert.
 
-Documenter le nombre de défauts par grade et par génération : **un tableau de calibration sans effectifs est irrecevable.** Ne jamais extrapoler une probabilité sur un grade sans défaut observé sans marge documentée.
+**Les deux modèles ne sont pas équivalents, et cela se mesure.** Le meilleur grade du modèle standard porte une probabilité de 0,16 %, celui du modèle comportemental 0,48 % — trois fois plus. Le pire grade : 16,1 % contre 24,7 %. Afficher le même libellé pour les deux échelles aurait affirmé une équivalence que les données contredisent. C'est la justification empirique du constat C03.
 
-### 25.4 Répétition à blanc sur portefeuille simulé
+Ces trois résultats portent sur des **données simulées**. Ils valident la chaîne, pas le niveau du risque.
 
-La chaîne de calibration décrite ci-dessus a été exécutée intégralement sur un portefeuille **simulé**, avant toute disponibilité de défauts observés. L'objet n'est pas d'obtenir des probabilités : il est de s'assurer que la chaîne fonctionne, que l'échelle ordonne correctement le risque, et que la batterie de validation sait détecter un défaut de calibration lorsqu'il y en a un. Elle a été exécutée sur les **deux modèles**, chacun avec sa propre calibration : les deux grilles n'observent pas la même chose — flux bancaires pour le modèle TPE comportemental, états financiers pour le modèle standard — et ne produisent pas la même distribution de grades. Une calibration transposée de l'un à l'autre serait indéfendable. Les rapports détaillés figurent en annexe (`docs/06-rapport-calibration-corp-std-v1.md` et `docs/06-rapport-calibration-corp-tpe-behav-v1.md`).
+---
 
-Deux garde-fous méthodologiques structurent l'exercice.
+# Partie VII — Gouvernance et feuille de route
 
-**Les scores ne sont pas simulés.** Le simulateur produit des données d'entrée — ratios, ancrages qualitatifs, flags structurels, qualité de l'information — et c'est le moteur réel qui en tire un score et un grade. Simuler directement un score puis lui associer une probabilité aurait rendu l'exercice circulaire : il aurait vérifié l'hypothèse posée, pas le modèle.
+## 28. Portes de décision
 
-**Le statut de calibration reste distinct.** Une probabilité issue de données simulées porte le statut `CALIBRATED_SYNTHETIC`, jamais `CALIBRATED`. La distinction est propagée jusqu'au contrat d'interface, à l'instantané persisté et à l'écran de résultat : aucun système aval ne peut confondre les deux.
+La trajectoire du diagnostic est conservée. Cette version livre l'essentiel du contenu de la porte P1 et une partie de P2.
 
-Trois enseignements de portée générale en sont ressortis.
+| Porte | Objet | État |
+|---|---|---|
+| P0 — Sécuriser | Restrictions d'usage, paquet de preuve, corpus, gouvernance | Restrictions d'usage **techniquement imposées** ; paquet de preuve à produire ; corpus et gouvernance à la banque |
+| P1 — Refondre | Routage, données, échelles, ordre de calcul, double comptage, CGNC, interface | **Livré** dans cette version |
+| P2 — Construire | Moteur remédié, ingestion, identité/groupe, qualité de données, tests, observabilité | Moteur et tests livrés ; ingestion, service d'identité et observabilité à construire |
+| P3 — Piloter | Mode fantôme TPE/PME, double notation, accord inter-analystes | À conduire |
+| P4 — Calibrer | Historique, reconstruction, champion/challenger, validation hors période | À conduire — condition de toute probabilité de défaut |
+| P5 — Réglementer | Moteurs classification, IFRS 9, actifs pondérés | À construire après validation du corpus |
+| P6 — Déployer | Déploiement progressif, limites, surveillance, alerte précoce | À conduire |
 
-**La probabilité doit être calibrée sur le grade, non sur le score.** Le grade final intègre les caps, qui déplacent une contrepartie vers le bas sans toucher à son score brut. Le score moyen n'est donc pas monotone dans l'échelle : sur le portefeuille simulé, le score moyen de G4 dépasse celui de G3, et celui de G7 dépasse celui de G6, parce que ces grades rassemblent des dossiers bien notés mais plafonnés. Le risque, lui, reste monotone. Dériver la probabilité d'une courbe du score réaffecterait à ces dossiers la probabilité de leur score et annulerait l'effet du cap.
+## 29. Décisions demandées
 
-**Les caps de confiance créent deux points de masse dans l'échelle.** G4 et G7 rassemblent à eux seuls la moitié du portefeuille, et la majorité des dossiers qui s'y trouvent y ont été **déplacés** par un cap de qualité d'information : 61 % en G4 et 55 % en G7 pour le modèle standard, 65 % et 61 % pour le modèle TPE. Les autres grades ne sont pratiquement pas touchés par les caps. C'est le comportement voulu, mais il a une conséquence opérationnelle : améliorer la collecte d'information déplacerait davantage de dossiers que réviser les pondérations.
-
-**Sur le modèle TPE, deux grades ne se distinguent plus.** La régression isotone fusionne G6 et G7 à une même probabilité. Le cap de confiance déverse dans G7 des dossiers dont le score moyen (73,8) dépasse celui de G6 (67,5), au point que les taux de défaut des deux grades ne diffèrent plus de façon détectable — la comparaison des deux proportions donne p = 0,27 en développement et p = 0,59 hors période. Ce n'est pas un défaut de la calibration : c'est le constat qu'une distinction de grade ne porte plus de différence de risque. Deux issues relèvent du comité modèles : revoir ce qui alimente ces grades, ou les fusionner dans l'échelle.
-
-**Le test d'adéquation usuel est inadapté à un système de notation.** Le test de Hosmer-Lemeshow découpe la population en déciles de probabilité prédite ; or celle-ci ne prend qu'une valeur par grade. Un même grade se retrouve scindé en groupes de probabilité identique dont les taux observés diffèrent par le seul hasard, et le test rejette pour une mauvaise raison. Le test retenu groupe par grade.
-
-## 26. Validation indépendante et surveillance
-
-Indicateurs minimaux : pouvoir discriminant avec intervalles de confiance ; score de Brier et log-vraisemblance ; ordonnée à l'origine et pente de calibration, rapport observé sur attendu ; taux de défaut par grade et monotonie ; matrices de migration et stabilité ; indices de stabilité de population et de caractéristiques ; performance par segment, secteur, région et qualité de donnée ; taux, sens, motifs et performance des dérogations ; sensibilité et robustesse ; analyse de biais et de variables de substitution illicites ; comparaison champion-challenger.
-
-Des zones de surveillance peuvent être proposées, mais doivent être adaptées au portefeuille et **approuvées par la banque**. Un seuil générique de place ne remplace ni l'appétence au risque de l'établissement ni l'analyse de ses intervalles de confiance.
-
-## 27. Fréquences de revue
-
-| Élément | Fréquence |
-|---|---|
-| Actualisation de la note TPE et PME | Annuelle, ou sur événement significatif |
-| Actualisation de la note GE | Annuelle au minimum, revue intermédiaire selon exposition |
-| Comportement et alerte précoce | Mensuelle ou plus fréquente selon les systèmes |
-| Référentiel sectoriel | Trimestrielle à semestrielle selon volatilité |
-| Surveillance du modèle | Trimestrielle, synthèse annuelle |
-| Contrôle a posteriori des probabilités de défaut | Annuel, avec générations suffisantes |
-| Recalibration | Sur déclencheur ou périodicité approuvée |
-| Validation indépendante complète | Selon matérialité et politique modèle, et après tout changement majeur |
-| Revue des dérogations et des caps | Trimestrielle |
-| Revue des règles réglementaires | À chaque nouveau texte ou date d'effet, et au moins annuellement |
-
-## 28. Décisions du comité modèles avant pilote
-
-1. valider le périmètre et les modèles dédiés ;
-2. confirmer la segmentation et la définition du groupe ;
-3. approuver la définition du défaut et de la guérison ;
-4. valider les formules et retraitements financiers ;
-5. challenger les poids et seuils sur le portefeuille ;
-6. décider entre modèle TPE standard et comportemental ;
-7. approuver les caps, red flags et politiques de données manquantes ;
-8. valider l'échelle interne et les règles de dérogation ;
-9. approuver le plan de calibration et de validation indépendante ;
-10. confirmer la séparation des cinq moteurs ;
-11. valider les sources de données et les habilitations ;
-12. autoriser un pilote en mode fantôme avant tout usage contraignant.
+1. Prendre acte que les huit constats critiques sont traités dans la conception, et mandater la revue indépendante de niveau E3 qui seule peut le confirmer sur pièces.
+2. Valider ou corriger les arbitrages structurants du journal des décisions, notamment : grades de défaut communs, granularité provisoire à huit et six grades, seuils de couverture, route jeune entreprise.
+3. Confirmer les seuils de segmentation sur le corpus Bank Al-Maghrib applicable, avec date d'effet — ils restent non opposables.
+4. Approuver la politique de défaut, de guérison et de rechute proposée.
+5. Approuver le dictionnaire CGNC et les conventions de retraitement, conjointement Finance et Risques.
+6. Financer le peuplement du référentiel sectoriel NMA 2010 × région et la bibliothèque de scénarios.
+7. Décider du traitement des jeunes entreprises, aujourd'hui routées hors grille.
+8. Maintenir l'interdiction de toute probabilité de défaut, master scale commune ou usage réglementaire avant calibration sur défauts observés et validation indépendante.
 
 ---
 
 # Annexes
 
-## Annexe A — Vecteurs de contrôle chiffrés
+## Annexe A — Vecteurs de contrôle
 
-Ces vecteurs sont exacts et vérifiables par exécution. Ils constituent le socle de non-régression du moteur.
+Exacts et vérifiables par exécution ; ils constituent le socle de non-régression du moteur.
 
 | # | Objet | Attendu |
 |---|---|---|
 | 1 | Agrégation du domaine D1 sur TPE, scores 75/50/50/75/50/75/50/50 | 61,00 |
-| 2 | Agrégation globale TPE, domaines 61/60/82/65/70/75/50 | 68,75 → G6 |
-| 3 | Cap structurel sur score 69,10 avec couverture de dette insuffisante | brut 69,10 conservé, moteur G6, final G9 |
-| 4 | Confiance sur composantes 75/100/75/100 | 83,75 → niveau moyen → cap G4 |
-| 5 | Agrégation globale GE, domaines 78/75/80/70/75/90/60 | 75,65 → G4 |
-| 6 | Bornes du levier TPE | 1,0 → 100 ; 1,0001 → 75 ; 2,0 → 75 ; 2,0001 → 50 ; 3,5 → 50 ; 3,5001 → 25 ; 5,0 → 25 ; 5,0001 → 0 |
-| 7 | Deux critères non applicables sur quatre, les autres à 50 | score de domaine 50, poids applicable réduit, score global inchangé |
+| 2 | Agrégation globale TPE, domaines 61/50/75/50/75/75/50 | 64,50 → STD-P5 |
+| 3 | Poids total appliqué, avec ou sans donnée manquante | 10 000 points de base dans les deux cas |
+| 4 | Effacement d'un critère à 50 | score strictement inférieur ; jamais supérieur |
+| 5 | Couverture du service de dette < 1 en base | grade moteur STD-P5 inchangé, grade autonome STD-P7, score brut conservé |
+| 6 | Confiance ramenée de 100 à 75 | grade **inchangé**, classe B |
+| 7 | Confiance à 25 | aucun grade, score brut 64,50 conservé |
+| 8 | Bornes du levier TPE | 1,0 → 100 ; 1,0001 → 75 ; 2,0 → 75 ; 2,0001 → 50 ; 3,5 → 50 ; 3,5001 → 25 ; 5,0 → 25 ; 5,0001 → 0 |
+| 9 | Support groupe, quatre conditions réunies, quatre crans demandés | deux crans appliqués, note autonome conservée |
+| 10 | Risque physique non matériel | poids de D7.1 transféré à D7.3, poids du domaine inchangé |
+| 11 | Notation hors bac à sable | probabilité de défaut nulle, finalité PILOT_SHADOW |
 
-## Annexe B — Registre des écarts et travaux futurs
+## Annexe B — Constats non traités dans cette version
 
-| # | Écart ou travail | Nature | Condition de levée |
+| Réf. | Constat | Motif | Condition de levée |
 |---|---|---|---|
-| 1 | Seuils de segmentation non confirmés | Hypothèse | Extraction depuis le corpus applicable et validation Conformité |
-| 2 | Probabilité de défaut non calibrée | Limitation assumée | Historique suffisant, calibration, validation indépendante |
-| 3 | Moteurs de décision, classification, IFRS 9 et capital non implémentés | Périmètre | Validation du corpus réglementaire (Porte 1) |
-| 4 | Référentiel sectoriel non alimenté | Dépendance | Construction et approbation du référentiel daté |
-| 5 | Méthode de support groupe spécifiée mais non implémentée | Périmètre | Approbation de la grille de relèvement |
-| 6 | Percentiles sectoriels référencés dans les grilles qualitatives | Dépendance | Alimentation du référentiel avec effectifs et périodes |
-| 7 | Oracle non certifié | Certification | Instance licenciée fournie par la banque |
-| 8 | Authentification par clé, non OIDC | Transitoire | Raccordement au fournisseur d'identité de la banque |
-| 9 | Imports de masse et connecteurs non implémentés | Périmètre | Phase 4 |
-| 10 | Alerte précoce non implémentée | Périmètre | Phase 4 |
-| 11 | Multilinguisme arabe et droite-à-gauche non implémenté | Périmètre | Phase 4 |
-| 12 | Tests d'intégration sur instances réelles non exécutés | Preuve | Mise à disposition des environnements de test |
+| C01 | Revue indépendante du code et des preuves | Une revue indépendante ne peut pas être conduite par l'auteur du code | Mandat de revue E3 sur le dépôt et l'environnement de la banque |
+| C05 | Moteurs classification, IFRS 9, actifs pondérés | Supposent le corpus Bank Al-Maghrib autoritatif, non disponible. Coder une règle réglementaire sans son texte serait exactement le défaut que le diagnostic reproche | Obtention du corpus, matrice article-règle-test, validation Juridique |
+| H04 / H08 | Peuplement du référentiel sectoriel et des scénarios | Suppose les distributions OMTPME et du portefeuille, et une gouvernance sectorielle | Publication des distributions, comité sectoriel |
+| H10 | Sécurité : OIDC, mTLS, contrôle par attributs, coffre, supervision, tests d'intrusion, registre CNDP | Relève de l'infrastructure et d'un programme de sécurité | Programme de sécurité et raccordement au fournisseur d'identité |
+| H11 | Certification multi-bases sur instances réelles | Aucune instance MySQL, SQL Server ou Oracle disponible | Mise à disposition des environnements |
+| H13 | Imports de masse, connecteurs, alerte précoce | Supposent les systèmes sources et leurs conventions d'échange | Cadrage des interfaces avec la DSI |
+| M02 | Objectifs de reprise, haute disponibilité, exercices de restauration | Relève de l'exploitation | Programme de production |
+| M03 | Accord inter-analystes | Suppose un pilote et des dossiers étalons | Porte P3 |
+| M04 | Interface arabe et droite-à-gauche | Chantier d'internationalisation complet | Priorisation produit |
+| A.3 | Ré-estimation des pondérations | Aucune donnée observée. Optimiser des poids sur des données simulées produirait les poids du simulateur, pas ceux du risque | Porte P4 |
 
----
+## Annexe C — Ce qui reste vrai de la version 2
 
-**Conclusion.** Cette version 2.0 est suffisamment détaillée pour paramétrer le moteur, construire les écrans, préparer les imports et créer les cas de référence. Elle devient un dispositif bancaire de production uniquement après calibration, validation indépendante, approbation réglementaire et interne, et pilote contrôlé.
+Les fondements conservés : séparation des cinq finalités, grilles discrètes 0/25/50/75/100, explicabilité par contribution, conservation du score brut, versionnement et rejouabilité, horodatage métier distinct du temps système, dérogation sous double validation, moteur pur et déterministe, configuration entièrement externalisée, source de schéma unique multi-dialecte.
+
+**Conclusion.** Cette version corrige la conception là où le diagnostic a montré qu'elle produisait des résultats trompeurs ou incalibrables. Elle ne rapproche pas le dispositif d'un usage réglementaire : elle le rend honnête sur ce qu'il mesure, et calibrable le jour où l'historique existera. La décision prudente reste celle du diagnostic — remédier, piloter en parallèle, valider indépendamment, puis déployer progressivement.

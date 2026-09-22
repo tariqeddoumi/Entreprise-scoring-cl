@@ -1,11 +1,25 @@
+import { createHash } from "node:crypto";
 import { computeRating } from "@/core/engine";
+import type { EngineOptions } from "@/core/engine";
 import type { RatingInput, RatingResult } from "@/core/types";
 import { getModel } from "@/models";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
+import { config } from "./env";
 import { prisma } from "./prisma";
 import { stableStringify } from "./api-utils";
 import { publishEvent } from "./webhooks";
+
+/**
+ * Options du moteur dérivées de l'environnement.
+ *
+ * Le moteur est pur et ne lit jamais l'environnement : la décision d'exposer
+ * ou non une probabilité de défaut non calibrée est prise ICI, à la frontière,
+ * et transmise explicitement (constat C02).
+ */
+export function engineOptions(): EngineOptions {
+  return { syntheticPdAllowed: config().allowSyntheticPd };
+}
 
 export class RatingServiceError extends Error {
   constructor(
@@ -22,7 +36,7 @@ export function simulateRating(input: RatingInput): RatingResult {
   if (!model) {
     throw new RatingServiceError(404, `Modèle inconnu : ${input.modelId}`);
   }
-  return computeRating(model, input);
+  return computeRating(model, input, engineOptions());
 }
 
 export interface PersistedRun {
@@ -61,12 +75,20 @@ export async function executeRatingRun(
     throw new RatingServiceError(404, `Contrepartie inconnue : ${counterpartyId}`);
   }
 
+  // Idempotence liée au CONTENU (constat M01) : une même clé présentée avec un
+  // payload différent est un conflit, pas un rejeu. Sans ce contrôle, un
+  // appelant qui réutilise sa clé par erreur reçoit silencieusement le résultat
+  // d'un autre dossier.
+  const payloadHash = createHash("sha256")
+    .update(stableStringify({ counterpartyId, input }))
+    .digest("hex");
+
   if (idempotencyKey) {
-    const replay = await findReplay(idempotencyKey);
+    const replay = await findReplay(idempotencyKey, payloadHash);
     if (replay) return replay;
   }
 
-  const result = computeRating(model, input);
+  const result = computeRating(model, input, engineOptions());
 
   const persist = () =>
     prisma.$transaction(async (tx) => {
@@ -78,11 +100,16 @@ export async function executeRatingRun(
           engineVersion: result.engineVersion,
           asOfDate: result.asOfDate,
           segment: result.segment,
-          outcome: result.outcome,
+          outcome: result.ratingStatus,
           rawScore: result.rawScore,
-          confidenceScore: result.confidenceScore,
+          confidenceScore: result.confidence.score,
           engineGrade: result.engineGrade,
-          cappedGrade: result.cappedGrade,
+          // Grade produit par le moteur, support groupe compris : c'est la note
+          // sur laquelle porte une dérogation, et elle n'est jamais réécrite.
+          // Y stocker la note autonome faussait l'écart en crans dès qu'un
+          // support groupe s'appliquait, et faisait passer un simple relèvement
+          // de groupe pour une dérogation approuvée à l'affichage.
+          cappedGrade: result.finalGrade,
           finalGrade: result.finalGrade,
           inputSnapshot: stableStringify(input),
           resultSnapshot: stableStringify(result),
@@ -110,7 +137,7 @@ export async function executeRatingRun(
           counterpartyId,
           modelId: result.modelId,
           modelVersion: result.modelVersion,
-          outcome: result.outcome,
+          outcome: result.ratingStatus,
           rawScore: result.rawScore,
           finalGrade: result.finalGrade,
           asOfDate: result.asOfDate,
@@ -130,7 +157,7 @@ export async function executeRatingRun(
     // contrainte d'unicité. Le comportement attendu est de rejouer le résultat
     // déjà enregistré, jamais de renvoyer une erreur.
     if (idempotencyKey && isUniqueViolation(e)) {
-      const replay = await findReplay(idempotencyKey);
+      const replay = await findReplay(idempotencyKey, payloadHash);
       if (replay) return replay;
     }
     throw e;
@@ -141,7 +168,7 @@ export async function executeRatingRun(
   // remet jamais en cause le résultat métier déjà persisté et audité.
   void publishEvent({
     type:
-      result.outcome === "SCORED" || result.outcome === "DEFAULT_GRADE"
+      result.ratingStatus === "RATED" || result.ratingStatus === "DEFAULTED"
         ? "rating.completed"
         : "rating.blocked",
     data: {
@@ -149,22 +176,54 @@ export async function executeRatingRun(
       counterpartyId,
       modelId: result.modelId,
       modelVersion: result.modelVersion,
-      outcome: result.outcome,
+      outcome: result.ratingStatus,
       segment: result.segment,
       rawScore: result.rawScore,
+      gradeScaleId: result.gradeScaleId,
       finalGrade: result.finalGrade,
       asOfDate: result.asOfDate,
       pdStatus: result.pdStatus,
+      // Les droits d'usage voyagent avec l'événement : un consommateur aval
+      // n'a pas à deviner ce qu'il a le droit de faire du grade (constat M01).
+      purpose: result.usageRights.purpose,
+      permittedUses: result.usageRights.permittedUsesFr,
+      restrictions: result.usageRights.restrictionsFr,
     },
   }).catch(() => undefined);
 
   return { runId: run.id, result, replayed: false };
 }
 
-/** Relit un run déjà enregistré sous une clé d'idempotence donnée. */
-async function findReplay(idempotencyKey: string): Promise<PersistedRun | null> {
+/**
+ * Relit un run déjà enregistré sous une clé d'idempotence donnée.
+ *
+ * Le rejeu n'est accordé que si le contenu présenté est identique à celui qui a
+ * produit le run : une même clé sur un payload différent lève un conflit
+ * explicite (409), conformément au constat M01.
+ */
+async function findReplay(
+  idempotencyKey: string,
+  payloadHash: string
+): Promise<PersistedRun | null> {
   const existing = await prisma.ratingRun.findUnique({ where: { idempotencyKey } });
   if (!existing) return null;
+
+  const storedInput = existing.inputSnapshot;
+  const storedHash = createHash("sha256")
+    .update(
+      stableStringify({
+        counterpartyId: existing.counterpartyId,
+        input: JSON.parse(storedInput) as RatingInput,
+      })
+    )
+    .digest("hex");
+  if (storedHash !== payloadHash) {
+    throw new RatingServiceError(
+      409,
+      "Conflit d'idempotence : cette clé a déjà été utilisée avec un contenu différent. Utiliser une clé distincte pour un dossier distinct."
+    );
+  }
+
   return {
     runId: existing.id,
     result: JSON.parse(existing.resultSnapshot) as RatingResult,

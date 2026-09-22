@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compareRuns } from "@/core/compare";
-import type { RatingResult } from "@/core/types";
+import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
+import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -45,13 +46,19 @@ export default async function CounterpartyPage({
   const { counterparty, runs } = data;
 
   // Attribution de l'écart entre les deux dernières notations exploitables.
+  // Deux instantanés ne se comparent que s'ils ont la même forme : un
+  // instantané de moteur antérieur ne porte ni exceptions ni couverture, et le
+  // comparer reviendrait à attribuer un écart à des champs absents.
   const scored = runs.filter((r) => r.rawScore !== null);
+  const previousRead = scored.length >= 2 ? readResultSnapshot(scored[1].resultSnapshot) : null;
+  const currentRead = scored.length >= 2 ? readResultSnapshot(scored[0].resultSnapshot) : null;
   const comparison =
-    scored.length >= 2
-      ? compareRuns(
-          JSON.parse(scored[1].resultSnapshot) as RatingResult,
-          JSON.parse(scored[0].resultSnapshot) as RatingResult
-        )
+    previousRead?.kind === "V3" && currentRead?.kind === "V3"
+      ? compareRuns(previousRead.result, currentRead.result)
+      : null;
+  const comparisonSkippedFr =
+    scored.length >= 2 && comparison === null
+      ? "Comparaison indisponible : l'une des deux notations provient d'un moteur antérieur et n'a pas la même structure."
       : null;
 
   return (
@@ -76,6 +83,15 @@ export default async function CounterpartyPage({
             .join(" · ")}
         </p>
       </div>
+
+      {comparisonSkippedFr && (
+        <section className="card" style={{ padding: 16 }}>
+          <h2 style={{ fontWeight: 600, marginBottom: 8 }}>
+            Évolution depuis la notation précédente
+          </h2>
+          <p className="muted" style={{ fontSize: 13 }}>{comparisonSkippedFr}</p>
+        </section>
+      )}
 
       {comparison && (
         <section className="card" style={{ padding: 16 }}>
@@ -168,14 +184,16 @@ export default async function CounterpartyPage({
                   <td>{r.asOfDate}</td>
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore !== null ? Number(r.rawScore).toFixed(2) : "—"}</td>
-                  <td>{r.engineGrade ?? "—"}</td>
+                  <td><GradeBadge grade={r.engineGrade} /></td>
                   <td>
-                    {r.finalGrade ?? "—"}
+                    <GradeBadge grade={r.finalGrade} />
                     {r.finalGrade !== r.cappedGrade && r.finalGrade && (
                       <span className="muted" style={{ fontSize: 11 }}> (dérogé)</span>
                     )}
                   </td>
-                  <td className="muted" style={{ fontSize: 12 }}>{r.outcome}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>
+                    <OutcomeLabel outcome={r.outcome} />
+                  </td>
                   <td className="muted" style={{ fontSize: 12 }}>{r.requestedBy}</td>
                   <td>
                     <Link href={`/rating-runs/${r.id}`} style={{ color: "var(--brand)" }}>

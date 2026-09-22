@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { ok, problem } from "@/lib/api-utils";
-import { audit } from "@/lib/audit";
+import { auditWithin } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { counterpartySchema } from "@/lib/schemas";
@@ -48,15 +48,20 @@ export async function POST(req: NextRequest) {
   if (!body.ok) return body.response;
 
   try {
-    const created = await prisma.counterparty.create({ data: body.value });
-    await audit({
-      actor: g.ctx.identity.name,
-      actorRole: g.ctx.identity.role,
-      action: "COUNTERPARTY_CREATED",
-      resourceType: "Counterparty",
-      resourceId: created.id,
-      detail: { name: created.name, ice: created.ice },
-      correlationId: g.ctx.correlationId,
+    // Même règle que l'action serveur de l'interface : l'écriture métier et son
+    // audit sont indissociables, donc dans une seule transaction.
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.counterparty.create({ data: body.value });
+      await auditWithin(tx, {
+        actor: g.ctx.identity.name,
+        actorRole: g.ctx.identity.role,
+        action: "COUNTERPARTY_CREATED",
+        resourceType: "Counterparty",
+        resourceId: row.id,
+        detail: { name: row.name, ice: row.ice },
+        correlationId: g.ctx.correlationId,
+      });
+      return row;
     });
     return ok(created, 201);
   } catch (e) {

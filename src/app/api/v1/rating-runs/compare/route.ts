@@ -1,9 +1,9 @@
 import type { NextRequest } from "next/server";
 import { compareRuns } from "@/core/compare";
-import type { RatingResult } from "@/core/types";
 import { ok, problem } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { guard, readJsonBody } from "@/lib/route-guard";
+import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { compareRequestSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
@@ -48,10 +48,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const comparison = compareRuns(
-    JSON.parse(previous.resultSnapshot) as RatingResult,
-    JSON.parse(current.resultSnapshot) as RatingResult
-  );
+  // Les instantanés sont immuables : la base contient donc des résultats
+  // produits par des moteurs antérieurs, dont la forme n'est plus celle que la
+  // comparaison déréférence. Refuser explicitement vaut mieux qu'une erreur 500
+  // sur un champ absent, et mieux qu'une conversion qui inventerait les champs
+  // manquants.
+  const previousRead = readResultSnapshot(previous.resultSnapshot);
+  const currentRead = readResultSnapshot(current.resultSnapshot);
+  const incomparable = "La comparaison exige deux instantanés de même structure.";
+  if (previousRead.kind !== "V3") {
+    return problem(
+      422,
+      "Instantanés non comparables",
+      `Notation antérieure : ${previousRead.reasonFr} ${incomparable}`
+    );
+  }
+  if (currentRead.kind !== "V3") {
+    return problem(
+      422,
+      "Instantanés non comparables",
+      `Notation courante : ${currentRead.reasonFr} ${incomparable}`
+    );
+  }
+
+  const comparison = compareRuns(previousRead.result, currentRead.result);
 
   return ok({
     previousRunId,

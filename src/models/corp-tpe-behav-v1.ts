@@ -2,6 +2,7 @@ import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
 import { CORP_STD_V1 } from "./corp-std-v1";
+import { DEFAULT_GRADES } from "@/reference/default-policy";
 import calibrationJson from "./calibrations/CORP_TPE_BEHAV_V1-SYNTH-20260824.json";
 
 /**
@@ -43,8 +44,7 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
   },
   {
     code: "B1.2",
@@ -59,12 +59,13 @@ const criteria: CriterionConfig[] = [
       "16–30 jours cumulés, épisodes mensuels ou montant > 10 %",
       "> 30 jours, dépassement permanent, compte bloqué ou absence d'autorisation"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B1.3",
     domainCode: "B1",
+    cgncEntry: "FLUX_BANCAIRES_NETTOYES",
     labelFr: "Mouvements créditeurs vérifiés et tendance",
     descriptionFr:
       "Mouvements créditeurs observés / flux attendus (%). Un compte secondaire ne peut être annualisé sans preuve de la part de flux domiciliée.",
@@ -73,8 +74,7 @@ const criteria: CriterionConfig[] = [
     unit: " %",
     weightsBps: { TPE: 700 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [110, 90, 70, 50]) },
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
   },
   {
     code: "B1.4",
@@ -89,8 +89,8 @@ const criteria: CriterionConfig[] = [
       "> 95 % pendant plus de trois mois ou dépendance au renouvellement",
       "> 100 % non autorisé ou besoin structurel non financé"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B1.5",
@@ -105,22 +105,22 @@ const criteria: CriterionConfig[] = [
       "Incidents récurrents, régularisation tardive ou incident matériel",
       "Incident grave/non régularisé, interdiction ou signal bloquant"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // --- B2 — Capacité par flux (20 %) ---------------------------------------
   {
     code: "B2.1",
     domainCode: "B2",
+    cgncEntry: "SERVICE_DETTE",
     labelFr: "Couverture du service de dette par flux observés",
     type: "QUANTITATIVE",
     direction: "HIGHER_IS_BETTER",
     unit: "x",
     weightsBps: { TPE: 700 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [1.5, 1.3, 1.15, 1.0]) },
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
   },
   {
     code: "B2.2",
@@ -144,8 +144,8 @@ const criteria: CriterionConfig[] = [
         score: 25,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B2.3",
@@ -160,8 +160,8 @@ const criteria: CriterionConfig[] = [
       "16–30 jours débiteurs ou solde < 10 jours de charges",
       "> 30 jours débiteurs ou rupture de trésorerie"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B2.4",
@@ -173,8 +173,8 @@ const criteria: CriterionConfig[] = [
     unit: "x",
     weightsBps: { TPE: 400 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [1.3, 1.15, 1.0, 0.8]) },
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // --- B3 — Activité (18 %) -------------------------------------------------
@@ -191,8 +191,8 @@ const criteria: CriterionConfig[] = [
       "S4 — secteur vulnérable/sous surveillance",
       "S5 — secteur très vulnérable/crise structurelle"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B3.2",
@@ -206,12 +206,13 @@ const criteria: CriterionConfig[] = [
     specialCases: [
       {
         code: "UNDER_2Y_NO_SUPPORT",
-        labelFr: "Moins de deux ans d'activité sans support ni contrat structurant — déclenche le cap CAP01",
+        labelFr:
+          "Moins de deux ans d'activité sans support ni contrat structurant (le dossier est routé hors grille : voir la route jeune entreprise)",
         score: 0,
       },
     ],
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B3.3",
@@ -226,8 +227,8 @@ const criteria: CriterionConfig[] = [
       "Concentration élevée ou dépendance difficilement remplaçable",
       "Concentration critique, mono-client ou mono-source vital"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B3.4",
@@ -242,8 +243,8 @@ const criteria: CriterionConfig[] = [
       "P10–P25",
       "< P10, négative ou non fiable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B3.5",
@@ -258,8 +259,8 @@ const criteria: CriterionConfig[] = [
       "Faible visibilité, carnet non ferme ou churn élevé",
       "Aucune visibilité, carnet artificiel ou arrêt prévisible"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // --- B4 — Management (12 %) -----------------------------------------------
@@ -276,8 +277,8 @@ const criteria: CriterionConfig[] = [
       "Expérience limitée, objectifs non atteints",
       "Incompétence manifeste ou information trompeuse"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B4.2",
@@ -292,8 +293,8 @@ const criteria: CriterionConfig[] = [
       "Dirigeant concentre tout, succession absente",
       "Indisponibilité compromettant immédiatement l'activité"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B4.3",
@@ -308,8 +309,8 @@ const criteria: CriterionConfig[] = [
       "Contrôles faibles, incidents récurrents",
       "Absence de contrôle ou irrégularités"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B4.4",
@@ -324,8 +325,8 @@ const criteria: CriterionConfig[] = [
       "Aucune succession crédible",
       "Continuité immédiatement menacée"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // --- B5 — Transparence et conformité (12 %) --------------------------------
@@ -342,12 +343,13 @@ const criteria: CriterionConfig[] = [
       "Documents expirés ou incomplets",
       "Documents faux/refusés ou activité non autorisée"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B5.2",
     domainCode: "B5",
+    cgncEntry: "FLUX_BANCAIRES_NETTOYES",
     labelFr: "Rapprochement flux / CA déclaré / fiscal",
     descriptionFr: "Écart (%) entre flux bancaires annualisés, CA déclaré et données fiscales.",
     type: "QUANTITATIVE",
@@ -362,8 +364,7 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    missingPolicy: "BLOCK",
-    critical: true,
+    unavailablePolicy: "BLOCK",
   },
   {
     code: "B5.3",
@@ -378,8 +379,8 @@ const criteria: CriterionConfig[] = [
       "Arriérés matériels ou plan fragile",
       "Dette non soutenable ou mesure d'exécution majeure"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
   {
     code: "B5.4",
@@ -394,8 +395,8 @@ const criteria: CriterionConfig[] = [
       "Chaîne de détention opaque",
       "UBO impossible à établir ou blocage KYC"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // --- B6 — Groupe / support (5 %) -------------------------------------------
@@ -412,8 +413,8 @@ const criteria: CriterionConfig[] = [
       "Soutien incertain ou garant lui-même fragile",
       "Groupe en difficulté, ponctions de cash ou soutien promis non honoré"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 
   // --- B7 — ESG / climat (3 %) -----------------------------------------------
@@ -430,8 +431,8 @@ const criteria: CriterionConfig[] = [
       "Exposition élevée, mitigation insuffisante",
       "Activité menacée à court terme sans solution viable"
     ),
-    missingPolicy: "WARN",
-    critical: false,
+    unavailablePolicy: "CONSERVATIVE_SCORE",
+    unavailableScore: 25,
   },
 ];
 
@@ -448,12 +449,41 @@ const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
 
 export const CORP_TPE_BEHAV_V1: ModelConfig = {
   modelId: "CORP_TPE_BEHAV_V1",
-  version: "1.0.0",
+  version: "3.0.0",
   labelFr: "Modèle TPE comportemental — flux bancaires et informations alternatives",
   status: "DRAFT_EXPERT_SEED",
-  effectiveFrom: "2026-08-18",
+  effectiveFrom: "2026-09-17",
   conventionFr: "Score 100 = risque le plus faible ; score 0 = risque le plus élevé.",
   segments: ["TPE"],
+
+  /**
+   * Philosophie propre au modèle comportemental (constats H01 et H07).
+   *
+   * La fenêtre d'observation passe de 12 à 24 mois, cible 36. Douze mois ne
+   * couvrent qu'une seule saison : sur un hôtel de Marrakech, une exploitation
+   * du Souss ou un commerce dépendant du Ramadan, un exercice observé sur douze
+   * mois glissants peut décrire une saison exceptionnelle ou une saison
+   * manquée, sans qu'on puisse les distinguer.
+   */
+  philosophy: {
+    type: "PIT",
+    horizonMonths: 12,
+    observationWindowsMonths: {
+      financialStatements: 0,
+      behavioral: 24,
+      behavioralTarget: 36,
+      sector: 60,
+    },
+    cycleTreatmentFr:
+      "Point-in-time assumé : la grille repose sur des flux et des incidents récents, par construction sensibles au moment du cycle et à la saison. La fenêtre de 24 mois vise à couvrir au moins deux saisons comparables.",
+    migrationRuleFr:
+      "Rafraîchissement mensuel possible sur données comportementales. Toute migration doit pouvoir être expliquée par un mouvement de flux ou d'incident identifiable, jamais par un simple glissement de fenêtre.",
+    refreshRuleFr:
+      "Revue au moins semestrielle, mensuelle sur les dossiers en surveillance rapprochée.",
+    postCutoffEventsFr:
+      "Un incident postérieur à la date d'arrêté déclenche une nouvelle notation, il ne réécrit pas la précédente.",
+  },
+
   domains: [
     { code: "B1", labelFr: "Comportement de crédit" },
     { code: "B2", labelFr: "Capacité par flux" },
@@ -464,14 +494,63 @@ export const CORP_TPE_BEHAV_V1: ModelConfig = {
     { code: "B7", labelFr: "ESG / climat" },
   ],
   criteria,
-  masterScale: CORP_STD_V1.masterScale,
-  structuralCaps: CORP_STD_V1.structuralCaps.filter((c) =>
-    ["CAP01", "CAP03", "CAP04", "CAP09", "CAP10"].includes(c.code)
-  ),
+
+  /**
+   * Échelle PROPRE au modèle comportemental (constat C03).
+   *
+   * Six grades seulement. Le modèle observe des flux bancaires, pas des états
+   * financiers : sa capacité de séparation est structurellement plus faible, et
+   * la calibration synthétique montrait déjà deux grades voisins que les
+   * données ne distinguaient pas. Afficher dix grades donnerait une précision
+   * que l'information ne porte pas.
+   */
+  gradeScale: {
+    scaleId: "TPE-B-2026.1",
+    labelFr: "Échelle provisoire du modèle TPE comportemental",
+    comparableWith: [],
+    status: "PROVISIONAL",
+    bands: [
+      { grade: "TPE-B1", minScore: 85, maxScore: null, labelFr: "Comportement très sain" },
+      { grade: "TPE-B2", minScore: 76, maxScore: 85, labelFr: "Comportement sain" },
+      { grade: "TPE-B3", minScore: 68, maxScore: 76, labelFr: "Comportement acceptable" },
+      { grade: "TPE-B4", minScore: 60, maxScore: 68, labelFr: "Tensions ponctuelles" },
+      { grade: "TPE-B5", minScore: 50, maxScore: 60, labelFr: "Tensions installées" },
+      { grade: "TPE-B6", minScore: null, maxScore: 50, labelFr: "Comportement très dégradé" },
+    ],
+    defaultGrades: DEFAULT_GRADES,
+  },
+
+  /**
+   * Aucune exception non compensatoire (constat C08).
+   *
+   * Les cinq plafonds de la V2 ont tous disparu : la jeune entreprise est
+   * routée hors grille, l'ancienneté de l'information relève de la couverture,
+   * la restructuration relève des moteurs défaut et IFRS 9, et le support
+   * groupe est traité par sa méthode dédiée. Il ne reste que des scores
+   * continus — ce qui rend la grille calibrable.
+   */
+  nonCompensatoryRules: [],
+
   redFlags: CORP_STD_V1.redFlags,
-  confidenceWeights: CORP_STD_V1.confidenceWeights,
-  confidenceCaps: CORP_STD_V1.confidenceCaps,
-  segmentation: CORP_STD_V1.segmentation,
+
+  /**
+   * Confiance : mêmes classes que le modèle standard, mais exigence relevée à
+   * B. Une grille qui repose entièrement sur des flux bancaires ne tolère pas
+   * une information faible : si les flux ne sont pas fiables, il ne reste rien.
+   */
+  confidence: {
+    ...CORP_STD_V1.confidence,
+    minimumClassForRating: "B",
+  },
+
+  /** Couverture exigée plus élevée, pour la même raison. */
+  coverage: {
+    minGlobalObservedBps: 7000,
+    minDomainObservedBps: 4000,
+  },
+
+  groupSupport: CORP_STD_V1.groupSupport,
+  segmentationRulesetId: "SEG-2026.1",
   pdStatus: "UNCALIBRATED",
   calibration: SYNTHETIC_CALIBRATION,
   disclaimerFr: CORP_STD_V1.disclaimerFr,

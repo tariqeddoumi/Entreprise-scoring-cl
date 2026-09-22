@@ -86,13 +86,13 @@ describe("calibration du modèle TPE comportemental", () => {
     }
   });
 
-  it("signale la fusion de G6 et G7, que la régression isotone a rendus indistinguables", () => {
-    // Constat de premier ordre, pas un défaut : sur ce portefeuille le cap de
-    // confiance déverse dans G7 des dossiers mieux notés que ceux de G6, au
-    // point que les deux grades ne se distinguent plus par le risque.
-    const fusions = tiedGrades(CAL_TPE);
-    expect(fusions).toHaveLength(1);
-    expect(fusions[0].grades).toEqual(["G6", "G7"]);
+  it("ne fusionne plus aucun grade depuis la refonte de l'échelle", () => {
+    // En V2, le cap de confiance déversait dans G7 des dossiers mieux notés que
+    // ceux de G6, au point que les deux grades ne se distinguaient plus par le
+    // risque. La suppression du cap (H02) et la réduction à six grades (H03)
+    // ont supprimé le phénomène : chaque grade porte désormais une PD distincte.
+    expect(tiedGrades(CAL_TPE)).toHaveLength(0);
+    expect(tiedGrades(CAL)).toHaveLength(0);
   });
 
   it("restitue une PD via le moteur sur un dossier TPE", () => {
@@ -118,9 +118,9 @@ describe("calibration du modèle TPE comportemental", () => {
         structuralFlags: { companyAgeYears: 9 },
         confidence: { completeness: 100, freshness: 100, provenance: 100, reliability: 100 },
       },
-      "2025-12-31T12:00:00.000Z"
+      { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true }
     );
-    expect(r.outcome).toBe("SCORED");
+    expect(r.ratingStatus).toBe("RATED");
     expect(r.pdStatus).toBe("CALIBRATED_SYNTHETIC");
     expect(r.calibrationId).toBe(CAL_TPE.calibrationId);
     expect(r.pd12m).toBe(CAL_TPE.gradePd.find((g) => g.grade === r.finalGrade)!.pd);
@@ -129,18 +129,18 @@ describe("calibration du modèle TPE comportemental", () => {
 
 describe("affectation de la PD par grade", () => {
   it("renvoie la PD du grade demandé", () => {
-    const g4 = CAL.gradePd.find((g) => g.grade === "G4")!;
-    expect(pdForGrade(CAL, "G4", false)).toBe(g4.pd);
+    const g4 = CAL.gradePd.find((g) => g.grade === "STD-P4")!;
+    expect(pdForGrade(CAL, "STD-P4", false)).toBe(g4.pd);
   });
 
   it("renvoie 1 pour un grade de défaut, quel que soit le grade passé", () => {
-    expect(pdForGrade(CAL, "G1", true)).toBe(1);
+    expect(pdForGrade(CAL, "STD-P1", true)).toBe(1);
     expect(pdForGrade(CAL, null, true)).toBe(1);
   });
 
   it("renvoie null plutôt qu'une valeur par défaut sur un grade inconnu", () => {
     // Une PD inventée est plus dangereuse qu'une PD absente.
-    expect(pdForGrade(CAL, "G42", false)).toBeNull();
+    expect(pdForGrade(CAL, "GRADE_INEXISTANT", false)).toBeNull();
     expect(pdForGrade(CAL, null, false)).toBeNull();
   });
 });
@@ -150,7 +150,7 @@ describe("contrôles d'intégrité", () => {
 
   it("refuse une échelle non monotone", () => {
     const c = base();
-    const i = c.gradePd.findIndex((g) => g.grade === "G5");
+    const i = c.gradePd.findIndex((g) => g.grade === "STD-P5");
     c.gradePd[i].pd = c.gradePd[i - 1].pd / 2;
     expect(validateCalibration(c).join(" ")).toMatch(/monotonie rompue/);
   });
@@ -182,24 +182,24 @@ describe("contrôles d'intégrité", () => {
 
 describe("moteur : restitution de la PD", () => {
   it("produit une PD et le statut SIMULÉE quand une calibration est attachée", () => {
-    const r = computeRating(CORP_STD_V1, dossier(), "2025-12-31T12:00:00.000Z");
-    expect(r.outcome).toBe("SCORED");
+    const r = computeRating(CORP_STD_V1, dossier(), { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true });
+    expect(r.ratingStatus).toBe("RATED");
     expect(r.pdStatus).toBe("CALIBRATED_SYNTHETIC");
     expect(r.pd12m).toBe(CAL.gradePd.find((g) => g.grade === r.finalGrade)!.pd);
     expect(r.calibrationId).toBe(CAL.calibrationId);
   });
 
   it("affecte une PD de 1 à un défaut constaté", () => {
-    const r = computeRating(CORP_STD_V1, dossier({ defaultTriggered: true }), "2025-12-31T12:00:00.000Z");
-    expect(r.outcome).toBe("DEFAULT_GRADE");
+    const r = computeRating(CORP_STD_V1, dossier({ defaultTriggered: true }), { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true });
+    expect(r.ratingStatus).toBe("DEFAULTED");
     expect(r.pd12m).toBe(1);
   });
 
   it("ne produit aucune PD lorsque le scoring est bloqué", () => {
     const input = dossier();
     input.criteria["D1.5"] = { status: "MISSING" };
-    const r = computeRating(CORP_STD_V1, input, "2025-12-31T12:00:00.000Z");
-    expect(r.outcome).toBe("BLOCKED_DATA");
+    const r = computeRating(CORP_STD_V1, input, { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true });
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
     expect(r.pd12m).toBeNull();
   });
 
@@ -207,28 +207,28 @@ describe("moteur : restitution de la PD", () => {
     const r = computeRating(
       CORP_STD_V1,
       dossier({ confidence: { completeness: 25, freshness: 25, provenance: 25, reliability: 25 } }),
-      "2025-12-31T12:00:00.000Z"
+      { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true }
     );
-    expect(r.outcome).toBe("NO_GRADE_CONFIDENCE");
+    expect(r.ratingStatus).toBe("NO_RATING_INSUFFICIENT_DATA");
     expect(r.finalGrade).toBeNull();
     expect(r.pd12m).toBeNull();
   });
 
   it("laisse UNCALIBRATED et aucune PD sur un modèle sans calibration", () => {
     const sansCal: ModelConfig = { ...CORP_STD_V1, calibration: undefined };
-    const r = computeRating(sansCal, dossier(), "2025-12-31T12:00:00.000Z");
+    const r = computeRating(sansCal, dossier(), { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true });
     expect(r.pdStatus).toBe("UNCALIBRATED");
     expect(r.pd12m).toBeNull();
     expect(r.calibrationId).toBeNull();
   });
 
-  it("suit le grade et non le score : deux dossiers de même score plafonnés différemment reçoivent des PD différentes", () => {
-    // Même dossier, l'un plafonné par CAP01 (moins de deux ans, sans support).
-    const libre = computeRating(CORP_STD_V1, dossier(), "2025-12-31T12:00:00.000Z");
+  it("suit le grade et non le score : deux dossiers de même score traités différemment reçoivent des PD différentes", () => {
+    // Même dossier, l'un ramené par l'exception non compensatoire NC01.
+    const libre = computeRating(CORP_STD_V1, dossier(), { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true });
     const plafonne = computeRating(
       CORP_STD_V1,
-      dossier({ structuralFlags: { companyAgeYears: 1.2, hasStrongGroupSupport: false } }),
-      "2025-12-31T12:00:00.000Z"
+      dossier({ structuralFlags: { baseDscrBelow1: true } }),
+      { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true }
     );
     expect(plafonne.rawScore).toBe(libre.rawScore);
     expect(plafonne.finalGrade).not.toBe(libre.finalGrade);

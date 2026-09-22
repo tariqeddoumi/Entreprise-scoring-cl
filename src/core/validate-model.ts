@@ -1,4 +1,7 @@
 import { checkBins } from "./binning";
+import { checkDoubleCounting } from "./double-counting";
+import { unknownCgncKeys } from "@/reference/cgnc";
+import { rulesetById } from "@/reference/segmentation";
 import type { ModelConfig, Segment } from "./types";
 
 /**
@@ -7,8 +10,11 @@ import type { ModelConfig, Segment } from "./types";
  *  - somme des poids critères = 10 000 bps (100,00 %) par segment ;
  *  - somme des poids d'un domaine = poids affiché du domaine ;
  *  - barèmes quantitatifs exhaustifs, sans trou ni chevauchement ;
- *  - master scale exhaustive sur [0, 100] ;
- *  - pondérations de confiance = 100 ; bandes de confiance exhaustives ;
+ *  - échelle de grades propre au modèle, exhaustive sur [0, 100] ;
+ *  - pondérations de confiance = 100 ; classes de confiance exhaustives ;
+ *  - inventaire phénomène-règle respecté (aucune exception non déclarée) ;
+ *  - catégorie « information absente » définie pour tout critère non bloquant ;
+ *  - transferts de poids de non-applicabilité cohérents ;
  *  - références domaine/critère cohérentes ;
  *  - aucun critère ne dépasse le plafond de poids du modèle ;
  *  - codes de cas spéciaux uniques et scores admissibles.
@@ -91,10 +97,10 @@ export function validateModel(model: ModelConfig): string[] {
     }
   }
 
-  // Master scale : couvre [0, 100] sans trou, bornes min incluses / max exclues.
-  const scale = model.masterScale;
+  // Échelle de grades : couvre [0, 100] sans trou, bornes min incluses / max exclues.
+  const scale = model.gradeScale.bands;
   if (scale.length === 0) {
-    issues.push("Master scale vide");
+    issues.push("Échelle de grades vide");
   } else {
     if (scale[scale.length - 1].minScore !== null && scale[scale.length - 1].minScore !== 0) {
       // dernière bande = la pire ; elle doit couvrir jusqu'à 0 inclus
@@ -106,62 +112,113 @@ export function validateModel(model: ModelConfig): string[] {
       const cur = sorted[i];
       const next = sorted[i + 1];
       if (cur.minScore === null) {
-        issues.push(`Master scale : bande ${cur.grade} sans borne minimale mais non terminale`);
+        issues.push(`Échelle de grades : bande ${cur.grade} sans borne minimale mais non terminale`);
         continue;
       }
       if (next.maxScore !== cur.minScore) {
         issues.push(
-          `Master scale : discontinuité entre ${next.grade} (max=${next.maxScore}) et ${cur.grade} (min=${cur.minScore})`
+          `Échelle de grades : discontinuité entre ${next.grade} (max=${next.maxScore}) et ${cur.grade} (min=${cur.minScore})`
         );
       }
     }
     const worst = sorted[sorted.length - 1];
     if (worst.minScore !== null && worst.minScore > 0) {
-      issues.push(`Master scale : les scores < ${worst.minScore} ne sont pas couverts`);
+      issues.push(`Échelle de grades : les scores < ${worst.minScore} ne sont pas couverts`);
     }
     const best = sorted[0];
     if (best.maxScore !== null && best.maxScore <= 100) {
-      issues.push(`Master scale : les scores >= ${best.maxScore} ne sont pas couverts`);
+      issues.push(`Échelle de grades : les scores >= ${best.maxScore} ne sont pas couverts`);
     }
   }
 
-  const cw = model.confidenceWeights;
+  const cw = model.confidence.weights;
   const cwTotal = cw.completeness + cw.freshness + cw.reliability + cw.provenance;
   if (cwTotal !== 100) {
     issues.push(`Pondérations de confiance : somme = ${cwTotal} (attendu 100)`);
   }
 
   // Bandes de confiance : exhaustives sur [0, 100].
-  const cc = [...model.confidenceCaps].sort((a, b) => a.minConfidence - b.minConfidence);
+  const cc = [...model.confidence.classes].sort((a, b) => a.minScore - b.minScore);
   if (cc.length === 0) {
-    issues.push("Aucune bande de confiance");
+    issues.push("Aucune classe de confiance");
   } else {
-    if (cc[0].minConfidence !== 0) {
-      issues.push(`Bandes de confiance : ne couvrent pas 0 (min=${cc[0].minConfidence})`);
+    if (cc[0].minScore !== 0) {
+      issues.push(`Classes de confiance : ne couvrent pas 0 (min=${cc[0].minScore})`);
     }
     for (let i = 0; i < cc.length - 1; i++) {
-      if (cc[i].maxConfidence !== cc[i + 1].minConfidence) {
+      if (cc[i].maxScore !== cc[i + 1].minScore) {
         issues.push(
-          `Bandes de confiance : discontinuité à ${cc[i].maxConfidence}/${cc[i + 1].minConfidence}`
+          `Classes de confiance : discontinuité à ${cc[i].maxScore}/${cc[i + 1].minScore}`
         );
       }
     }
-    if (cc[cc.length - 1].maxConfidence !== null) {
-      issues.push("Bandes de confiance : la dernière bande doit être ouverte (max=null)");
+    if (cc[cc.length - 1].maxScore !== null) {
+      issues.push("Classes de confiance : la dernière classe doit être ouverte (max=null)");
     }
   }
 
-  // Caps : grades référencés existants.
-  const gradeSet = new Set(model.masterScale.map((b) => b.grade));
-  for (const cap of model.structuralCaps) {
-    if (cap.maxGrade !== "NO_GRADE" && !gradeSet.has(cap.maxGrade)) {
-      issues.push(`Cap ${cap.code} : grade plafond inconnu ${cap.maxGrade}`);
+  // Exceptions non compensatoires : grades référencés existants.
+  const gradeSet = new Set(model.gradeScale.bands.map((b) => b.grade));
+  for (const rule of model.nonCompensatoryRules) {
+    if (rule.maxGrade !== "NO_GRADE" && !gradeSet.has(rule.maxGrade)) {
+      issues.push(`${rule.code} : grade plafond inconnu ${rule.maxGrade}`);
     }
   }
-  for (const band of model.confidenceCaps) {
-    if (band.maxGrade !== "NONE" && band.maxGrade !== "NO_GRADE" && !gradeSet.has(band.maxGrade)) {
-      issues.push(`Bande de confiance ${band.levelFr} : grade plafond inconnu ${band.maxGrade}`);
+
+  // Inventaire phénomène-règle (constat C08) : une exception qui ne déclare pas
+  // sa contribution centrale ne peut pas être chargée.
+  issues.push(...checkDoubleCounting(model));
+
+  // Politique de donnée indisponible (constat C07) : un critère non bloquant
+  // doit déclarer le score prudent appliqué, sinon la catégorie « information
+  // absente » n'est pas définie et le comportement redevient implicite.
+  const criterionCodes = new Set(model.criteria.map((c) => c.code));
+  for (const c of model.criteria) {
+    if (c.unavailablePolicy === "CONSERVATIVE_SCORE" && c.unavailableScore === undefined) {
+      issues.push(`${c.code} : politique CONSERVATIVE_SCORE sans score prudent déclaré`);
     }
+    if (c.notApplicableRule && !criterionCodes.has(c.notApplicableRule.transferWeightTo)) {
+      issues.push(
+        `${c.code} : critère receveur de poids ${c.notApplicableRule.transferWeightTo} inconnu`
+      );
+    }
+    if (c.notApplicableRule?.transferWeightTo === c.code) {
+      issues.push(`${c.code} : transfert de poids vers lui-même`);
+    }
+    if (c.materialityGate && !c.notApplicableRule) {
+      issues.push(
+        `${c.code} : porte de matérialité sans règle de transfert de poids — le poids total ne serait plus constant`
+      );
+    }
+  }
+
+  // Dictionnaire CGNC (constat H06) : une référence inconnue signale une
+  // définition de grandeur que personne n'a écrite.
+  const cgncKeys = model.criteria.map((c) => c.cgncEntry).filter((k): k is string => !!k);
+  for (const missing of unknownCgncKeys(cgncKeys)) {
+    issues.push(`Référence CGNC inconnue : ${missing}`);
+  }
+
+  // Référentiel de segmentation effectif-daté (constat C04).
+  try {
+    rulesetById(model.segmentationRulesetId);
+  } catch {
+    issues.push(`Jeu de règles de segmentation inconnu : ${model.segmentationRulesetId}`);
+  }
+
+  // Philosophie de notation (constat H01).
+  if (model.philosophy.horizonMonths !== 12) {
+    issues.push(
+      `Philosophie : horizon ${model.philosophy.horizonMonths} mois — seul l'horizon 12 mois est supporté par la calibration et le backtesting.`
+    );
+  }
+
+  // Échelle propre au modèle (constat C03) : une échelle déclarée comparable à
+  // une autre sans étude de correspondance validée est refusée.
+  if (model.gradeScale.comparableWith.length > 0 && model.gradeScale.status !== "CALIBRATED") {
+    issues.push(
+      `Échelle ${model.gradeScale.scaleId} : comparabilité déclarée alors que l'échelle est encore provisoire`
+    );
   }
 
   return issues;

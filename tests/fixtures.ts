@@ -21,7 +21,11 @@ function v(value: number): CriterionInput {
  * D2 = 50, D3 = 75, D4 = 50, D5 = 75, D6 = 75, D7 = 50.
  *
  * Score global attendu :
- * 61×0,25 + 50×0,10 + 75×0,25 + 50×0,15 + 75×0,15 + 75×0,07 + 50×0,03 = 64,50 → G7.
+ * 61×0,25 + 50×0,10 + 75×0,25 + 50×0,15 + 75×0,15 + 75×0,07 + 50×0,03 = 64,50 → STD-P5.
+ *
+ * D7.1 et D7.2 sont conditionnés à la matérialité : sans déclaration, leur poids
+ * est transféré à D7.3 et D7.4 selon la règle déclarée, et le score du domaine
+ * reste 50.
  */
 export function tpeGoldenInput(): RatingInput {
   return {
@@ -57,8 +61,8 @@ export function tpeGoldenInput(): RatingInput {
       // D4 — uniforme 50
       "D4.1": q(50),
       "D4.2": q(50),
-      "D4.3": q(50),
-      "D4.4": q(50),
+      "D4.3": v(30), // ]25,35] => 50 (TPE)
+      "D4.4": v(30), // ]25,40] => 50
       "D4.5": q(50),
       "D4.6": q(50),
       "D4.7": q(50),

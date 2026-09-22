@@ -15,6 +15,12 @@ export interface AppConfig {
   rateLimitPerMinute: number;
   maxRequestBodyBytes: number;
   allowPrivateWebhookUrls: boolean;
+  /**
+   * Autorise l'exposition d'une probabilité de défaut issue d'une calibration
+   * non observée (constat C02). Refusée en production par construction : la
+   * variable y fait échouer le démarrage plutôt que d'ouvrir une porte.
+   */
+  allowSyntheticPd: boolean;
 }
 
 function intFromEnv(name: string, fallback: number, min: number, max: number): number {
@@ -32,7 +38,13 @@ function intFromEnv(name: string, fallback: number, min: number, max: number): n
 function loadConfig(): AppConfig {
   const isProduction = process.env.NODE_ENV === "production";
 
-  const provider = (process.env.DATABASE_PROVIDER ?? "postgresql").toLowerCase();
+  // Une variable déclarée dans l'interface Vercel mais laissée sans valeur est
+  // transmise comme chaîne vide, pas comme absente : `?? "postgresql"` ne s'y
+  // applique donc pas. Sans ce garde-fou, une case vide dans le tableau de
+  // variables d'environnement suffit à faire échouer le middleware sur
+  // absolument toutes les routes.
+  const rawProvider = process.env.DATABASE_PROVIDER?.trim();
+  const provider = (rawProvider ? rawProvider : "postgresql").toLowerCase();
   const providers: DbProvider[] = ["postgresql", "mysql", "sqlserver", "sqlite"];
   if (!providers.includes(provider as DbProvider)) {
     throw new Error(
@@ -65,6 +77,17 @@ function loadConfig(): AppConfig {
     }
   }
 
+  // Bac à sable de simulation : la PD non calibrée ne peut sortir que d'un
+  // environnement qui n'est pas la production. Le démarrage échoue si la
+  // dérogation est posée en production — un oubli de configuration ne doit pas
+  // pouvoir publier une probabilité de défaut issue de données simulées.
+  const allowSyntheticPd = process.env.ALLOW_SYNTHETIC_PD === "1";
+  if (isProduction && allowSyntheticPd) {
+    throw new Error(
+      "ALLOW_SYNTHETIC_PD=1 est refusé en production : une probabilité de défaut calibrée sur données simulées ne doit jamais quitter un environnement bac à sable."
+    );
+  }
+
   return {
     isProduction,
     dbProvider: provider as DbProvider,
@@ -72,6 +95,7 @@ function loadConfig(): AppConfig {
     rateLimitPerMinute: intFromEnv("RATE_LIMIT_PER_MINUTE", 120, 0, 100_000),
     maxRequestBodyBytes: intFromEnv("MAX_REQUEST_BODY_KB", 512, 1, 51_200) * 1024,
     allowPrivateWebhookUrls: process.env.ALLOW_PRIVATE_WEBHOOK_URLS === "1",
+    allowSyntheticPd,
   };
 }
 

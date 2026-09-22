@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { prisma, safeQuery } from "@/lib/safe-db";
-import { requireSession } from "@/lib/session";
+import { getSessionIdentity, requireSession } from "@/lib/session";
+import { CounterpartiesTable } from "./CounterpartiesTable";
+import { NewCounterpartyForm } from "./NewCounterpartyForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function CounterpartiesPage() {
   // Toute page porteuse de données exige une session authentifiée.
   await requireSession();
+  // La création exige le rôle ANALYST : le formulaire ne s'affiche donc que
+  // pour les identités habilitées à écrire, comme le fait déjà l'API REST.
+  const canCreate = (await getSessionIdentity("ANALYST")).ok;
 
   const { data: items, dbAvailable } = await safeQuery(
     () =>
@@ -50,43 +55,13 @@ export default async function CounterpartiesPage() {
         </div>
       )}
 
+      {dbAvailable && canCreate && <NewCounterpartyForm />}
+
       <section className="card" style={{ padding: 16 }}>
         {items.length === 0 ? (
           <p className="muted">Aucune contrepartie enregistrée.</p>
         ) : (
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Nom</th>
-                <th>ICE</th>
-                <th>Segment</th>
-                <th>Secteur</th>
-                <th>Dernier score</th>
-                <th>Dernier grade</th>
-                <th>Arrêté</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((c) => {
-                const last = c.ratingRuns[0];
-                return (
-                  <tr key={c.id}>
-                    <td>
-                      <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }}>
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="muted">{c.ice ?? "—"}</td>
-                    <td>{c.segment ?? "—"}</td>
-                    <td className="muted">{c.sectorCode ?? "—"}</td>
-                    <td>{last?.rawScore ? Number(last.rawScore).toFixed(2) : "—"}</td>
-                    <td>{last?.finalGrade ?? "—"}</td>
-                    <td className="muted">{last?.asOfDate ?? "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <CounterpartiesTable items={items} />
         )}
       </section>
 

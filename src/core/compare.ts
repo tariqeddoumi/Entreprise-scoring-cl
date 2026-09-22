@@ -137,16 +137,16 @@ export function compareRuns(previous: RatingResult, current: RatingResult): RunC
   }
   criterionDeltas.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
 
-  // --- Caps et red flags -----------------------------------------------------
-  const prevCaps = new Set(previous.appliedCaps.map((c) => c.code));
-  const curCaps = new Set(current.appliedCaps.map((c) => c.code));
+  // --- Exceptions non compensatoires et red flags ---------------------------
+  const prevRules = new Set(previous.appliedRules.map((c) => c.code));
+  const curRules = new Set(current.appliedRules.map((c) => c.code));
   const capChangesFr = [
-    ...[...curCaps]
-      .filter((c) => !prevCaps.has(c))
-      .map((c) => `Cap ${c} désormais appliqué : ${labelOfCap(current, c)}`),
-    ...[...prevCaps]
-      .filter((c) => !curCaps.has(c))
-      .map((c) => `Cap ${c} levé : ${labelOfCap(previous, c)}`),
+    ...[...curRules]
+      .filter((c) => !prevRules.has(c))
+      .map((c) => `Exception ${c} désormais appliquée : ${labelOfRule(current, c)}`),
+    ...[...prevRules]
+      .filter((c) => !curRules.has(c))
+      .map((c) => `Exception ${c} levée : ${labelOfRule(previous, c)}`),
   ];
 
   const prevFlags = new Set(previous.triggeredRedFlags.map((f) => f.code));
@@ -176,8 +176,8 @@ export function compareRuns(previous: RatingResult, current: RatingResult): RunC
   };
 }
 
-function labelOfCap(r: RatingResult, code: string): string {
-  return r.appliedCaps.find((c) => c.code === code)?.labelFr ?? code;
+function labelOfRule(r: RatingResult, code: string): string {
+  return r.appliedRules.find((c) => c.code === code)?.labelFr ?? code;
 }
 function labelOfFlag(r: RatingResult, code: string): string {
   return r.triggeredRedFlags.find((f) => f.code === code)?.labelFr ?? code;

@@ -48,6 +48,33 @@ export const structuralFlagsSchema = z
   })
   .strict();
 
+/**
+ * Matérialité des risques conditionnels (constat H09).
+ *
+ * Renseignée depuis le référentiel sectoriel et la localisation des sites : un
+ * critère ESG n'est évalué que si l'exposition existe.
+ */
+export const materialitySchema = z
+  .object({
+    esgPhysicalMaterial: z.boolean().optional(),
+    esgTransitionMaterial: z.boolean().optional(),
+    esgComplianceMaterial: z.boolean().optional(),
+    covenantsMaterial: z.boolean().optional(),
+  })
+  .strict();
+
+/** Support groupe (constat H05) : quatre conditions cumulatives, relèvement plafonné. */
+export const groupSupportSchema = z
+  .object({
+    claimed: z.boolean(),
+    capacityDocumented: z.boolean().optional(),
+    willingnessDocumented: z.boolean().optional(),
+    legallyBinding: z.boolean().optional(),
+    fundsTransferable: z.boolean().optional(),
+    requestedNotches: z.number().int().min(0).max(5).optional(),
+  })
+  .strict();
+
 export const ratingRequestSchema = z
   .object({
     counterpartyId: z.string().min(1).optional(), // requis pour la persistance, absent en simulation
@@ -70,11 +97,18 @@ export const ratingRequestSchema = z
       }),
     confidence: confidenceSchema,
     structuralFlags: structuralFlagsSchema.optional(),
+    materiality: materialitySchema.optional(),
+    groupSupport: groupSupportSchema.optional(),
     redFlags: z
       .array(z.string().regex(/^RF\d{2}$/, "Code de red flag attendu au format RFnn"))
       .max(50)
       .optional(),
+    /** Statut conformité amont — porté séparément du risque (constat C06). */
+    complianceStatus: z.enum(["NOT_EVALUATED", "CLEAR", "REFER", "BLOCKED"]).optional(),
+    /** Exposition déjà au bilan : autorise la notation sous voie contrôlée. */
+    existingExposure: z.boolean().optional(),
     defaultTriggered: z.boolean().optional(),
+    defaultGrade: z.enum(["DEF1", "DEF2", "DEF3"]).optional(),
     asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date d'arrêté au format YYYY-MM-DD"),
   })
   .strict();

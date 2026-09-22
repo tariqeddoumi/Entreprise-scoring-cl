@@ -96,11 +96,11 @@ for (const r of RUNS) {
 
   const input: RatingInput = { ...r.input, modelId, asOfDate: r.asOfDate };
   const result = computeRating(model, input, `${r.asOfDate}T12:00:00.000Z`);
-  tally[result.outcome] = (tally[result.outcome] ?? 0) + 1;
+  tally[result.ratingStatus] = (tally[result.ratingStatus] ?? 0) + 1;
 
   const id = `seed_run_${slug(r.counterpartyKey)}_${r.asOfDate.replace(/-/g, "")}`;
   runId.set(`${r.counterpartyKey}:${r.asOfDate}`, id);
-  cappedByRun.set(id, result.cappedGrade);
+  cappedByRun.set(id, result.finalGrade);
   if (result.segment) segmentByCp.set(r.counterpartyKey, result.segment);
 
   w(`-- ${r.purposeFr}`);
@@ -114,11 +114,13 @@ for (const r of RUNS) {
         lit(result.engineVersion),
         lit(result.asOfDate),
         lit(result.segment),
-        lit(result.outcome),
+        lit(result.ratingStatus),
         lit(result.rawScore),
-        lit(result.confidenceScore),
+        lit(result.confidence.score),
         lit(result.engineGrade),
-        lit(result.cappedGrade),
+        // cappedGrade porte le grade moteur, support groupe compris : même
+        // convention que rating-service et le seed applicatif.
+        lit(result.finalGrade),
         lit(result.finalGrade),
         lit(stable(input)),
         lit(stable(result)),
@@ -152,7 +154,7 @@ for (const o of OVERRIDES) {
   }
   // Le jeu de démonstration ne doit jamais contenir une dérogation que l'API
   // refuserait : mêmes règles que POST /api/v1/overrides.
-  const scale = getModel(DEFAULT_MODEL)!.masterScale;
+  const scale = getModel(DEFAULT_MODEL)!.gradeScale;
   const notches = Math.abs(gradeRank(scale, o.toGrade) - gradeRank(scale, from));
   if (notches === 0) {
     throw new Error(

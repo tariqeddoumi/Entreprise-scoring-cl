@@ -31,8 +31,11 @@ export default async function ModelsPage() {
           </div>
           <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
             {m.criteria.length} critères · {m.domains.length} domaines · segments{" "}
-            {m.segments.join(", ")} · {m.structuralCaps.length} caps ·{" "}
-            {m.redFlags.length} red flags · PD : {m.pdStatus}
+            {m.segments.join(", ")} · {m.nonCompensatoryRules.length} exception(s) ·{" "}
+            {m.redFlags.length} red flags · PD :{" "}
+            {m.calibration
+              ? `calibrée sur ${m.calibration.dataSource === "SYNTHETIC" ? "données simulées" : "défauts observés"} (${m.calibration.calibrationId})`
+              : "non calibrée"}
           </p>
         </section>
       ))}
