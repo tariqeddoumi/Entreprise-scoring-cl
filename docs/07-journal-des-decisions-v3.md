@@ -261,9 +261,55 @@ Contrôle demandé après la mise en service : la base réellement déployée di
 
 *Décision :* les colonnes attendues sont dérivées du schéma Prisma — lues, jamais recopiées — et confrontées au catalogue. Le contrôle fonctionne sur PostgreSQL comme sur SQLite. Il dénombre en outre les notations persistées au format d'une version antérieure, sans les traiter comme une anomalie : un instantané est immuable, une base en exploitation en contient forcément.
 
-**Sur l'état des données.** Les treize notations de la base de production ont toutes été produites par le moteur v1 : grades de l'échelle retirée, vocabulaire de statut antérieur, instantanés sans couverture ni droits d'usage. Avant le correctif D-17, la consultation de chacune de ces treize fiches échouait. Elles s'affichent désormais en archive. Elles ne sont comparables à aucune notation courante, et le resteront tant qu'aucune table de correspondance n'aura été validée — ou tant que les contreparties n'auront pas été renotées.
+**Sur l'état des données.** Les treize notations de la base de production ont toutes été produites par le moteur v1 : grades de l'échelle retirée, vocabulaire de statut antérieur, instantanés sans couverture ni droits d'usage. Avant le correctif D-17, la consultation de chacune de ces treize fiches échouait. Elles s'affichent désormais en archive. Elles ne sont comparables à aucune notation courante, et le resteront tant qu'aucune table de correspondance n'aura été validée — ou tant que les contreparties n'auront pas été renotées. **Ce constat décrit l'état au moment du contrôle ; les dix contreparties ont depuis été renotées et la base en porte vingt-six (D-27).**
 
 **Sur la piste d'audit.** Les treize notations et les trois dérogations de la base de production ne portent aucun événement d'audit : le jeu de démonstration est inséré par script SQL, hors application, et n'en produit pas. C'est cohérent pour une démonstration, mais aucune de ces lignes ne satisfait la règle « une écriture métier et son audit sont indissociables » (D-20). Un jeu de démonstration ne doit pas servir de référence pour juger de la complétude de la piste d'audit.
+
+---
+
+# 2 quater. Renotation et portabilité de la base
+
+Deux sujets distincts mais liés par la même question : que devient une base déjà en exploitation lorsque le moteur change, puis lorsque le moteur de base de données change à son tour ?
+
+## D-27 — La renotation ajoute une série, elle n'en réécrit aucune — **MÉTHODE**
+
+*Constat :* la vérification précédente établissait que les treize notations de production portaient toutes des instantanés v1 (§ 2 ter). Le correctif D-17 les rendait consultables en archive, mais aucune n'était comparable à une notation courante, et le tableau de bord n'avait aucune notation V3 à distribuer.
+
+*Décision :* les dix contreparties ont été renotées par le moteur 3.0.0 sur leurs treize arrêtés. Les treize notations V3 **s'ajoutent** aux treize archives v1, sous des clés d'idempotence distinctes (`seed:v3:<CLÉ>:<date>`). Aucune ligne n'a été modifiée ni supprimée. La base de production porte désormais vingt-six notations et treize événements d'audit.
+
+*Pourquoi une addition et non un remplacement :* garder les deux séries sur des entrées strictement identiques est la seule façon de mesurer ce que le passage en V3 change réellement, dossier par dossier. Écraser les archives aurait détruit le point de comparaison au moment précis où il devient utile — le pilote.
+
+*Preuve que c'est un rejeu et non une saisie :* chaque `inputSnapshot` V3 est repris de l'archive correspondante par sous-requête, jamais recopié ; les treize empreintes SHA-256 d'entrée sont identiques deux à deux. Les treize empreintes de `resultSnapshot` ont été calculées par le moteur avant insertion, puis reconfrontées en base : identiques. Une corruption de transcription aurait été détectée.
+
+*Ce que la renotation ne règle pas :* les archives v1 restent non comparables aux notations V3. Le point 9 du chapitre 3 demeure ouvert — la renotation fournit une correspondance observée sur treize dossiers de démonstration, pas une table de correspondance validée.
+
+## D-28 — Le durcissement n'est pas porté par le schéma et ne suit pas la bascule — **TECHNIQUE**
+
+*Constat :* `npm run db:provider` régénère le schéma pour le dialecte cible, mais Prisma ne gère ni les droits, ni la sécurité au niveau des lignes, ni les déclencheurs. Les quatre propriétés de sécurité de la base — isolation dans `corp_scoring`, retrait des droits aux rôles exposés, sécurité au niveau des lignes activée sans politique, piste d'audit en ajout seul par déclencheur — vivent dans `prisma/sql/01-postgresql-hardening.sql`, hors du périmètre de la génération.
+
+*Décision :* la bascule vers un autre moteur suppose de **retranscrire ce script dans les termes du dialecte cible**, et non de le porter mécaniquement. Les équivalents ne sont pas interchangeables : MySQL ne connaît pas la sécurité au niveau des lignes et impose de la remplacer par une séparation de comptes et de vues ; SQL Server la connaît sous une autre forme et une autre syntaxe ; la notion de rôle exposé publiquement est propre à Supabase et disparaît sur une instance autonome.
+
+*Conséquence à tenir :* un schéma généré et poussé sur un nouveau moteur donne une application qui fonctionne et une base **non durcie**. Rien dans la chaîne ne le signale aujourd'hui, `npm run db:check` contrôlant ces propriétés sur PostgreSQL. Tant que l'équivalent n'est pas écrit et vérifié pour le dialecte cible, la bascule ne doit pas être considérée comme faite.
+
+## D-29 — `directUrl` répond à un pooler, pas à un besoin du modèle — **TECHNIQUE**
+
+*Constat :* le générateur ajoute `directUrl` au seul dialecte PostgreSQL. Ce n'est pas un oubli pour les autres : le paramètre existe parce qu'un pooler en mode transaction (pgBouncer de Supabase, PgBouncer, RDS Proxy) ne supporte pas les migrations, qui doivent emprunter une connexion directe.
+
+*Décision :* le paramètre reste conditionnel au dialecte. Sur un autre moteur, la question ne disparaît pas pour autant : elle se repose dans les termes de son propre intermédiaire de connexion, s'il y en a un. Documenté ici parce que l'absence du paramètre hors PostgreSQL se lit facilement comme une lacune du générateur, alors qu'elle est délibérée.
+
+## D-30 — Oracle figure dans la matrice mais n'est pas une cible générable — **TECHNIQUE**
+
+*Constat :* la matrice de portabilité du README annonce cinq moteurs, dont Oracle 19c+ au niveau « à certifier ». Le générateur n'en accepte que quatre : `DATABASE_PROVIDER=oracle` est refusé avec un code d'erreur. L'écart n'est pas un défaut du script — Prisma 6 ne propose pas de connecteur Oracle — mais la matrice laisse croire qu'une instance licenciée suffirait.
+
+*Décision :* le niveau annoncé pour Oracle se lit « suppose un changement de couche d'accès aux données », et non « suppose une instance ». C'est un arbitrage d'architecture, pas une case à cocher dans une variable d'environnement. Les quatre dialectes réellement générables restent PostgreSQL, MySQL, SQL Server et SQLite, ce dernier exclu de la production faute de précision décimale.
+
+## D-31 — Les clés du jeu de démonstration divergent entre le dépôt et la production — **TECHNIQUE**
+
+*Constat :* `prisma/sql/02-seed-demonstration.sql` produit treize notations V3 sous les clés `seed:<CLÉ>:<date>`. En production, ces mêmes clés portent les **archives v1**, la série V3 vivant sous `seed:v3:<CLÉ>:<date>` (D-27). Une base reconstruite depuis le dépôt donnerait donc treize lignes et aucune archive, non les vingt-six lignes actuelles.
+
+*Décision :* l'écart est assumé et documenté plutôt que corrigé. Le jeu de démonstration a vocation à livrer un état propre et reproductible, pas à rejouer l'historique d'une instance particulière ; et le seed ne s'exécute jamais en production, garde explicite du projet.
+
+*Ce qu'il faut en faire à la bascule :* la question n'est pas de faire converger les clés, mais de décider ce qui est repris. Reprendre les vingt-six lignes conserve le point de comparaison de D-27 et impose de transporter des instantanés d'un moteur retiré ; ne reprendre que la série V3 donne une base homogène et referme définitivement la comparaison. Ce choix appartient à la banque et figure au chapitre 3.
 
 ---
 
@@ -277,7 +323,9 @@ Contrôle demandé après la mise en service : la base réellement déployée di
 6. **Granularité définitive des échelles** — résultat de la calibration, pas choix de présentation.
 7. **Maintien ou suppression des quatre exceptions conservées** — sur tests d'ablation.
 8. **Correspondance entre les deux échelles** — condition de toute master scale commune.
-9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Leur reprise éventuelle suppose une table de correspondance validée, ou une renotation.
+9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Les dix contreparties ont été renotées (D-27) : les deux séries coexistent désormais sur des entrées identiques. Leur rapprochement suppose toujours une table de correspondance validée — treize dossiers de démonstration ne l'établissent pas.
+10. **Ce qui est repris lors d'une bascule de moteur de base** — les vingt-six notations, ou la seule série V3 (D-31). Conserver les deux préserve le point de comparaison du pilote et impose de transporter des instantanés d'un moteur retiré.
+11. **Dialecte cible et niveau de certification exigé** — un schéma validé n'est pas un dialecte certifié, et le durcissement de la base doit être réécrit dans ses termes avant toute mise en service (D-28).
 
 ---
 
