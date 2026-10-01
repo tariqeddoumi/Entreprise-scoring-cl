@@ -51,10 +51,15 @@ describe("Poids total constant (constat C07)", () => {
     expect(total(complet)).toBe(10000);
   });
 
-  it("une information absente ne peut jamais améliorer le score", () => {
+  it("une information absente dégrade un critère noté au-dessus du score prudent", () => {
     const base = tpeGoldenInput();
     // D4.1 vaut 50 dans le vecteur de référence ; l'effacer applique la
-    // catégorie prudente (25) et doit donc dégrader, jamais améliorer.
+    // catégorie prudente (25) et doit donc dégrader.
+    //
+    // La propriété inverse n'est PAS garantie : un critère réellement noté 0
+    // gagne 25 points à être déclaré absent, ce qui contredit la note
+    // méthodologique (§ 6). Voir le journal des décisions, D-32 : le score de
+    // la catégorie « information absente » reste à arbitrer par la banque.
     const avec = computeRating(CORP_STD_V1, base, AT);
     const sans = computeRating(
       CORP_STD_V1,
@@ -212,6 +217,65 @@ describe("Ordre canonique du pipeline (constat H14)", () => {
     expect(r.finalGrade).toBe("DEF2");
     expect(r.rawScore).toBeCloseTo(64.5, 10);
   });
+
+  /**
+   * Un défaut ne doit jamais se perdre derrière un refus de notation : les
+   * moteurs aval liraient « pas de note » là où il y a un défaut, et
+   * l'événement publié serait `rating.blocked` au lieu de `rating.completed`.
+   */
+  describe("un défaut constaté survit à tout refus de notation", () => {
+    const cas: [string, () => RatingInput][] = [
+      [
+        "entreprise de moins de deux ans",
+        () => ({
+          ...tpeGoldenInput(),
+          defaultTriggered: true,
+          defaultGrade: "DEF3",
+          structuralFlags: { companyAgeYears: 1 },
+        }),
+      ],
+      [
+        "donnée critique manquante",
+        () => {
+          const i = tpeGoldenInput();
+          return {
+            ...i,
+            defaultTriggered: true,
+            defaultGrade: "DEF3",
+            criteria: { ...i.criteria, "D3.1": { status: "MISSING" } },
+          };
+        },
+      ],
+      [
+        "segment indéterminé",
+        () => {
+          const { segment: _omis, ...sansSegment } = tpeGoldenInput();
+          return { ...sansSegment, defaultTriggered: true, defaultGrade: "DEF3" };
+        },
+      ],
+    ];
+    for (const [libelle, build] of cas) {
+      it(libelle, () => {
+        const r = computeRating(CORP_STD_V1, build(), AT);
+        expect(r.ratingStatus).toBe("DEFAULTED");
+        expect(r.finalGrade).toBe("DEF3");
+        expect(r.standaloneGrade).toBe("DEF3");
+        // Aucun score n'est inventé : le refus de mesurer reste visible.
+        expect(r.rawScore).toBeNull();
+        expect(r.engineGrade).toBeNull();
+        expect(r.blockingReasonsFr.length).toBeGreaterThan(0);
+      });
+    }
+
+    it("sans défaut déclaré, ces mêmes dossiers restent non notés", () => {
+      for (const [, build] of cas) {
+        const { defaultTriggered: _d, defaultGrade: _g, ...sansDefaut } = build();
+        const r = computeRating(CORP_STD_V1, sansDefaut, AT);
+        expect(r.ratingStatus).not.toBe("DEFAULTED");
+        expect(r.finalGrade).toBeNull();
+      }
+    });
+  });
 });
 
 describe("Séparation des finalités (constat C06)", () => {
@@ -286,6 +350,26 @@ describe("Exposition de la probabilité de défaut (constat C02)", () => {
 });
 
 describe("Routage (constats C04 et C08)", () => {
+  it("un segment fourni qui contredit le calcul est accepté mais tracé dans le résultat", () => {
+    // 2 M MAD de CA et 0,5 M MAD d'exposition : TPE pour le jeu SEG-2026.1.
+    const donnees = { annualTurnover: 2_000_000, globalBankExposure: 500_000 };
+    const conforme = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), segment: "TPE", segmentationData: donnees },
+      AT
+    );
+    expect(conforme.inconsistenciesFr).toEqual([]);
+
+    const diverge = computeRating(
+      CORP_STD_V1,
+      { ...tpeGoldenInput(), segment: "GE", segmentationData: donnees },
+      AT
+    );
+    expect(diverge.segment).toBe("GE");
+    expect(diverge.segmentSource).toBe("PROVIDED");
+    expect(diverge.inconsistenciesFr.join(" ")).toMatch(/Segment GE fourni.*calcule TPE/);
+  });
+
   it("un modèle non publié pour le segment refuse de noter", () => {
     const r = computeRating(
       CORP_TPE_BEHAV_V1,
@@ -563,6 +647,20 @@ describe("Modèle TPE comportemental", () => {
 });
 
 describe("Codes de raison et corroboration des signaux", () => {
+  it("signale un code de critère inconnu au lieu de l'ignorer en silence", () => {
+    const base = tpeGoldenInput();
+    // Faute de frappe : « D1.10 » au lieu de « D1.1 ».
+    const { "D1.1": valeur, ...reste } = base.criteria;
+    const r = computeRating(
+      CORP_STD_V1,
+      { ...base, criteria: { ...reste, "D1.10": valeur } },
+      AT
+    );
+    expect(r.warningsFr).toContain("Critère inconnu du modèle CORP_STD_V1 ignoré : D1.10");
+    // Le critère visé, lui, reste traité comme manquant — et signalé comme tel.
+    expect(r.warningsFr.some((w) => w.startsWith("D1.1 —"))).toBe(true);
+  });
+
   it("produit des codes de raison stables et normalisés", () => {
     const r = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
     expect(r.reasonCodes.length).toBeGreaterThan(0);

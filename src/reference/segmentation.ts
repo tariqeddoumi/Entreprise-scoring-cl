@@ -90,6 +90,11 @@ export interface SegmentationResult {
   source: "PROVIDED" | "COMPUTED" | "UNDETERMINED";
   rulesetId: string;
   explanationFr: string;
+  /**
+   * Écart entre le segment fourni et le segment recalculé, lorsque les données
+   * de segmentation permettent ce recalcul. Absent sinon.
+   */
+  divergenceFr?: string;
 }
 
 /**
@@ -109,13 +114,14 @@ export function determineSegment(
   if (input.segment) {
     const divergence =
       computed.segment !== null && computed.segment !== input.segment
-        ? ` Divergence avec le calcul (${computed.segment}) : à instruire, le référentiel amont fait foi mais l'écart est tracé.`
-        : "";
+        ? `Segment ${input.segment} fourni, mais le jeu ${ruleset.rulesetId} calcule ${computed.segment} sur les données de segmentation transmises : à instruire. Le référentiel amont fait foi ; l'écart est tracé parce que le segment détermine les pondérations et les barèmes.`
+        : undefined;
     return {
       segment: input.segment,
       source: "PROVIDED",
       rulesetId: ruleset.rulesetId,
-      explanationFr: `Segment ${input.segment} fourni par le référentiel amont (jeu ${ruleset.rulesetId}).${divergence}`,
+      explanationFr: `Segment ${input.segment} fourni par le référentiel amont (jeu ${ruleset.rulesetId}).${divergence ? ` ${divergence}` : ""}`,
+      ...(divergence ? { divergenceFr: divergence } : {}),
     };
   }
   return computed;

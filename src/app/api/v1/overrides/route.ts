@@ -46,6 +46,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Symétrique de la règle précédente : un défaut est un constat reçu d'un
+  // moteur amont (§ 10 de la note méthodologique), jamais un jugement. Une
+  // dérogation qui y ferait entrer le dossier laisserait en outre un run au
+  // statut RATED portant un grade de défaut, que les consommateurs aval
+  // liraient de deux façons contradictoires.
+  if (toGrade.startsWith("DEF")) {
+    return problem(
+      409,
+      "Passage en défaut par dérogation interdit",
+      "Le défaut se déclare comme un constat (defaultTriggered, defaultGrade) lors d'une nouvelle notation, pas par dérogation."
+    );
+  }
+
+  // Une dérogation déjà expirée à sa création ne serait jamais applicable.
+  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
+    return problem(400, "Date d'expiration déjà passée.", `expiresAt = ${expiresAt}`);
+  }
+
   // Une dérogation déjà en attente sur le même run doit être tranchée avant
   // d'en proposer une autre : deux dérogations concurrentes produiraient un
   // grade final dépendant de l'ordre d'approbation.

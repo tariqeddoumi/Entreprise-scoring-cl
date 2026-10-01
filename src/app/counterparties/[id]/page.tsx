@@ -24,12 +24,35 @@ export default async function CounterpartyPage({
     async () => {
       const counterparty = await prisma.counterparty.findUnique({ where: { id } });
       if (!counterparty) return null;
+      // Historique sans les instantanés, qui pèsent plusieurs dizaines de
+      // kilo-octets par run : seuls les deux derniers runs notés sont relus,
+      // pour l'attribution d'écart.
       const runs = await prisma.ratingRun.findMany({
         where: { counterpartyId: id },
         orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
         take: 50,
+        select: {
+          id: true,
+          asOfDate: true,
+          segment: true,
+          outcome: true,
+          rawScore: true,
+          engineGrade: true,
+          cappedGrade: true,
+          finalGrade: true,
+          requestedBy: true,
+        },
       });
-      return { counterparty, runs };
+      const lastScoredIds = runs
+        .filter((r) => r.rawScore !== null)
+        .slice(0, 2)
+        .map((r) => r.id);
+      const snapshots = await prisma.ratingRun.findMany({
+        where: { id: { in: lastScoredIds } },
+        select: { id: true, resultSnapshot: true },
+      });
+      const snapshotById = new Map(snapshots.map((r) => [r.id, r.resultSnapshot]));
+      return { counterparty, runs, snapshotById };
     },
     null
   );
@@ -43,15 +66,16 @@ export default async function CounterpartyPage({
   }
   if (!data) notFound();
 
-  const { counterparty, runs } = data;
+  const { counterparty, runs, snapshotById } = data;
 
   // Attribution de l'écart entre les deux dernières notations exploitables.
   // Deux instantanés ne se comparent que s'ils ont la même forme : un
   // instantané de moteur antérieur ne porte ni exceptions ni couverture, et le
   // comparer reviendrait à attribuer un écart à des champs absents.
   const scored = runs.filter((r) => r.rawScore !== null);
-  const previousRead = scored.length >= 2 ? readResultSnapshot(scored[1].resultSnapshot) : null;
-  const currentRead = scored.length >= 2 ? readResultSnapshot(scored[0].resultSnapshot) : null;
+  const snapshotOf = (runId: string) => snapshotById.get(runId) ?? "";
+  const previousRead = scored.length >= 2 ? readResultSnapshot(snapshotOf(scored[1].id)) : null;
+  const currentRead = scored.length >= 2 ? readResultSnapshot(snapshotOf(scored[0].id)) : null;
   const comparison =
     previousRead?.kind === "V3" && currentRead?.kind === "V3"
       ? compareRuns(previousRead.result, currentRead.result)

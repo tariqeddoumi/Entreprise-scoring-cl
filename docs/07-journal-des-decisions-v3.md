@@ -313,13 +313,69 @@ Deux sujets distincts mais liés par la même question : que devient une base d�
 
 ---
 
+# 2 quinquies. Diagnostic complet du 1er octobre 2026
+
+Revue du modèle, du moteur et de l'outil, conduite sur une instance locale PostgreSQL 16 en mode production. Le rapport complet figure dans `docs/08-diagnostic-complet.md` ; ce chapitre consigne les décisions prises et celle qui reste ouverte.
+
+## D-32 — Une information absente peut améliorer un score — **À CONFIRMER**
+
+*Constat :* la note méthodologique (§ 6) affirme « l'impossibilité qu'une information absente améliore un score » et la dit vérifiée par un test. Elle est fausse dès qu'un critère est réellement mauvais. La catégorie « information absente » vaut 25 ; un critère qui vaudrait 0 gagne donc 25 points à être déclaré manquant. Sur le dossier de référence, c'est vrai pour les 43 critères non bloquants du modèle standard, et cela améliore le **grade** pour 11 d'entre eux. Sur un dossier entièrement défavorable, six critères peuvent être masqués avant que la porte de couverture ne se ferme. Le test cité ne vérifiait que le cas inverse — un critère à 50 qui tombe à 25 ; il a été renommé pour ne plus promettre davantage.
+
+*Pourquoi ce n'est pas corrigé ici :* le choix du score de cette catégorie est déjà inscrit parmi les arbitrages de la banque (chapitre 3, point 5). Le porter à 0 rétablirait la garantie annoncée ; sur les treize notations de production, il ne changerait aucun grade (seul le score brut du dossier Négoce au 31/12/2025, déjà sans grade, passerait de 47,75 à 47,00), mais il imposerait de refaire la calibration. L'autre voie consiste à garder 25 et à corriger la note.
+
+*Ce qui ne peut pas rester en l'état :* une note remise au comité qui affirme une propriété que le code ne tient pas.
+
+## D-33 — Un défaut constaté survit à tout refus de notation — **MÉTHODE**
+
+*Constat :* le moteur testait le défaut **après** quatre refus de notation — entreprise de moins de deux ans, donnée critique manquante, segment indéterminé, aucun domaine pondéré. Un dossier en défaut tombant dans l'un de ces cas ressortait « sans note », et l'événement publié était `rating.blocked` au lieu de `rating.completed`. Les consommateurs aval lisaient une absence de note là où il y avait un défaut. C'est contraire au § 10 : le moteur « reçoit le constat et force le grade correspondant ».
+
+*Décision :* dans ces quatre cas, le grade de défaut s'impose, sans score inventé (`rawScore` et `engineGrade` restent nuls, les motifs de refus restent visibles). Seul le routage vers un autre modèle publié n'est pas concerné : ce modèle forcera à son tour le même grade, commun aux deux échelles. Quatre tests, dont trois échouaient avant correction. Aucune des treize notations de production n'est modifiée.
+
+## D-34 — Une dérogation ne fait pas entrer en défaut — **MÉTHODE**
+
+*Constat :* la sortie du défaut par dérogation était interdite, l'entrée ne l'était pas. Une dérogation ordinaire d'un cran pouvait faire passer un STD-P8 en DEF1 ; une fois approuvée, le run portait le statut `RATED` et le grade `DEF1` — deux lectures contradictoires pour les moteurs aval. Reproduit sur l'instance de test.
+
+*Décision :* refus en 409. Un défaut se déclare comme un constat, lors d'une nouvelle notation. Une dérogation dont l'expiration est déjà passée à sa création est également refusée.
+
+## D-35 — L'écart entre segment fourni et segment calculé est restitué — **TECHNIQUE**
+
+*Constat :* le moteur rédigeait le message de divergence… puis le jetait : il ne figurait nulle part dans le résultat. La promesse du § 11 — « une divergence est tracée plutôt que silencieusement acceptée » — n'était pas tenue. Or l'enjeu est réel : sur le dossier de référence, le même dossier vaut 64,50 en TPE et 60,44 en GE.
+
+*Décision :* la divergence est portée dans `inconsistenciesFr`, affichée par l'interface.
+
+## D-36 — Le tableau de bord montre la note courante de chaque contrepartie — **MÉTHODE**
+
+*Constat :* la distribution des grades comptait tous les runs. Une contrepartie notée deux fois pesait deux fois, avec deux grades : en production, le laboratoire pharmaceutique y figurait en STD-P2 et en STD-P3. Ce n'était pas la distribution du portefeuille.
+
+*Décision :* une seule note par contrepartie, celle du dernier arrêté (la plus récente à arrêté égal). Les contreparties sans grade à leur dernier arrêté sont dénombrées à part. Résultat contrôlé contre un calcul SQL indépendant.
+
+## D-37 — Un code de critère inconnu est signalé — **TECHNIQUE**
+
+*Constat :* une faute de frappe (`D1.10` pour `D1.1`) était ignorée sans trace ; le critère visé tombait dans la catégorie prudente sans que l'analyste comprenne pourquoi.
+
+*Décision :* avertissement explicite, sur le modèle des red flags inconnus.
+
+## D-38 — Les écrans ne chargent que ce qu'ils affichent — **TECHNIQUE**
+
+*Constat :* le tableau de bord et la fiche contrepartie rapatriaient les instantanés complets — environ 22 Ko par run, jusqu'à cinquante runs par fiche, soit plus d'un mégaoctet — pour n'en lire que quelques champs.
+
+*Décision :* sélection des seuls champs affichés ; la fiche ne relit que les deux instantanés nécessaires à l'attribution d'écart.
+
+## D-39 — Mise à jour de sécurité de Next.js — **TECHNIQUE**
+
+*Constat :* Next.js 15.5.23 était visé par deux avis critiques (exécution de code à distance par l'optimiseur d'images, et sur hébergement Windows). L'exposition réelle était faible — l'application n'utilise pas l'optimiseur et n'est pas hébergée sous Windows — mais rien ne justifiait de rester exposé.
+
+*Décision :* passage à 15.5.27 et à sharp 0.35, mises à jour de correctif sans changement d'API. Les alertes restantes (outil Prisma, PostCSS interne à Next) concernent l'outillage de construction, pas l'exécution, et supposent une montée de version majeure.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.
 2. **Politique de défaut, guérison et rechute** — les durées probatoires proposées (trois mois, douze mois) sont des seeds.
 3. **Seuils de couverture** — à recaler sur la distribution réelle de complétude, dès les premiers dossiers du pilote.
 4. **Traitement des jeunes entreprises** — grille dédiée ou traitement expert tracé.
-5. **Score de la catégorie « information absente »** — à estimer comme une catégorie de risque à part entière lors de la calibration.
+5. **Score de la catégorie « information absente »** — à estimer comme une catégorie de risque à part entière lors de la calibration. **Urgent** : à 25, une information absente améliore le score de tout critère réellement mauvais, contrairement à ce qu'affirme la note méthodologique (D-32).
 6. **Granularité définitive des échelles** — résultat de la calibration, pas choix de présentation.
 7. **Maintien ou suppression des quatre exceptions conservées** — sur tests d'ablation.
 8. **Correspondance entre les deux échelles** — condition de toute master scale commune.
