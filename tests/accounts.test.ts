@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   isLocked,
   LOCK_DURATION_MS,
+  LOGIN_LIMIT_PER_IP,
+  LOGIN_LIMIT_PER_USERNAME,
   lockUntilAfter,
+  loginThrottled,
   MAX_FAILED_ATTEMPTS,
 } from "@/lib/accounts";
+import { resetRateLimits } from "@/lib/rate-limit";
 import {
   generateTemporaryPassword,
   hashPassword,
@@ -96,5 +100,54 @@ describe("Verrouillage après échecs", () => {
     expect(isLocked(until, now)).toBe(true);
     expect(isLocked(until, new Date(until.getTime() + 1))).toBe(false);
     expect(isLocked(null, now)).toBe(false);
+  });
+});
+
+describe("Plafond de tentatives de connexion, avant tout calcul", () => {
+  beforeEach(() => resetRateLimits());
+  const t0 = Date.parse("2026-10-01T10:00:00Z");
+
+  it(`refuse au-delà de ${LOGIN_LIMIT_PER_USERNAME} tentatives par minute sur un même identifiant`, () => {
+    for (let i = 0; i < LOGIN_LIMIT_PER_USERNAME; i++) {
+      // Adresses distinctes : seul le plafond par identifiant joue.
+      expect(loginThrottled(`10.0.0.${i}`, "cible", t0)).toBeNull();
+    }
+    expect(loginThrottled("10.0.0.99", "cible", t0)).toMatch(/Trop de tentatives/);
+    expect(loginThrottled("10.0.0.99", "autre", t0)).toBeNull();
+  });
+
+  it(`refuse au-delà de ${LOGIN_LIMIT_PER_IP} tentatives par minute depuis une même adresse`, () => {
+    for (let i = 0; i < LOGIN_LIMIT_PER_IP; i++) {
+      expect(loginThrottled("10.1.1.1", `invente${i}`, t0)).toBeNull();
+    }
+    expect(loginThrottled("10.1.1.1", "encore.un", t0)).toMatch(/Trop de tentatives/);
+  });
+
+  it("une adresse bloquée ne crée plus de compteur par identifiant", () => {
+    for (let i = 0; i <= LOGIN_LIMIT_PER_IP; i++) loginThrottled("10.2.2.2", "x" + i, t0);
+    // « victime » n'a jamais été comptée : une autre adresse peut l'essayer
+    // autant de fois que le plafond par identifiant le permet.
+    for (let i = 0; i < LOGIN_LIMIT_PER_USERNAME; i++) {
+      loginThrottled("10.2.2.2", "victime", t0);
+    }
+    expect(loginThrottled("10.3.3.3", "victime", t0)).toBeNull();
+  });
+
+  it("le plafond se lève après une minute", () => {
+    for (let i = 0; i <= LOGIN_LIMIT_PER_USERNAME; i++) loginThrottled(`10.4.0.${i}`, "cible", t0);
+    expect(loginThrottled("10.4.1.1", "cible", t0 + 1_000)).not.toBeNull();
+    expect(loginThrottled("10.4.1.1", "cible", t0 + 61_000)).toBeNull();
+  });
+
+  it("s'applique même si la limite générale de l'API est désactivée", () => {
+    const before = process.env.RATE_LIMIT_PER_MINUTE;
+    process.env.RATE_LIMIT_PER_MINUTE = "0";
+    try {
+      for (let i = 0; i < LOGIN_LIMIT_PER_USERNAME; i++) loginThrottled(`10.5.0.${i}`, "cible", t0);
+      expect(loginThrottled("10.5.1.1", "cible", t0)).not.toBeNull();
+    } finally {
+      if (before === undefined) delete process.env.RATE_LIMIT_PER_MINUTE;
+      else process.env.RATE_LIMIT_PER_MINUTE = before;
+    }
   });
 });

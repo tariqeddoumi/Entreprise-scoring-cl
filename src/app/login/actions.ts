@@ -20,7 +20,11 @@ export async function loginAction(
 
   let result: Awaited<ReturnType<typeof login>>;
   try {
-    result = await login(username, password, (await headers()).get("user-agent") ?? undefined);
+    const h = await headers();
+    result = await login(username, password, {
+      userAgent: h.get("user-agent") ?? undefined,
+      clientIp: clientIp(h),
+    });
   } catch {
     return {
       errorFr: "Service d'authentification indisponible : la base de données ne répond pas.",
@@ -52,4 +56,14 @@ export async function logoutAction(): Promise<void> {
   }
   store.delete(SESSION_COOKIE);
   redirect("/login");
+}
+
+/**
+ * Adresse du client telle que la transmet le frontal. Sur Vercel comme
+ * derrière un mandataire inverse correctement configuré, x-forwarded-for est
+ * réécrit par l'infrastructure : sa première valeur est celle du client.
+ */
+function clientIp(h: Headers): string {
+  const forwarded = h.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || h.get("x-real-ip") || "inconnue";
 }

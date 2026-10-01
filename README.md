@@ -227,7 +227,7 @@ Choix de portabilité : identifiants textuels non séquentiels, aucun type énum
 - clés stockées sous forme d'empreinte, comparaison en temps constant, parcours sans sortie anticipée ;
 - longueur minimale de 24 caractères, aucun secret par défaut ;
 - interface web : comptes nominatifs, mot de passe haché par scrypt et jamais stocké, longueur minimale de 12 caractères, mot de passe provisoire à changer à la première connexion ;
-- cinq échecs consécutifs verrouillent le compte quinze minutes ; le message d'échec ne dit jamais si l'identifiant existe ;
+- cinq échecs consécutifs verrouillent le compte quinze minutes ; le message d'échec ne dit jamais si l'identifiant existe ; au-delà de 20 tentatives par minute depuis une adresse ou de 10 sur un identifiant, la tentative est refusée avant tout calcul ;
 - session par jeton aléatoire de 256 bits (cookie HttpOnly, Secure, SameSite=Strict), dont la base ne garde que l'empreinte ; révoquée côté serveur à la déconnexion, au changement de mot de passe, à la réinitialisation et à la désactivation du compte ;
 - toute page porteuse de données exige une session valide ; connexions, échecs, verrouillages et opérations sur les comptes sont audités ;
 - garde unique appliqué aux 12 routes de l'API — aucune ne peut oublier un contrôle.

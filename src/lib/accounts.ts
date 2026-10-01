@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { Prisma } from "@/generated/prisma";
 import { auditWithin } from "./audit";
 import { isRole, type Identity, type Role } from "./auth";
 import {
@@ -10,6 +11,7 @@ import {
   verifyPassword,
 } from "./password";
 import { prisma } from "./prisma";
+import { checkRateLimit } from "./rate-limit";
 
 /**
  * Comptes nominatifs de l'interface web.
@@ -30,6 +32,19 @@ export const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
 const SESSION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_FAILED_ATTEMPTS = 5;
 export const LOCK_DURATION_MS = 15 * 60 * 1000;
+
+/**
+ * Plafonds de tentatives de connexion par minute, contrôlés AVANT le calcul
+ * scrypt et toute écriture en base. Le verrouillage protège un compte ; ces
+ * plafonds protègent le serveur : sans eux, des tentatives répétées — même
+ * sur un compte inconnu ou déjà verrouillé — consommeraient chacune 32 Mo de
+ * mémoire et une ligne d'audit. L'adresse est contrôlée d'abord, pour qu'une
+ * rafale d'identifiants inventés depuis une même source ne crée pas autant
+ * de compteurs. Compteurs en mémoire, par instance : en déploiement multi-
+ * instances, la limite effective est multipliée par le nombre d'instances.
+ */
+export const LOGIN_LIMIT_PER_IP = 20;
+export const LOGIN_LIMIT_PER_USERNAME = 10;
 
 export const LOGIN_FAILED_FR =
   "Identifiant ou mot de passe incorrect, ou compte temporairement verrouillé.";
@@ -71,9 +86,15 @@ export function isLocked(lockedUntil: Date | null, now: Date): boolean {
 export async function login(
   usernameRaw: string,
   password: string,
-  userAgent?: string
+  meta: { userAgent?: string; clientIp?: string } = {}
 ): Promise<{ ok: true; token: string; mustChangePassword: boolean } | { ok: false; errorFr: string }> {
   const username = normalizeUsername(usernameRaw);
+  const throttled = loginThrottled(
+    meta.clientIp ?? "inconnue",
+    username ?? usernameRaw.trim().toLowerCase()
+  );
+  if (throttled) return { ok: false, errorFr: throttled };
+
   const user = username ? await prisma.user.findUnique({ where: { username } }) : null;
   const now = new Date();
 
@@ -137,7 +158,7 @@ export async function login(
         id: tokenId(token),
         userId: user.id,
         expiresAt: new Date(now.getTime() + SESSION_TTL_MS),
-        userAgent: userAgent?.slice(0, 300),
+        userAgent: meta.userAgent?.slice(0, 300),
       },
     });
     await auditWithin(tx, {
@@ -149,6 +170,26 @@ export async function login(
     });
   });
   return { ok: true, token, mustChangePassword: user.mustChangePassword };
+}
+
+/**
+ * Message de refus si l'adresse ou l'identifiant a dépassé son plafond, null
+ * sinon. Le message est le même que le compte existe ou non.
+ */
+export function loginThrottled(clientIp: string, username: string, now = Date.now()): string | null {
+  const byIp = checkRateLimit(`login:ip:${clientIp}`, now, LOGIN_LIMIT_PER_IP);
+  if (!byIp.allowed) return tooManyFr(byIp.retryAfterSeconds);
+  const byUser = checkRateLimit(
+    `login:user:${username.slice(0, 64)}`,
+    now,
+    LOGIN_LIMIT_PER_USERNAME
+  );
+  if (!byUser.allowed) return tooManyFr(byUser.retryAfterSeconds);
+  return null;
+}
+
+function tooManyFr(seconds: number): string {
+  return `Trop de tentatives de connexion : réessayez dans ${seconds} seconde${seconds > 1 ? "s" : ""}.`;
 }
 
 /** Résout le jeton du cookie. null si absent, inconnu, expiré, révoqué ou compte inactif. */
@@ -331,14 +372,35 @@ export async function resetUserPassword(
 /**
  * Garde-fou : l'outil ne doit jamais se retrouver sans administrateur actif,
  * faute de quoi plus personne ne pourrait créer ni débloquer un compte.
+ *
+ * Le décompte et la modification s'exécutent dans la MÊME transaction,
+ * sérialisable : deux administrateurs qui se rétrogradent ou se désactivent
+ * l'un l'autre au même instant verraient sinon chacun l'autre encore actif,
+ * et les deux opérations réussiraient. En isolation sérialisable, le moteur
+ * en annule une ; elle est signalée comme opération concurrente.
  */
-async function assertAnotherActiveAdmin(userId: string): Promise<void> {
-  const others = await prisma.user.count({
+async function assertAnotherActiveAdmin(
+  tx: Prisma.TransactionClient,
+  userId: string
+): Promise<void> {
+  const others = await tx.user.count({
     where: { role: "ADMIN", isActive: true, id: { not: userId } },
   });
   if (others === 0) {
     throw new AccountError("Opération refusée : ce compte est le dernier administrateur actif.");
   }
+}
+
+const SERIALIZABLE = { isolationLevel: Prisma.TransactionIsolationLevel.Serializable };
+
+/** Conflit de sérialisation (P2034) : l'autre opération concurrente l'a emporté. */
+function asConcurrencyError(e: unknown): unknown {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2034") {
+    return new AccountError(
+      "Opération concurrente sur les comptes : rien n'a été modifié. Rechargez la page et réessayez."
+    );
+  }
+  return e;
 }
 
 export async function setUserRole(actor: Identity, userId: string, role: string): Promise<void> {
@@ -349,18 +411,22 @@ export async function setUserRole(actor: Identity, userId: string, role: string)
   if (user.username === actor.name) {
     throw new AccountError("Un administrateur ne modifie pas son propre rôle.");
   }
-  if (user.role === "ADMIN") await assertAnotherActiveAdmin(user.id);
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: user.id }, data: { role } });
-    await auditWithin(tx, {
-      actor: actor.name,
-      actorRole: actor.role,
-      action: "USER_ROLE_CHANGED",
-      resourceType: "User",
-      resourceId: user.id,
-      detail: { username: user.username, avant: user.role, apres: role },
+  await prisma
+    .$transaction(async (tx) => {
+      if (user.role === "ADMIN") await assertAnotherActiveAdmin(tx, user.id);
+      await tx.user.update({ where: { id: user.id }, data: { role } });
+      await auditWithin(tx, {
+        actor: actor.name,
+        actorRole: actor.role,
+        action: "USER_ROLE_CHANGED",
+        resourceType: "User",
+        resourceId: user.id,
+        detail: { username: user.username, avant: user.role, apres: role },
+      });
+    }, SERIALIZABLE)
+    .catch((e) => {
+      throw asConcurrencyError(e);
     });
-  });
 }
 
 export async function setUserActive(actor: Identity, userId: string, active: boolean): Promise<void> {
@@ -370,28 +436,32 @@ export async function setUserActive(actor: Identity, userId: string, active: boo
   if (!active && user.username === actor.name) {
     throw new AccountError("Un administrateur ne désactive pas son propre compte.");
   }
-  if (!active && user.role === "ADMIN") await assertAnotherActiveAdmin(user.id);
   const now = new Date();
-  await prisma.$transaction(async (tx) => {
-    await tx.user.update({
-      where: { id: user.id },
-      data: active ? { isActive: true, failedAttempts: 0, lockedUntil: null } : { isActive: false },
-    });
-    if (!active) {
-      await tx.userSession.updateMany({
-        where: { userId: user.id, revokedAt: null },
-        data: { revokedAt: now },
+  await prisma
+    .$transaction(async (tx) => {
+      if (!active && user.role === "ADMIN") await assertAnotherActiveAdmin(tx, user.id);
+      await tx.user.update({
+        where: { id: user.id },
+        data: active ? { isActive: true, failedAttempts: 0, lockedUntil: null } : { isActive: false },
       });
-    }
-    await auditWithin(tx, {
-      actor: actor.name,
-      actorRole: actor.role,
-      action: active ? "USER_REACTIVATED" : "USER_DEACTIVATED",
-      resourceType: "User",
-      resourceId: user.id,
-      detail: { username: user.username },
+      if (!active) {
+        await tx.userSession.updateMany({
+          where: { userId: user.id, revokedAt: null },
+          data: { revokedAt: now },
+        });
+      }
+      await auditWithin(tx, {
+        actor: actor.name,
+        actorRole: actor.role,
+        action: active ? "USER_REACTIVATED" : "USER_DEACTIVATED",
+        resourceType: "User",
+        resourceId: user.id,
+        detail: { username: user.username },
+      });
+    }, SERIALIZABLE)
+    .catch((e) => {
+      throw asConcurrencyError(e);
     });
-  });
 }
 
 export type { Role };
