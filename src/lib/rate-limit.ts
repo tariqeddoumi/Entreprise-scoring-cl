@@ -26,8 +26,16 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-export function checkRateLimit(identityKey: string, now = Date.now()): RateLimitResult {
-  const limit = config().rateLimitPerMinute;
+/**
+ * @param limit plafond par minute ; par défaut celui de la configuration
+ *   (RATE_LIMIT_PER_MINUTE). La connexion à l'interface impose le sien, qui
+ *   s'applique même lorsque la limite générale est désactivée.
+ */
+export function checkRateLimit(
+  identityKey: string,
+  now = Date.now(),
+  limit = config().rateLimitPerMinute
+): RateLimitResult {
   if (limit === 0) {
     return { allowed: true, limit: 0, remaining: 0, retryAfterSeconds: 0 };
   }

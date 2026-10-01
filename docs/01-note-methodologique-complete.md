@@ -1570,7 +1570,7 @@ L'écran de résultat restitue séparément : le grade moteur, le grade autonome
 
 ## 23. Sécurité et exploitation
 
-Les constats de sécurité relevés par le diagnostic — authentification par fournisseur d'identité, mTLS, contrôle d'accès par attributs, coffre à secrets, supervision, tests d'intrusion, registre des traitements — **n'ont pas été traités dans cette version** : ils relèvent de l'infrastructure de la banque et d'un programme de sécurité, non de la conception du modèle. Ils figurent en annexe B avec leur condition de levée. Le dispositif existant conserve ses garde-fous : aucun secret par défaut, empreintes de clés, comparaison en temps constant, audit transactionnel, validation stricte des entrées, limitation de débit.
+Les constats de sécurité relevés par le diagnostic — authentification par fournisseur d'identité, mTLS, contrôle d'accès par attributs, coffre à secrets, supervision, tests d'intrusion, registre des traitements — **n'ont pas été traités dans cette version** : ils relèvent de l'infrastructure de la banque et d'un programme de sécurité, non de la conception du modèle. Ils figurent en annexe B avec leur condition de levée. Le dispositif existant conserve ses garde-fous : aucun secret par défaut, empreintes de clés, comparaison en temps constant, audit transactionnel, validation stricte des entrées, limitation de débit. Depuis octobre 2026, l'interface s'ouvre par compte nominatif — mot de passe haché par scrypt, verrouillage après cinq échecs, sessions révocables côté serveur — et les clés sont réservées à l'API entre systèmes ; le raccordement au fournisseur d'identité de la banque reste la cible (journal des décisions, D-40).
 
 ## 24. Tests et preuves d'exécution
 

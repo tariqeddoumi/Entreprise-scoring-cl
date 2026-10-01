@@ -4,7 +4,7 @@
  * Contrôles effectués :
  *  1. connexion établie et version du moteur ;
  *  2. schéma cible résolu (celui de la chaîne de connexion) ;
- *  3. présence des six tables ET de toutes leurs colonnes, dérivées du schéma
+ *  3. présence de toutes les tables ET de toutes leurs colonnes, dérivées du schéma
  *     Prisma lui-même — une colonne absente ne se découvre sinon qu'à la
  *     première requête qui la touche, en production ;
  *  3 bis. cohérence des données persistées avec le moteur courant : statuts et
@@ -17,14 +17,6 @@
 import { readFileSync } from "node:fs";
 import { PrismaClient } from "../src/generated/prisma/index.js";
 
-const EXPECTED_TABLES = [
-  "counterparties",
-  "rating_runs",
-  "overrides",
-  "webhook_subscriptions",
-  "webhook_deliveries",
-  "audit_events",
-];
 
 /**
  * Colonnes attendues, dérivées du schéma Prisma.
@@ -60,6 +52,9 @@ function expectedColumns(): Map<string, string[]> {
   }
   return byTable;
 }
+
+/** Tables attendues : celles que déclare le schéma, jamais une liste recopiée. */
+const EXPECTED_TABLES = [...expectedColumns().keys()];
 
 const prisma = new PrismaClient();
 let failures = 0;

@@ -25,8 +25,13 @@ cp .env.example .env          # renseigner DATABASE_URL, DIRECT_URL, API_KEYS
 npm run db:provider
 npm run db:generate
 npm run db:check              # connexion, isolation du schéma, garde-fous
+npm run users:create -- --username <identifiant> --name "<Prénom Nom>" --role ADMIN
 npm run dev
 ```
+
+La dernière commande crée le premier administrateur et affiche son mot de passe
+provisoire, à changer à la première connexion. Les comptes suivants se créent
+depuis l'écran **Utilisateurs**.
 
 Les tables vivent dans le schéma dédié **`corp_scoring`**, jamais dans
 `public`. Deux chaînes sont nécessaires : `DATABASE_URL` via le pooler
@@ -93,6 +98,8 @@ src/models/        CORP_STD_V1 (45 critères), CORP_TPE_BEHAV_V1
 src/lib/
   auth.ts          vérification des clés, temps constant
   session.ts       session web (cookie HttpOnly), garde de page
+  accounts.ts      comptes nominatifs : connexion, verrouillage, sessions, administration
+  password.ts      empreinte scrypt, politique de mot de passe
   route-guard.ts   garde unique : auth + débit + taille de corps
   rate-limit.ts    limitation de débit par identité
   url-safety.ts    contrôle anti-SSRF des URL sortantes
@@ -175,11 +182,18 @@ Quatre principes contractuels :
 
 Les événements sortants sont signés en HMAC SHA-256 sur `timestamp . corps brut`, avec identifiant anti-rejeu et horodatage. Le consommateur doit vérifier la signature, rejeter au-delà de 300 secondes et rester idempotent.
 
-### Rôles
+### Rôles et accès
 
-`READONLY` < `ANALYST` < `RISK_MANAGER` < `ADMIN`. Configuration via `API_KEYS="<clé>:<rôle>:<nom>;…"`.
+`READONLY` < `ANALYST` < `RISK_MANAGER` < `ADMIN`. Deux voies d'accès, chacune réservée à son usage :
 
-**Aucun secret par défaut** : sans configuration, l'API refuse toute requête authentifiée et le démarrage échoue en production.
+| Accès | Qui | Comment |
+|---|---|---|
+| Interface web | Personnes | Compte nominatif : identifiant et mot de passe, créés par un administrateur depuis l'écran **Utilisateurs** (ou `npm run users:create` pour le premier) |
+| API REST | Systèmes | Clé porteuse, `Authorization: Bearer <clé>`, configurée via `API_KEYS="<clé>:<rôle>:<nom>;…"` |
+
+Une clé API n'ouvre pas de session dans l'interface, et une session de l'interface n'ouvre pas l'API.
+
+**Aucun secret par défaut** : sans configuration, l'API refuse toute requête authentifiée et le démarrage échoue en production ; aucun compte n'existe tant qu'un administrateur ne l'a pas créé.
 
 ---
 
@@ -212,7 +226,10 @@ Choix de portabilité : identifiants textuels non séquentiels, aucun type énum
 - identité et rôle dérivés du jeton, jamais du payload ni d'un champ de formulaire ;
 - clés stockées sous forme d'empreinte, comparaison en temps constant, parcours sans sortie anticipée ;
 - longueur minimale de 24 caractères, aucun secret par défaut ;
-- interface web protégée par session (cookie HttpOnly, SameSite=Strict) ; toute page porteuse de données exige une session valide ;
+- interface web : comptes nominatifs, mot de passe haché par scrypt et jamais stocké, longueur minimale de 12 caractères, mot de passe provisoire à changer à la première connexion ;
+- cinq échecs consécutifs verrouillent le compte quinze minutes ; le message d'échec ne dit jamais si l'identifiant existe ; au-delà de 20 tentatives par minute depuis une adresse ou de 10 sur un identifiant, la tentative est refusée avant tout calcul ;
+- session par jeton aléatoire de 256 bits (cookie HttpOnly, Secure, SameSite=Strict), dont la base ne garde que l'empreinte ; révoquée côté serveur à la déconnexion, au changement de mot de passe, à la réinitialisation et à la désactivation du compte ;
+- toute page porteuse de données exige une session valide ; connexions, échecs, verrouillages et opérations sur les comptes sont audités ;
 - garde unique appliqué aux 12 routes de l'API — aucune ne peut oublier un contrôle.
 
 **Intégrité des données**
@@ -300,7 +317,7 @@ Toute modification d'un poids ou d'un seuil dans `src/models/` se répercute dan
 4. Le référentiel sectoriel n'est pas alimenté ; les critères qui s'y réfèrent utilisent des ancrages qualitatifs.
 5. La méthode de support groupe est spécifiée, non implémentée.
 6. Oracle n'est pas certifié.
-7. L'authentification par clé (API et session web) doit être remplacée par le fournisseur d'identité de la banque.
+7. Les comptes de l'interface sont gérés dans l'outil, et l'API s'authentifie par clé : les deux doivent être raccordés au fournisseur d'identité de la banque (OIDC/SAML, double authentification).
 8. Imports de masse, alerte précoce et multilinguisme arabe restent à construire.
 
 Le registre complet figure en annexe B de la note méthodologique.

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getSessionIdentity } from "@/lib/session";
+import { getCurrentSession } from "@/lib/session";
 import { listModels } from "@/models";
 import { logoutAction } from "./login/actions";
 import { NavLinks } from "./nav-links";
@@ -32,7 +32,8 @@ function calibrationFooterFr(models: ReturnType<typeof listModels>): string {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const session = await getSessionIdentity("READONLY");
+  const session = await getCurrentSession();
+  const ready = session !== null && !session.mustChangePassword;
   const models = listModels();
 
   return (
@@ -62,13 +63,18 @@ export default async function RootLayout({
             >
               Scoring Entreprises · Maroc
             </Link>
-            <NavLinks />
+            {ready && <NavLinks isAdmin={session.identity.role === "ADMIN"} />}
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
-              {session.ok ? (
+              {session ? (
                 <>
-                  <span className="muted" style={{ fontSize: 12 }}>
-                    {session.identity.name} · {session.identity.role}
-                  </span>
+                  <Link
+                    href="/account/password"
+                    className="muted"
+                    style={{ fontSize: 12 }}
+                    title="Changer de mot de passe"
+                  >
+                    {session.displayName} · {session.identity.role}
+                  </Link>
                   <form action={logoutAction}>
                     <button
                       type="submit"
