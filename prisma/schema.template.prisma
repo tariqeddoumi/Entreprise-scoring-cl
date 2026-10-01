@@ -172,3 +172,52 @@ model AuditEvent {
   @@index([createdAt])
   @@map("audit_events")
 }
+
+// --- Comptes utilisateurs de l'interface web -------------------------------
+//
+// Comptes nominatifs : la piste d'audit désigne une personne, non un rôle
+// partagé. Les clés API (variable API_KEYS) restent réservées aux échanges
+// entre systèmes et ne permettent plus d'ouvrir une session dans l'interface.
+//
+// Le mot de passe n'est jamais stocké : seule son empreinte scrypt salée l'est.
+// Ce mécanisme est provisoire par nature — le raccordement au fournisseur
+// d'identité de la banque (OIDC/SAML) le remplacera sans changer le reste :
+// l'identité et le rôle continuent de provenir de la session.
+
+model User {
+  id                 String    @id @default(cuid())
+  username           String    @unique // minuscules, [a-z0-9._-]
+  displayName        String
+  role               String // READONLY | ANALYST | RISK_MANAGER | ADMIN
+  passwordHash       String // scrypt$N$r$p$sel$empreinte
+  mustChangePassword Boolean   @default(true)
+  isActive           Boolean   @default(true)
+  failedAttempts     Int       @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  passwordChangedAt  DateTime?
+  createdBy          String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  sessions UserSession[]
+
+  @@map("users")
+}
+
+// Session ouverte dans l'interface. Le cookie porte un jeton aléatoire ; la
+// base n'en garde que l'empreinte SHA-256, qui sert d'identifiant. Une session
+// se révoque côté serveur : déconnexion, changement ou réinitialisation du mot
+// de passe, désactivation du compte.
+model UserSession {
+  id         String    @id // SHA-256 hexadécimal du jeton
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userAgent  String?
+
+  @@index([userId])
+  @@map("user_sessions")
+}

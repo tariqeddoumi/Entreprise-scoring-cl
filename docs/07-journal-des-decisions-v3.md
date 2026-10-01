@@ -369,6 +369,30 @@ Revue du modèle, du moteur et de l'outil, conduite sur une instance locale Post
 
 ---
 
+# 2 sexies. Accès à l'interface
+
+## D-40 — L'interface s'ouvre par compte nominatif, plus par clé — **À CONFIRMER**
+
+*Constat :* l'écran de connexion demandait une clé d'accès, partagée par rôle. Trois conséquences : la piste d'audit désignait « analyste » et non une personne, ce qui vide de sens le principe des quatre yeux dès que deux personnes partagent une clé ; le cookie de session contenait la clé elle-même, si bien qu'une déconnexion ne révoquait rien ; ajouter ou retirer une personne imposait de modifier la configuration et de redéployer. La note présentait ce mode comme transitoire, en attente du fournisseur d'identité de la banque.
+
+*Décision, prise avec l'utilisateur :* comptes gérés dans l'outil, en attendant ce raccordement.
+- **Mot de passe :** empreinte scrypt salée, jamais stocké ni journalisé ; douze caractères minimum, sans reprendre l'identifiant — la longueur plutôt que les règles de composition (NIST SP 800-63B).
+- **Première connexion :** mot de passe provisoire, à changer avant tout accès.
+- **Verrouillage :** cinq échecs consécutifs bloquent le compte quinze minutes ; le compteur ne se remet à zéro que sur une connexion réussie. Le message d'échec est identique, et de même durée, que l'identifiant existe ou non.
+- **Session :** jeton aléatoire de 256 bits, dont la base ne garde que l'empreinte. Elle est relue à chaque requête et révoquée côté serveur à la déconnexion, au changement ou à la réinitialisation du mot de passe, et à la désactivation du compte.
+- **Administration :** écran réservé au rôle ADMIN pour créer un compte, changer un rôle, réinitialiser un mot de passe, désactiver ou réactiver. Un administrateur ne peut ni rétrograder ni désactiver son propre compte, et l'outil refuse toute opération qui le laisserait sans administrateur actif. Premier compte et secours en ligne de commande (`npm run users:create`).
+- **Audit :** connexions, échecs, verrouillages et chaque opération sur les comptes, dans la même transaction que l'écriture.
+
+*Ce qui ne change pas :* les clés API restent l'accès des systèmes à l'API REST. Une clé n'ouvre plus de session dans l'interface, et une session n'ouvre pas l'API.
+
+*Ce qui n'a pas été retenu :*
+- Supabase Auth : plus rapide, mais il lie l'outil à Supabase, contrairement à l'objectif de portabilité (D-28), et il partage l'annuaire avec les autres applications du projet.
+- Raccordement direct au fournisseur d'identité : c'est la cible, mais il suppose des éléments que seule la DSI peut fournir.
+
+*À confirmer par la banque :* la politique de mot de passe et de verrouillage, la durée de session (huit heures), et l'échéance du raccordement au fournisseur d'identité, qui apportera la double authentification.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

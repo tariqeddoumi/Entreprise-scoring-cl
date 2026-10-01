@@ -1,47 +1,75 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { authenticateToken, type Identity, type Role } from "./auth";
+import { cache } from "react";
+import { resolveSession, type SessionInfo } from "./accounts";
+import { hasRole, type Identity, type Role } from "./auth";
 
 /**
  * Session de l'interface web.
  *
- * Le cookie porte la clé API elle-même, en HttpOnly, Secure et SameSite=Strict :
- *  - HttpOnly empêche toute lecture par du JavaScript (protection contre le vol
- *    par script intersites) ;
- *  - SameSite=Strict empêche l'envoi depuis un site tiers (protection contre la
- *    falsification de requête intersites), en complément du contrôle d'origine
- *    intégré aux actions serveur ;
- *  - aucun secret de signature supplémentaire n'est introduit, donc aucun
- *    secret par défaut.
+ * Le cookie porte un jeton aléatoire de 256 bits, en HttpOnly, Secure et
+ * SameSite=Strict ; la base n'en conserve que l'empreinte. L'identité et le
+ * rôle sont relus en base à chaque requête : une désactivation, un changement
+ * de rôle ou une réinitialisation de mot de passe prennent effet
+ * immédiatement, sans attendre l'expiration du cookie.
  *
- * L'identité est toujours dérivée de ce jeton, jamais d'un champ de formulaire.
+ *  - HttpOnly empêche toute lecture par du JavaScript (vol par script
+ *    intersites) ;
+ *  - SameSite=Strict empêche l'envoi depuis un site tiers (falsification de
+ *    requête intersites), en complément du contrôle d'origine intégré aux
+ *    actions serveur.
+ *
+ * Les clés API n'ouvrent plus de session : elles restent réservées aux
+ * échanges entre systèmes, par l'en-tête Authorization.
+ *
+ * L'identité est toujours dérivée de la session, jamais d'un champ de formulaire.
  */
 
 export const SESSION_COOKIE = "corp_scoring_session";
 
+/** Session courante, résolue une seule fois par requête. */
+export const getCurrentSession = cache(async (): Promise<SessionInfo | null> => {
+  const store = await cookies();
+  try {
+    return await resolveSession(store.get(SESSION_COOKIE)?.value);
+  } catch {
+    // Base injoignable : aucune session ne peut être établie.
+    return null;
+  }
+});
+
 export async function getSessionIdentity(minRole: Role): Promise<
   { ok: true; identity: Identity } | { ok: false; reasonFr: string }
 > {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
-  if (!token) {
-    return { ok: false, reasonFr: "Session absente : authentifiez-vous." };
+  const session = await getCurrentSession();
+  if (!session) {
+    return { ok: false, reasonFr: "Session absente ou expirée : authentifiez-vous." };
   }
-  const auth = authenticateToken(token, minRole);
-  if (!auth.ok) {
-    return { ok: false, reasonFr: auth.message };
+  if (session.mustChangePassword) {
+    return {
+      ok: false,
+      reasonFr: "Changement de mot de passe requis avant toute opération.",
+    };
   }
-  return { ok: true, identity: auth.identity };
+  if (!hasRole(session.identity.role, minRole)) {
+    return {
+      ok: false,
+      reasonFr: `Rôle ${session.identity.role} insuffisant (requis : ${minRole}).`,
+    };
+  }
+  return { ok: true, identity: session.identity };
 }
 
 /**
  * Exige une session valide pour afficher une page.
- * Redirige vers l'écran d'authentification si la session est absente,
- * expirée ou de rôle insuffisant.
+ *  - sans session : écran de connexion ;
+ *  - mot de passe provisoire : écran de changement de mot de passe ;
+ *  - rôle insuffisant : tableau de bord.
  */
 export async function requireSession(minRole: Role = "READONLY"): Promise<Identity> {
-  const session = await getSessionIdentity(minRole);
-  if (session.ok) return session.identity;
-  // `redirect` interrompt le rendu : le code suivant n'est jamais atteint.
-  redirect("/login");
+  const session = await getCurrentSession();
+  if (!session) redirect("/login");
+  if (session.mustChangePassword) redirect("/account/password");
+  if (!hasRole(session.identity.role, minRole)) redirect("/");
+  return session.identity;
 }

@@ -33,6 +33,18 @@ const ROLE_RANK: Record<Role, number> = {
   ADMIN: 3,
 };
 
+/** Rôles reconnus, du moins au plus habilité. */
+export const ROLES: readonly Role[] = ["READONLY", "ANALYST", "RISK_MANAGER", "ADMIN"];
+
+export function isRole(value: string): value is Role {
+  return value in ROLE_RANK;
+}
+
+/** true si `role` atteint au moins `minRole`. */
+export function hasRole(role: Role, minRole: Role): boolean {
+  return ROLE_RANK[role] >= ROLE_RANK[minRole];
+}
+
 interface KeyEntry {
   hash: Buffer; // SHA-256 de la clé — les clés ne sont jamais gardées en clair
   role: Role;

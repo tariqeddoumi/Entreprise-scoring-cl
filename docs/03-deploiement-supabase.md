@@ -99,6 +99,24 @@ Les tables existent déjà : `db:push` n'est pas nécessaire au premier
 démarrage. Il le deviendra lors d'une évolution du schéma, suivi d'un
 nouveau passage du script de durcissement.
 
+### Comptes utilisateurs (à partir d'octobre 2026)
+
+La connexion à l'interface se fait par compte nominatif. Les deux tables
+`users` et `user_sessions` doivent exister **avant** le déploiement de la
+version qui l'introduit — sans elles, plus personne ne peut ouvrir de session :
+
+```bash
+psql "$DIRECT_URL" -f prisma/sql/03-comptes-utilisateurs.sql
+npm run users:create -- --username <identifiant> --name "<Prénom Nom>" --role ADMIN
+```
+
+Le script est idempotent et applique lui-même le durcissement des deux tables
+(droits retirés aux rôles `anon` et `authenticated`, sécurité au niveau des
+lignes). La seconde commande affiche une fois le mot de passe provisoire du
+premier administrateur, qui crée ensuite les autres comptes depuis l'écran
+**Utilisateurs**. En cas de perte du dernier accès administrateur :
+`npm run users:create -- --username <identifiant> --reset`.
+
 ## 5. Migration vers PostgreSQL autonome
 
 Le passage ne demande aucune modification de code.

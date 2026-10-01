@@ -1,44 +1,55 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { authenticateToken } from "@/lib/auth";
+import { login, logout, SESSION_TTL_MS } from "@/lib/accounts";
 import { SESSION_COOKIE } from "@/lib/session";
-
-/** Durée de la session applicative, en secondes. */
-const SESSION_MAX_AGE = 8 * 60 * 60;
 
 export async function loginAction(
   _prev: { errorFr?: string } | undefined,
   formData: FormData
 ): Promise<{ errorFr?: string }> {
-  const key = String(formData.get("apiKey") ?? "").trim();
-  if (!key) {
-    return { errorFr: "Saisissez votre clé d'accès." };
+  const username = String(formData.get("username") ?? "");
+  const password = String(formData.get("password") ?? "");
+  if (!username.trim() || !password) {
+    return { errorFr: "Saisissez votre identifiant et votre mot de passe." };
+  }
+  if (password.length > 1024) {
+    return { errorFr: "Identifiant ou mot de passe incorrect." };
   }
 
-  // La clé est vérifiée contre le référentiel serveur ; aucun rôle n'est
-  // accepté depuis le formulaire.
-  const auth = authenticateToken(key, "READONLY");
-  if (!auth.ok) {
-    // Message volontairement générique : ne pas indiquer si la clé existe.
-    return { errorFr: "Clé d'accès invalide." };
+  let result: Awaited<ReturnType<typeof login>>;
+  try {
+    result = await login(username, password, (await headers()).get("user-agent") ?? undefined);
+  } catch {
+    return {
+      errorFr: "Service d'authentification indisponible : la base de données ne répond pas.",
+    };
   }
+  if (!result.ok) return { errorFr: result.errorFr };
 
   const store = await cookies();
-  store.set(SESSION_COOKIE, key, {
+  store.set(SESSION_COOKIE, result.token, {
     httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: SESSION_MAX_AGE,
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
 
-  redirect("/");
+  redirect(result.mustChangePassword ? "/account/password" : "/");
 }
 
 export async function logoutAction(): Promise<void> {
   const store = await cookies();
+  try {
+    // Révocation côté serveur : un cookie copié avant la déconnexion ne
+    // rouvre plus rien.
+    await logout(store.get(SESSION_COOKIE)?.value);
+  } catch {
+    // Base injoignable : le cookie est supprimé quand même, la session
+    // expirera d'elle-même.
+  }
   store.delete(SESSION_COOKIE);
   redirect("/login");
 }

@@ -56,7 +56,8 @@ DECLARE
 BEGIN
   FOREACH t IN ARRAY ARRAY[
     'counterparties', 'rating_runs', 'overrides',
-    'webhook_subscriptions', 'webhook_deliveries', 'audit_events'
+    'webhook_subscriptions', 'webhook_deliveries', 'audit_events',
+    'users', 'user_sessions'
   ] LOOP
     IF EXISTS (
       SELECT 1 FROM pg_tables
