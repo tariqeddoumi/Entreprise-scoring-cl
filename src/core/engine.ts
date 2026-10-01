@@ -76,6 +76,16 @@ export function computeRating(
   const blocking: string[] = [];
   const inconsistencies: string[] = [];
 
+  // Un code de critère que le modèle ne connaît pas (faute de frappe, critère
+  // d'un autre modèle) serait sinon ignoré sans trace, et le critère visé
+  // traité comme manquant sans que l'analyste comprenne pourquoi.
+  const knownCriteria = new Set(model.criteria.map((c) => c.code));
+  for (const code of Object.keys(input.criteria)) {
+    if (!knownCriteria.has(code)) {
+      warnings.push(`Critère inconnu du modèle ${model.modelId} ignoré : ${code}`);
+    }
+  }
+
   // --- 03. Contrôles de relation : statut conformité, jamais fusionné -------
   const triggeredRedFlags = resolveRedFlags(model, input.redFlags ?? [], warnings);
   const complianceStatus = resolveComplianceStatus(input.complianceStatus, triggeredRedFlags);
@@ -86,6 +96,9 @@ export function computeRating(
   // --- 02. Routage : segment puis éligibilité du modèle --------------------
   const ruleset = rulesetById(model.segmentationRulesetId);
   const seg = determineSegment(input, ruleset);
+  // Un segment fourni qui contredit le calcul est accepté mais jamais tu
+  // (§ 11) : choisir son segment revient à choisir ses pondérations.
+  if (seg.divergenceFr) inconsistencies.push(seg.divergenceFr);
 
   const shell = {
     modelId: model.modelId,
@@ -123,8 +136,37 @@ export function computeRating(
     meetsPolicy: false,
   };
 
+  // Un défaut constaté ne se perd jamais dans un refus de notation (§ 10 de
+  // la note méthodologique : le moteur « reçoit le constat et force le grade
+  // correspondant »). Sans cette règle, une entreprise de moins de deux ans,
+  // un dossier amputé d'une donnée critique ou un segment indéterminé
+  // ressortaient « sans note » alors que le défaut était déclaré — et les
+  // moteurs aval lisaient une absence de note là où il y avait un défaut.
+  // Seul le routage vers un autre modèle publié n'est pas concerné : ce
+  // modèle-là forcera à son tour le même grade, commun aux deux échelles.
+  const forcedDefault = (
+    contextFr: string,
+    scored: { domainResults: DomainResult[]; coverage: CoverageResult }
+  ): RatingResult => {
+    const defGrade = input.defaultGrade ?? DEFAULT_GRADE_FALLBACK;
+    return finalize(model, opts, {
+      ...shell,
+      ratingStatus: "DEFAULTED",
+      rawScore: null,
+      domainResults: scored.domainResults,
+      coverage: scored.coverage,
+      engineGrade: null,
+      standaloneGrade: defGrade,
+      finalGrade: defGrade,
+      explanationFr: `Défaut constaté (${defGrade}) : le grade de défaut s'impose bien qu'aucun score ne puisse être calculé (${contextFr}). Un défaut est un constat, pas une estimation : il ne disparaît pas derrière un refus de notation. La classification réglementaire et le stage IFRS 9 relèvent de moteurs distincts.`,
+    });
+  };
+
   if (!seg.segment) {
     blocking.push(seg.explanationFr);
+    if (input.defaultTriggered) {
+      return forcedDefault("segment indéterminé", { domainResults: [], coverage: emptyCoverage });
+    }
     return finalize(model, opts, {
       ...shell,
       ratingStatus: "NO_RATING_SEGMENT_UNDETERMINED",
@@ -167,6 +209,12 @@ export function computeRating(
   ) {
     const msg = `Entreprise de moins de ${YOUNG_COMPANY_YEARS} ans sans support groupe juridiquement robuste : routage vers le traitement jeune entreprise. Les grilles publiées supposent un historique que ce dossier n'a pas ; un grade plafonné donnerait une fausse impression de mesure.`;
     blocking.push(msg);
+    if (input.defaultTriggered) {
+      return forcedDefault("entreprise routée vers le traitement jeune entreprise", {
+        domainResults: [],
+        coverage: emptyCoverage,
+      });
+    }
     return finalize(model, opts, {
       ...shell,
       ratingStatus: "NO_RATING_ROUTED_OTHER_MODEL",
@@ -196,6 +244,9 @@ export function computeRating(
     // score d'un dossier amputé d'une variable bloquante ne mesure rien — à la
     // différence d'un dossier simplement peu couvert, où le score est conservé
     // pour la surveillance (porte de couverture, plus bas).
+    if (input.defaultTriggered) {
+      return forcedDefault("donnée critique manquante ou invalide", { domainResults, coverage });
+    }
     return finalize(model, opts, {
       ...shell,
       ratingStatus: "NO_RATING_INSUFFICIENT_DATA",
@@ -214,6 +265,9 @@ export function computeRating(
   const rawScore = aggregate(domainResults);
   if (rawScore === null) {
     blocking.push("Aucun domaine pondéré applicable : agrégation impossible.");
+    if (input.defaultTriggered) {
+      return forcedDefault("aucun domaine pondéré applicable", { domainResults, coverage });
+    }
     return finalize(model, opts, {
       ...shell,
       ratingStatus: "NO_RATING_INSUFFICIENT_DATA",

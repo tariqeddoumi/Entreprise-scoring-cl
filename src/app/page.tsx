@@ -41,27 +41,58 @@ export default async function DashboardPage() {
 
   const { data: stats, dbAvailable } = await safeQuery(
     async () => {
-      const [counterparties, runs, recent, gradeRows] = await Promise.all([
+      const [counterparties, runs, recent, latest] = await Promise.all([
         prisma.counterparty.count(),
         prisma.ratingRun.count(),
+        // Champs affichés seulement : les instantanés d'entrée et de résultat
+        // pèsent plusieurs dizaines de kilo-octets par run.
         prisma.ratingRun.findMany({
           orderBy: { createdAt: "desc" },
           take: 10,
-          include: { counterparty: { select: { name: true } } },
+          select: {
+            id: true,
+            asOfDate: true,
+            segment: true,
+            outcome: true,
+            rawScore: true,
+            finalGrade: true,
+            counterparty: { select: { name: true } },
+          },
         }),
-        // Groupé PAR MODÈLE : deux modèles portent deux échelles que rien ne
-        // déclare comparables (constat C03). Les additionner dans une seule
-        // distribution reviendrait à traiter un STD-P3 et un TPE-B3 comme le
-        // même risque, ce que le moteur refuse explicitement par ailleurs.
-        prisma.ratingRun.groupBy({
-          by: ["modelId", "finalGrade"],
-          _count: { _all: true },
-          where: { finalGrade: { not: null } },
+        // Note COURANTE de chaque contrepartie : sa notation au dernier arrêté,
+        // la plus récente à arrêté égal. Compter tous les runs ferait peser une
+        // contrepartie autant de fois qu'elle a été notée, et mêlerait ses
+        // notes successives — ce ne serait plus la distribution du portefeuille.
+        prisma.ratingRun.findMany({
+          distinct: ["counterpartyId"],
+          orderBy: [{ counterpartyId: "asc" }, { asOfDate: "desc" }, { createdAt: "desc" }],
+          select: { modelId: true, finalGrade: true },
         }),
       ]);
-      return { counterparties, runs, recent, gradeRows };
+      // Groupé PAR MODÈLE : deux modèles portent deux échelles que rien ne
+      // déclare comparables (constat C03). Les additionner dans une seule
+      // distribution reviendrait à traiter un STD-P3 et un TPE-B3 comme le
+      // même risque, ce que le moteur refuse explicitement par ailleurs.
+      const counts = new Map<string, { modelId: string; finalGrade: string; n: number }>();
+      let ungraded = 0;
+      for (const run of latest) {
+        if (run.finalGrade === null) {
+          ungraded++;
+          continue;
+        }
+        const key = `${run.modelId}\u0000${run.finalGrade}`;
+        const row = counts.get(key) ?? { modelId: run.modelId, finalGrade: run.finalGrade, n: 0 };
+        row.n++;
+        counts.set(key, row);
+      }
+      const gradeRows = [...counts.values()].map((r) => ({
+        modelId: r.modelId,
+        finalGrade: r.finalGrade,
+        _count: { _all: r.n },
+      }));
+      return { counterparties, runs, recent, gradeRows, ungraded };
     },
-    { counterparties: 0, runs: 0, recent: [], gradeRows: [] } as {
+    { counterparties: 0, runs: 0, recent: [], gradeRows: [], ungraded: 0 } as {
       counterparties: number;
       runs: number;
       recent: Array<{
@@ -78,6 +109,7 @@ export default async function DashboardPage() {
         finalGrade: string | null;
         _count: { _all: number };
       }>;
+      ungraded: number;
     }
   );
 
@@ -123,11 +155,12 @@ export default async function DashboardPage() {
       <section className="card" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Distribution des grades finaux</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Une distribution par modèle. Les échelles ne sont pas comparables entre elles
+          Note courante de chaque contrepartie — sa notation au dernier arrêté. Une
+          distribution par modèle : les échelles ne sont pas comparables entre elles
           tant qu&apos;aucune correspondance sur probabilités de défaut n&apos;a été
-          validée : les additionner produirait un histogramme qui ne mesure rien.
+          validée, et les additionner produirait un histogramme qui ne mesure rien.
         </p>
-        {stats.gradeRows.length === 0 ? (
+        {stats.gradeRows.length === 0 && stats.ungraded === 0 ? (
           <p className="muted">Aucune notation enregistrée.</p>
         ) : (
           (() => {
@@ -197,17 +230,25 @@ export default async function DashboardPage() {
                   );
                 })}
 
+                {stats.ungraded > 0 && (
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    <strong>{stats.ungraded}</strong> contrepartie(s) sans grade à leur
+                    dernier arrêté (données insuffisantes, segment indéterminé ou routage
+                    vers un autre traitement) : elles ne figurent pas dans la distribution.
+                  </p>
+                )}
+
                 {archivedTotal > 0 && (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    <strong>{archivedTotal}</strong> notation(s) portent un grade qui
-                    n&apos;appartient à aucune échelle publiée —{" "}
+                    <strong>{archivedTotal}</strong> contrepartie(s) ont pour dernière
+                    notation un grade qui n&apos;appartient à aucune échelle publiée —{" "}
                     {archived
                       .map((g) => `${g.finalGrade} (${g._count._all})`)
                       .join(", ")}
-                    . Produites par une version antérieure du moteur, elles restent
-                    consultables mais ne sont pas classées ici : les ranger dans
+                    . Produites par une version antérieure du moteur, ces notations
+                    restent consultables mais ne sont pas classées ici : les ranger dans
                     l&apos;échelle courante leur donnerait un sens qu&apos;elles
-                    n&apos;ont pas.
+                    n&apos;ont pas. Une renotation les y fera entrer.
                   </p>
                 )}
               </div>

@@ -269,7 +269,8 @@ paths:
       summary: Proposition d'override (maker)
       description: |
         Le résultat moteur n'est jamais écrasé. L'override ordinaire est limité à
-        ±2 crans ; l'amélioration d'un grade défaut est refusée.
+        ±2 crans. Un grade de défaut n'est ni quitté ni atteint par override : le
+        défaut est un constat amont, déclaré lors d'une notation.
       requestBody:
         required: true
         content:
@@ -277,6 +278,9 @@ paths:
             schema: { $ref: "#/components/schemas/OverrideRequest" }
       responses:
         "201": { description: Override en attente de décision }
+        "400": { description: Payload invalide, grade cible inconnu ou identique, expiration déjà passée }
+        "404": { description: Run de notation inconnu }
+        "409": { description: Run sans grade, grade de défaut au départ ou à l'arrivée, ou override déjà en attente sur ce run }
         "422": { description: Nombre de crans supérieur à la limite }
 
   /overrides/{id}/decision:
