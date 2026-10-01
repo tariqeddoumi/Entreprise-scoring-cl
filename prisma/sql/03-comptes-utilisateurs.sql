@@ -17,9 +17,10 @@
 -- 01-postgresql-hardening.sql, qui couvre lui aussi ces deux tables.
 -- ---------------------------------------------------------------------------
 
-SET search_path TO corp_scoring;
+-- Tous les noms sont qualifiés par « corp_scoring » : sur Supabase, le schéma
+-- « public » héberge déjà des tables « users » d'autres applications.
 
-CREATE TABLE IF NOT EXISTS "users" (
+CREATE TABLE IF NOT EXISTS corp_scoring."users" (
     "id" TEXT NOT NULL,
     "username" TEXT NOT NULL,
     "displayName" TEXT NOT NULL,
@@ -38,7 +39,7 @@ CREATE TABLE IF NOT EXISTS "users" (
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE IF NOT EXISTS "user_sessions" (
+CREATE TABLE IF NOT EXISTS corp_scoring."user_sessions" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -49,16 +50,18 @@ CREATE TABLE IF NOT EXISTS "user_sessions" (
     CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS "users_username_key" ON "users"("username");
-CREATE INDEX IF NOT EXISTS "user_sessions_userId_idx" ON "user_sessions"("userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "users_username_key" ON corp_scoring."users"("username");
+CREATE INDEX IF NOT EXISTS "user_sessions_userId_idx" ON corp_scoring."user_sessions"("userId");
 
 DO $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'user_sessions_userId_fkey'
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'user_sessions_userId_fkey'
+      AND conrelid = 'corp_scoring.user_sessions'::regclass
   ) THEN
-    ALTER TABLE "user_sessions" ADD CONSTRAINT "user_sessions_userId_fkey"
-      FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    ALTER TABLE corp_scoring."user_sessions" ADD CONSTRAINT "user_sessions_userId_fkey"
+      FOREIGN KEY ("userId") REFERENCES corp_scoring."users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
   END IF;
 END $$;
 
