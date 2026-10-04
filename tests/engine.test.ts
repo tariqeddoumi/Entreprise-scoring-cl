@@ -298,6 +298,18 @@ describe("Séparation des finalités (constat C06)", () => {
     expect(r.usageRights.restrictionsFr.join(" ")).toContain("conformité");
   });
 
+  it("un statut déclaré ne masque jamais un red flag de conformité observé (D-43)", () => {
+    const base = tpeGoldenInput();
+    const at = (input: Partial<typeof base>) =>
+      computeRating(CORP_STD_V1, { ...base, ...input }, AT).complianceStatus;
+    expect(at({ complianceStatus: "CLEAR", redFlags: ["RF01"] })).toBe("BLOCKED");
+    expect(at({ complianceStatus: "REFER", redFlags: ["RF02"] })).toBe("BLOCKED");
+    // Le statut déclaré reste retenu quand il est le plus sévère, ou seul.
+    expect(at({ complianceStatus: "BLOCKED" })).toBe("BLOCKED");
+    expect(at({ complianceStatus: "CLEAR" })).toBe("CLEAR");
+    expect(at({})).toBe("NOT_EVALUATED");
+  });
+
   it("l'échelle ne porte aucune décision indicative", () => {
     for (const band of CORP_STD_V1.gradeScale.bands) {
       expect(Object.keys(band)).not.toContain("indicativeDecisionFr");

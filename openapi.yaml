@@ -123,19 +123,30 @@ paths:
     patch:
       tags: [Contreparties]
       summary: Mise à jour partielle
+      description: |
+        Seuls les champs présents sont modifiés. La modification et son audit
+        sont écrits dans la même transaction ; l'événement `counterparty.updated`
+        est ensuite publié aux souscriptions abonnées.
       parameters: [{ $ref: "#/components/parameters/Id" }]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/CounterpartyInput" }
+            schema: { $ref: "#/components/schemas/CounterpartyPatch" }
       responses:
         "200": { description: Contrepartie mise à jour }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: ICE déjà enregistré }
 
   /counterparties/{id}/rating-runs:
     get:
       tags: [Notation]
       summary: Historique des notations d'une contrepartie
+      description: |
+        Trié par date d'arrêté décroissante, puis par date de calcul : le premier
+        élément est la notation retenue par les écrans. Les scores sont des
+        nombres (précision de la colonne : 4 décimales).
       parameters: [{ $ref: "#/components/parameters/Id" }]
       responses:
         "200": { description: Runs de notation (résumés) }
@@ -280,7 +291,7 @@ paths:
         "201": { description: Override en attente de décision }
         "400": { description: Payload invalide, grade cible inconnu ou identique, expiration déjà passée }
         "404": { description: Run de notation inconnu }
-        "409": { description: Run sans grade, grade de défaut au départ ou à l'arrivée, ou override déjà en attente sur ce run }
+        "409": { description: Run sans grade, grade de défaut au départ ou à l'arrivée, override déjà en attente sur ce run, ou run produit par une version antérieure du modèle (autre échelle de grades) }
         "422": { description: Nombre de crans supérieur à la limite }
 
   /overrides/{id}/decision:
@@ -408,6 +419,19 @@ components:
         sectorCode: { type: string, description: Code du référentiel sectoriel interne }
         city: { type: string }
 
+    CounterpartyPatch:
+      type: object
+      description: Mise à jour partielle — tous les champs sont facultatifs.
+      properties:
+        name: { type: string, maxLength: 300 }
+        ice: { type: string, maxLength: 20 }
+        rc: { type: string, maxLength: 30 }
+        fiscalId: { type: string, maxLength: 30 }
+        legalForm: { type: string, maxLength: 60 }
+        sectorCode: { type: string, maxLength: 30 }
+        city: { type: string, maxLength: 80 }
+        isActive: { type: boolean, description: Désactivation sans suppression }
+
     CriterionInput:
       type: object
       required: [status]
@@ -472,12 +496,54 @@ components:
             singleClientDependencyUnmitigated: { type: boolean }
             activeRestructuringForbearance: { type: boolean }
             materialGroupFileIncomplete: { type: boolean }
+        materiality:
+          type: object
+          description: >
+            Matérialité des risques conditionnels. Un critère soumis à une porte de
+            matérialité (D7.1, D7.2) n'est évalué que si l'indicateur vaut true ;
+            sinon il est écarté et son poids transféré au critère désigné par le
+            modèle, quelle que soit la valeur transmise.
+          properties:
+            esgPhysicalMaterial: { type: boolean }
+            esgTransitionMaterial: { type: boolean }
+            esgComplianceMaterial: { type: boolean, description: Aucun critère ne s'y rattache dans la version actuelle }
+            covenantsMaterial: { type: boolean, description: Aucun critère ne s'y rattache dans la version actuelle }
+        groupSupport:
+          type: object
+          required: [claimed]
+          description: >
+            Support groupe : relèvement de la note autonome accordé seulement si les
+            quatre conditions sont documentées, plafonné par le modèle.
+          properties:
+            claimed: { type: boolean }
+            capacityDocumented: { type: boolean }
+            willingnessDocumented: { type: boolean }
+            legallyBinding: { type: boolean }
+            fundsTransferable: { type: boolean }
+            requestedNotches: { type: integer, minimum: 0, maximum: 5 }
         redFlags:
           type: array
           items: { type: string, example: RF07 }
+        complianceStatus:
+          type: string
+          enum: [NOT_EVALUATED, CLEAR, REFER, BLOCKED]
+          description: >
+            Statut transmis par le système conformité amont. Le statut restitué est
+            le plus sévère entre celui-ci et celui qu'impliquent les red flags de
+            conformité transmis (RF01 à RF03).
+        existingExposure:
+          type: boolean
+          description: >
+            Exposition déjà au bilan. Accepté et conservé dans l'instantané
+            d'entrée, sans effet sur le calcul dans la version actuelle : la
+            notation est produite quel que soit le statut conformité.
         defaultTriggered:
           type: boolean
           description: Définition de défaut déclenchée — force un grade défaut
+        defaultGrade:
+          type: string
+          enum: [DEF1, DEF2, DEF3]
+          description: Grade de défaut constaté ; DEF1 si absent alors que defaultTriggered vaut true
         asOfDate:
           type: string
           format: date
@@ -602,13 +668,6 @@ components:
         triggeredRedFlags: { type: array, items: { type: object } }
         blockingReasonsFr: { type: array, items: { type: string } }
         warningsFr: { type: array, items: { type: string } }
-        pd12m:
-          type: number
-          nullable: true
-          description: >
-            Probabilité de défaut à 12 mois. NULLE hors environnement bac à sable
-            tant que la calibration n'est pas établie sur défauts observés : une
-            PD simulée ne quitte jamais le bac à sable.
         pdStatus:
           type: string
           enum: [UNCALIBRATED, CALIBRATED, CALIBRATED_SYNTHETIC, TECHNICAL_ONLY_DISABLED]
@@ -622,13 +681,24 @@ components:
           description: >
             PD à 12 mois du grade final. Nulle quand aucun grade final n'est
             produit, ou quand la version de modèle ne porte pas de calibration.
-            Vaut 1 pour un défaut constaté.
+            Vaut 1 pour un défaut constaté. Une PD calibrée sur données simulées
+            n'est exposée qu'en bac à sable, jamais en production.
         calibrationId:
           type: string
           nullable: true
           description: >
             Identifiant de la calibration appliquée. Consigné dans l'instantané
             pour que la notation reste rejouable.
+        reasonCodes:
+          type: array
+          description: Codes d'explication stables des critères (<DOMAINE>.<CRITERE>.<SENS>.<MOTIF>)
+          items: { type: string }
+        topStrengthsFr: { type: array, items: { type: string } }
+        topWeaknessesFr: { type: array, items: { type: string } }
+        inconsistenciesFr:
+          type: array
+          description: Incohérences de saisie relevées par le moteur (ex. non-applicabilité non prévue)
+          items: { type: string }
         explanationFr: { type: string }
         computedAt: { type: string, format: date-time }
 
@@ -637,7 +707,7 @@ components:
       required: [ratingRunId, toGrade, reasonCode, comment]
       properties:
         ratingRunId: { type: string }
-        toGrade: { type: string, example: G6 }
+        toGrade: { type: string, example: STD-P4, description: Grade de l'échelle du modèle qui a produit le run }
         reasonCode:
           type: string
           enum:
@@ -683,7 +753,10 @@ webhooks:
                     runId: { type: string }
                     counterpartyId: { type: string }
                     modelId: { type: string }
+                    modelVersion: { type: string }
                     outcome: { type: string }
+                    segment: { type: string, nullable: true }
+                    asOfDate: { type: string, format: date }
                     rawScore: { type: number, nullable: true }
                     gradeScaleId: { type: string }
                     finalGrade: { type: string, nullable: true }
@@ -691,5 +764,30 @@ webhooks:
                     purpose: { type: string }
                     permittedUses: { type: array, items: { type: string } }
                     restrictions: { type: array, items: { type: string } }
+      responses:
+        "2XX": { description: Événement accepté }
+
+  counterpartyUpdated:
+    post:
+      summary: Événement sortant `counterparty.updated`
+      description: |
+        Publié après une mise à jour partielle validée (PATCH /counterparties/{id}).
+        Mêmes en-têtes de sécurité que `rating.completed`. Le corps ne reprend pas
+        les valeurs modifiées : le consommateur relit la fiche par l'API.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: string }
+                type: { type: string, example: counterparty.updated }
+                timestamp: { type: string, format: date-time }
+                data:
+                  type: object
+                  properties:
+                    counterpartyId: { type: string }
+                    changedFields: { type: array, items: { type: string } }
+                    isActive: { type: boolean }
       responses:
         "2XX": { description: Événement accepté }

@@ -1,11 +1,11 @@
 import type { NextRequest } from "next/server";
-import { ok, problem } from "@/lib/api-utils";
+import { ok, problem, runScoresAsNumbers } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { guard } from "@/lib/route-guard";
 
 export const dynamic = "force-dynamic";
 
-/** Historique des notations d'une contrepartie, plus récentes d'abord. */
+/** Historique des notations d'une contrepartie, arrêté le plus récent d'abord. */
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -22,7 +22,11 @@ export async function GET(
 
   const runs = await prisma.ratingRun.findMany({
     where: { counterpartyId: id },
-    orderBy: { createdAt: "desc" },
+    // Même ordre que la fiche contrepartie et la liste : la date d'arrêté
+    // d'abord, puis la date de calcul. Trié par date de calcul seule, l'API
+    // désignait comme « dernière » une renotation d'un arrêté ancien, quand
+    // l'écran retenait l'arrêté le plus récent (D-43).
+    orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
     take: 100,
     select: {
       id: true,
@@ -40,5 +44,5 @@ export async function GET(
       createdAt: true,
     },
   });
-  return ok({ items: runs });
+  return ok({ items: runs.map(runScoresAsNumbers) });
 }

@@ -1,9 +1,8 @@
 "use server";
 
-import { computeRating } from "@/core/engine";
 import type { RatingInput, RatingResult } from "@/core/types";
 import { getModel } from "@/models";
-import { executeRatingRun } from "@/lib/rating-service";
+import { executeRatingRun, simulateRating } from "@/lib/rating-service";
 import { ratingRequestSchema } from "@/lib/schemas";
 import { getSessionIdentity } from "@/lib/session";
 
@@ -26,11 +25,26 @@ export interface ScoringActionResult {
  * L'identité de l'analyste provient de la session authentifiée (cookie
  * HttpOnly vérifié côté serveur), jamais d'une valeur codée en dur ni d'un
  * champ de formulaire.
+ *
+ * Mêmes règles que l'API (D-43) :
+ *  - la session est exigée AVANT tout calcul, simulation comprise. Une action
+ *    serveur est un point d'entrée public — son identifiant figure dans le
+ *    JavaScript livré au navigateur — et l'écran qui l'appelle ne la protège
+ *    pas : sans ce contrôle, le moteur répondait à un appel anonyme alors que
+ *    `/rating-runs/simulate` le refuse (401) ;
+ *  - rôle ANALYST, comme `/rating-runs/simulate` et `/rating-runs` ;
+ *  - options du moteur dérivées de l'environnement par le service de notation,
+ *    pour qu'un même dossier donne le même résultat à l'écran et par l'API.
  */
 export async function runScoringAction(
   payload: unknown,
   counterpartyId?: string
 ): Promise<ScoringActionResult> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) {
+    return { ok: false, persisted: false, errorFr: session.reasonFr };
+  }
+
   const parsed = ratingRequestSchema.safeParse(payload);
   if (!parsed.success) {
     return {
@@ -43,27 +57,15 @@ export async function runScoringAction(
   }
 
   const { counterpartyId: _payloadCp, ...input } = parsed.data;
-  const model = getModel(input.modelId);
-  if (!model) {
+  if (!getModel(input.modelId)) {
     return { ok: false, persisted: false, errorFr: `Modèle inconnu : ${input.modelId}` };
   }
 
   // Calcul systématique (pur, sans base) — jamais bloqué par l'infrastructure.
-  const result = computeRating(model, input as RatingInput);
+  const result = simulateRating(input as RatingInput);
 
   if (!counterpartyId) {
     return { ok: true, result, persisted: false };
-  }
-
-  // La persistance exige une session authentifiée avec le rôle adéquat.
-  const session = await getSessionIdentity("ANALYST");
-  if (!session.ok) {
-    return {
-      ok: true,
-      result,
-      persisted: false,
-      persistenceWarningFr: `Résultat calculé mais non enregistré : ${session.reasonFr}`,
-    };
   }
 
   try {

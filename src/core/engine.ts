@@ -23,7 +23,14 @@ import type {
   UsageRights,
 } from "./types";
 
-export const ENGINE_VERSION = "3.0.0";
+/**
+ * Version du moteur, consignée dans chaque instantané.
+ *
+ * 3.0.1 : un statut conformité déclaré ne peut plus masquer un red flag de
+ * conformité observé (D-43). Seuls les dossiers qui portaient les deux à la
+ * fois changent de résultat.
+ */
+export const ENGINE_VERSION = "3.0.1";
 
 /** Âge minimal, en années, en deçà duquel la contrepartie est routée hors grilles publiées. */
 const YOUNG_COMPANY_YEARS = 2;
@@ -443,16 +450,32 @@ function resolveRedFlags(
  * refuser de la surveiller et de la provisionner — la conformité interdit une
  * relation ou une opération, pas la connaissance du risque.
  */
+const COMPLIANCE_SEVERITY: Record<ComplianceStatus, number> = {
+  NOT_EVALUATED: 0,
+  CLEAR: 1,
+  REFER: 2,
+  BLOCKED: 3,
+};
+
+/*
+ * Le statut retenu est le plus sévère entre le statut déclaré par le système
+ * amont et celui qu'impliquent les red flags de conformité observés. Laisser le
+ * statut déclaré l'emporter toujours permettait à un « CLEAR » de masquer un
+ * RF01 bloquant transmis dans la même requête : le résultat affichait une
+ * relation conforme alors qu'il portait lui-même le signal contraire (D-43).
+ */
 function resolveComplianceStatus(
   declared: ComplianceStatus | undefined,
   flags: TriggeredRedFlag[]
 ): ComplianceStatus {
-  if (declared && declared !== "NOT_EVALUATED") return declared;
-  const hasBlock = flags.some((f) => f.source === "COMPLIANCE" && f.level === "BLOCK");
-  if (hasBlock) return "BLOCKED";
-  const hasRefer = flags.some((f) => f.source === "COMPLIANCE");
-  if (hasRefer) return "REFER";
-  return declared ?? "NOT_EVALUATED";
+  const compliance = flags.filter((f) => f.source === "COMPLIANCE");
+  const observed: ComplianceStatus = compliance.some((f) => f.level === "BLOCK")
+    ? "BLOCKED"
+    : compliance.length > 0
+      ? "REFER"
+      : "NOT_EVALUATED";
+  const stated = declared ?? "NOT_EVALUATED";
+  return COMPLIANCE_SEVERITY[observed] > COMPLIANCE_SEVERITY[stated] ? observed : stated;
 }
 
 /**

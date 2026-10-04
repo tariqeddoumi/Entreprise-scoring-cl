@@ -1,6 +1,7 @@
 import { getModel } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { ScoringForm } from "./ScoringForm";
+import { hasRole } from "@/lib/auth";
 import { requireSession } from "@/lib/session";
 import { CodeLabel, MODEL_STATUS_LABELS } from "@/app/ui-helpers";
 
@@ -12,7 +13,10 @@ export default async function ScoringPage({
   searchParams: Promise<{ model?: string }>;
 }) {
   // Toute page porteuse de données exige une session authentifiée.
-  await requireSession();
+  const identity = await requireSession();
+  // Le calcul exige le rôle ANALYST, comme l'API : un profil en lecture seule
+  // consulte la grille mais ne la soumet pas.
+  const canRate = hasRole(identity.role, "ANALYST");
 
   const { model: modelParam } = await searchParams;
   const model = getModel(modelParam ?? "CORP_STD_V1");
@@ -42,7 +46,13 @@ export default async function ScoringPage({
           agrégation sont appliqués côté serveur.
         </p>
       </div>
-      <ScoringForm model={model} counterparties={counterparties} />
+      {!canRate && (
+        <div className="card" role="status" style={{ padding: "12px 16px", fontSize: 13 }}>
+          Profil en lecture seule : la grille est consultable, mais le calcul et
+          l&apos;enregistrement d&apos;une notation sont réservés aux analystes.
+        </div>
+      )}
+      <ScoringForm model={model} counterparties={counterparties} canRate={canRate} />
     </div>
   );
 }

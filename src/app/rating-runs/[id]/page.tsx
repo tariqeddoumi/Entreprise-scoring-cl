@@ -4,7 +4,7 @@ import { getModel } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
-import { GradeBadge } from "@/app/ui-helpers";
+import { CodeLabel, GradeBadge, OVERRIDE_REASON_LABELS } from "@/app/ui-helpers";
 
 const OVERRIDE_STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente de décision",
@@ -107,7 +107,9 @@ export default async function RatingRunPage({
                   <td title={o.status}>{OVERRIDE_STATUS_LABELS[o.status] ?? o.status}</td>
                   <td><GradeBadge grade={o.fromGrade} /></td>
                   <td><GradeBadge grade={o.toGrade} /></td>
-                  <td className="muted">{o.reasonCode}</td>
+                  <td className="muted">
+                    <CodeLabel code={o.reasonCode} labels={OVERRIDE_REASON_LABELS} />
+                  </td>
                   <td className="muted">{o.requestedBy}</td>
                   <td className="muted">{o.decidedBy ?? "—"}</td>
                   <td className="muted" style={{ fontSize: 12 }}>{o.comment}</td>

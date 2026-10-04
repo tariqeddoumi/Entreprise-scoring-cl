@@ -147,6 +147,19 @@ export const PURPOSE_LABELS: Record<string, string> = {
   PRODUCTION_RATING: "Notation de production",
 };
 
+/** Motifs codifiés de dérogation (schéma `overrideRequestSchema`). */
+export const OVERRIDE_REASON_LABELS: Record<string, string> = {
+  DATA_NOT_CAPTURED: "Information non captée par la grille",
+  RECENT_EVENT_NEGATIVE: "Événement récent défavorable",
+  RECENT_EVENT_POSITIVE: "Événement récent favorable",
+  GROUP_SUPPORT: "Support groupe",
+  MODEL_LIMITATION: "Limite du modèle",
+  SECTOR_SPECIFICITY: "Spécificité sectorielle",
+  MANAGEMENT_CHANGE: "Changement de dirigeants",
+  TEMPORARY_SHOCK: "Choc temporaire",
+  POLICY_EXCEPTION: "Exception à la politique de crédit",
+};
+
 /** Libellé français d'un code, avec le code d'origine en infobulle. */
 export function CodeLabel({ code, labels }: { code: string; labels: Record<string, string> }) {
   const label = labels[code];

@@ -5,6 +5,8 @@ import type {
   CriterionConfig,
   CriterionInput,
   DataStatus,
+  GroupSupportInput,
+  MaterialityFlags,
   ModelConfig,
   RatingResult,
   Segment,
@@ -18,7 +20,37 @@ import { ResultPanel } from "./ResultPanel";
 interface Props {
   model: ModelConfig;
   counterparties: Array<{ id: string; name: string }>;
+  /** Rôle ANALYST ou supérieur : seul autorisé à soumettre la grille, comme par l'API. */
+  canRate: boolean;
 }
+
+type MaterialityFlag = keyof MaterialityFlags;
+
+/** Libellé des portes de matérialité que le modèle peut déclarer. */
+const MATERIALITY_LABELS: Record<MaterialityFlag, string> = {
+  esgPhysicalMaterial: "Risque climatique physique matériel",
+  esgTransitionMaterial: "Risque de transition matériel",
+  esgComplianceMaterial: "Risque de conformité environnementale matériel",
+  covenantsMaterial: "Covenants matériels",
+};
+
+/**
+ * Critère écarté faute de matérialité déclarée : le moteur l'ignore et
+ * transfère son poids, quelle que soit la valeur saisie.
+ */
+function isGatedOut(
+  criterion: CriterionConfig,
+  materiality: Partial<Record<MaterialityFlag, boolean>>
+): boolean {
+  return !!criterion.materialityGate && materiality[criterion.materialityGate.flag] !== true;
+}
+
+const GROUP_SUPPORT_CONDITIONS = [
+  ["capacityDocumented", "Capacité financière du garant documentée"],
+  ["willingnessDocumented", "Volonté de soutien démontrée (historique, engagement écrit)"],
+  ["legallyBinding", "Engagement juridiquement contraignant"],
+  ["fundsTransferable", "Transférabilité effective des fonds établie"],
+] as const;
 
 type CriterionState = {
   status: DataStatus;
@@ -99,7 +131,7 @@ function isAnswered(criterion: CriterionConfig, state: CriterionState): boolean 
   return true;
 }
 
-export function ScoringForm({ model, counterparties }: Props) {
+export function ScoringForm({ model, counterparties, canRate }: Props) {
   const [segment, setSegment] = useState<Segment>("PME");
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().slice(0, 10));
   const [counterpartyId, setCounterpartyId] = useState("");
@@ -114,6 +146,26 @@ export function ScoringForm({ model, counterparties }: Props) {
   const [defaultTriggered, setDefaultTriggered] = useState(false);
   const [defaultGrade, setDefaultGrade] = useState<string>(DEFAULT_GRADES[0].grade);
   const [pending, setPending] = useState(false);
+  const [materiality, setMateriality] = useState<Partial<Record<MaterialityFlag, boolean>>>({});
+  const [groupSupport, setGroupSupport] = useState<GroupSupportInput>({ claimed: false });
+
+  // Portes de matérialité dérivées du modèle chargé : le formulaire envoyait
+  // jusqu'ici les critères ESG sans jamais déclarer leur matérialité, si bien
+  // que le moteur les écartait systématiquement — la saisie était perdue
+  // sans que l'analyste le sache (D-43).
+  const materialityGates = useMemo(() => {
+    const byFlag = new Map<MaterialityFlag, { rationaleFr: string; criteria: string[] }>();
+    for (const c of model.criteria) {
+      if (!c.materialityGate) continue;
+      const entry = byFlag.get(c.materialityGate.flag) ?? {
+        rationaleFr: c.materialityGate.rationaleFr,
+        criteria: [],
+      };
+      entry.criteria.push(`${c.code} — ${c.labelFr}`);
+      byFlag.set(c.materialityGate.flag, entry);
+    }
+    return [...byFlag.entries()].map(([flag, v]) => ({ flag, ...v }));
+  }, [model]);
 
   // Les cases d'exception sont dérivées du modèle chargé, jamais recopiées :
   // une liste figée avait survécu au passage en V3 et proposait encore cinq
@@ -140,13 +192,13 @@ export function ScoringForm({ model, counterparties }: Props) {
     [model, segment]
   );
 
-  const answeredCount = useMemo(
-    () => applicable.filter((c) => isAnswered(c, criteria[c.code])).length,
-    [applicable, criteria]
-  );
-  const unansweredCritical = useMemo(
-    () => applicable.filter((c) => c.unavailablePolicy === "BLOCK" && !isAnswered(c, criteria[c.code])),
-    [applicable, criteria]
+  // Un critère écarté faute de matérialité compte comme tranché : il n'attend
+  // aucune saisie.
+  const answered = (c: CriterionConfig) =>
+    isGatedOut(c, materiality) || isAnswered(c, criteria[c.code]);
+  const answeredCount = applicable.filter(answered).length;
+  const unansweredCritical = applicable.filter(
+    (c) => c.unavailablePolicy === "BLOCK" && !answered(c)
   );
 
   function update(code: string, patch: Partial<CriterionState>) {
@@ -164,6 +216,8 @@ export function ScoringForm({ model, counterparties }: Props) {
     setHasStrongGroupSupport(false);
     setRedFlags([]);
     setDefaultTriggered(false);
+    setMateriality({});
+    setGroupSupport({ claimed: false });
     setResult(null);
     setMessage(null);
     setError(null);
@@ -176,6 +230,9 @@ export function ScoringForm({ model, counterparties }: Props) {
 
     const payloadCriteria: Record<string, CriterionInput> = {};
     for (const c of applicable) {
+      // Critère écarté : rien n'est transmis, pour que l'instantané d'entrée ne
+      // porte pas une valeur que le moteur n'a pas lue.
+      if (isGatedOut(c, materiality)) continue;
       const state = criteria[c.code];
       const entry: CriterionInput = { status: state.status };
       if (carriesValue(state.status)) {
@@ -213,6 +270,8 @@ export function ScoringForm({ model, counterparties }: Props) {
       redFlags,
       defaultTriggered,
       ...(defaultTriggered ? { defaultGrade } : {}),
+      materiality: Object.fromEntries(Object.entries(materiality).filter(([, v]) => v)),
+      ...(groupSupport.claimed ? { groupSupport } : {}),
     };
 
     try {
@@ -375,9 +434,9 @@ export function ScoringForm({ model, counterparties }: Props) {
           (acc, c) => acc + (c.weightsBps[segment] ?? 0),
           0
         );
-        const answered = domainCriteria.filter((c) => isAnswered(c, criteria[c.code])).length;
+        const domainAnswered = domainCriteria.filter(answered).length;
         const missingCritical = domainCriteria.filter(
-          (c) => c.unavailablePolicy === "BLOCK" && !isAnswered(c, criteria[c.code])
+          (c) => c.unavailablePolicy === "BLOCK" && !answered(c)
         ).length;
         const isCollapsed = collapsed[domain.code] ?? false;
         return (
@@ -413,7 +472,7 @@ export function ScoringForm({ model, counterparties }: Props) {
                   </span>
                 )}
                 <span className="muted" style={{ fontSize: 12 }}>
-                  {answered}/{domainCriteria.length} · poids {segment}{" "}
+                  {domainAnswered}/{domainCriteria.length} · poids {segment}{" "}
                   {(weight / 100).toFixed(2)} %
                 </span>
               </span>
@@ -426,6 +485,7 @@ export function ScoringForm({ model, counterparties }: Props) {
                     criterion={c}
                     segment={segment}
                     state={criteria[c.code]}
+                    gatedOut={isGatedOut(c, materiality)}
                     onChange={(patch) => update(c.code, patch)}
                   />
                 ))}
@@ -434,6 +494,92 @@ export function ScoringForm({ model, counterparties }: Props) {
           </section>
         );
       })}
+
+      {materialityGates.length > 0 && (
+        <section className="card no-print" style={{ padding: 16 }}>
+          <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Matérialité des risques ESG</h2>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+            Ces critères ne sont évalués que si le risque est matériel pour la
+            contrepartie. Case non cochée : le critère est écarté et son poids transféré
+            au critère désigné par le modèle, quelle que soit la saisie. La matérialité
+            s&apos;établit depuis le référentiel sectoriel et la localisation des sites ;
+            elle doit être justifiée au dossier.
+          </p>
+          <div style={{ display: "grid", gap: 10 }}>
+            {materialityGates.map((g) => (
+              <label key={g.flag} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 16, marginTop: 3 }}
+                  checked={materiality[g.flag] ?? false}
+                  onChange={(e) =>
+                    setMateriality((prev) => ({ ...prev, [g.flag]: e.target.checked }))
+                  }
+                />
+                <span style={{ fontSize: 13 }}>
+                  {MATERIALITY_LABELS[g.flag]}{" "}
+                  <span className="muted">({g.criteria.join(" ; ")})</span>
+                  <span className="muted" style={{ display: "block", fontSize: 11 }}>
+                    {g.rationaleFr}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="card no-print" style={{ padding: 16 }}>
+        <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Support groupe</h2>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          {model.groupSupport.methodFr}
+        </p>
+        <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            style={{ width: 16 }}
+            checked={groupSupport.claimed}
+            onChange={(e) =>
+              setGroupSupport(e.target.checked ? { claimed: true, requestedNotches: 1 } : { claimed: false })
+            }
+          />
+          <span style={{ fontSize: 13 }}>Relèvement au titre du support groupe demandé</span>
+        </label>
+        {groupSupport.claimed && (
+          <div style={{ display: "grid", gap: 8, marginTop: 10, paddingLeft: 24 }}>
+            {GROUP_SUPPORT_CONDITIONS.map(([key, label]) => (
+              <label key={key} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  style={{ width: 16 }}
+                  checked={groupSupport[key] ?? false}
+                  onChange={(e) =>
+                    setGroupSupport((prev) => ({ ...prev, [key]: e.target.checked }))
+                  }
+                />
+                <span style={{ fontSize: 13 }}>{label}</span>
+              </label>
+            ))}
+            <label style={{ maxWidth: 320 }}>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                Relèvement demandé (crans, plafonné à {model.groupSupport.maxNotches})
+              </div>
+              <select
+                value={groupSupport.requestedNotches ?? 0}
+                onChange={(e) =>
+                  setGroupSupport((prev) => ({ ...prev, requestedNotches: Number(e.target.value) }))
+                }
+              >
+                {Array.from({ length: model.groupSupport.maxNotches + 1 }, (_, n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+      </section>
 
       <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Qualité des données</h2>
@@ -611,7 +757,8 @@ export function ScoringForm({ model, counterparties }: Props) {
       >
         <button
           onClick={submit}
-          disabled={pending}
+          disabled={pending || !canRate}
+          title={canRate ? undefined : "Réservé aux analystes"}
           style={{
             background: "var(--brand)",
             color: "#fff",
@@ -619,7 +766,7 @@ export function ScoringForm({ model, counterparties }: Props) {
             borderRadius: 6,
             padding: "10px 20px",
             fontWeight: 600,
-            opacity: pending ? 0.6 : 1,
+            opacity: pending || !canRate ? 0.6 : 1,
           }}
         >
           {pending ? "Calcul en cours…" : "Calculer la notation"}
@@ -652,11 +799,13 @@ function CriterionRow({
   criterion,
   segment,
   state,
+  gatedOut,
   onChange,
 }: {
   criterion: CriterionConfig;
   segment: Segment;
   state: CriterionState;
+  gatedOut: boolean;
   onChange: (patch: Partial<CriterionState>) => void;
 }) {
   const weight = (criterion.weightsBps[segment] ?? 0) / 100;
@@ -687,89 +836,98 @@ function CriterionRow({
         </div>
       </div>
 
-      <div className="criterion-input">
-        <select
-          aria-label={`Statut de la donnée — ${name}`}
-          value={state.status}
-          onChange={(e) => onChange({ status: e.target.value as DataStatus })}
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {DATA_STATUS_LABELS[s] ?? s}
-            </option>
-          ))}
-        </select>
-
-        {editable ? (
-          criterion.type === "QUANTITATIVE" ? (
-            <div>
-              <input
-                type="number"
-                step="any"
-                aria-label={`Valeur — ${name}`}
-                placeholder={`Valeur${criterion.unit ? ` (${criterion.unit.trim()})` : ""}`}
-                value={state.value}
-                onChange={(e) => onChange({ value: e.target.value })}
-              />
-              {bins && (
-                <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                  Barème {segment} :{" "}
-                  {bins
-                    .slice()
-                    .sort((a, b) => b.score - a.score)
-                    .map(
-                      (b) =>
-                        `${b.score} → ${b.min === null ? "-∞" : b.min}${b.max === null ? " et +" : `–${b.max}`}`
-                    )
-                    .join(" | ")}
-                </div>
-              )}
-              {criterion.specialCases && criterion.specialCases.length > 0 && (
-                <label style={{ display: "block", marginTop: 6 }}>
-                  <span className="muted" style={{ fontSize: 11 }}>
-                    Cas particulier (prime sur la valeur mesurée)
-                  </span>
-                  <select
-                    value={state.specialCase}
-                    onChange={(e) => onChange({ specialCase: e.target.value })}
-                    style={{ marginTop: 3 }}
-                  >
-                    <option value="">— aucun —</option>
-                    {criterion.specialCases.map((sc) => (
-                      <option key={sc.code} value={sc.code}>
-                        {sc.labelFr} (score {sc.score})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </div>
-          ) : (
-            <select
-              aria-label={`Ancrage retenu — ${name}`}
-              value={state.score}
-              onChange={(e) => onChange({ score: e.target.value })}
-            >
-              {criterion.anchors?.map((a) => (
-                <option key={a.score} value={a.score}>
-                  {a.score} — {a.labelFr}
-                </option>
-              ))}
-            </select>
-          )
-        ) : (
-          <div
-            className="muted"
-            style={{
-              fontSize: 12,
-              paddingTop: 6,
-              color: criterion.unavailablePolicy === "BLOCK" ? "var(--bad)" : undefined,
-            }}
+      {gatedOut ? (
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          Risque non déclaré matériel (section « Matérialité des risques ESG ») :
+          critère écarté, poids transféré à{" "}
+          {criterion.notApplicableRule?.transferWeightTo ?? "—"}. Aucune saisie
+          n&apos;est transmise.
+        </div>
+      ) : (
+        <div className="criterion-input">
+          <select
+            aria-label={`Statut de la donnée — ${name}`}
+            value={state.status}
+            onChange={(e) => onChange({ status: e.target.value as DataStatus })}
           >
-            {unavailableExplanation(criterion, state.status)}
-          </div>
-        )}
-      </div>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {DATA_STATUS_LABELS[s] ?? s}
+              </option>
+            ))}
+          </select>
+
+          {editable ? (
+            criterion.type === "QUANTITATIVE" ? (
+              <div>
+                <input
+                  type="number"
+                  step="any"
+                  aria-label={`Valeur — ${name}`}
+                  placeholder={`Valeur${criterion.unit ? ` (${criterion.unit.trim()})` : ""}`}
+                  value={state.value}
+                  onChange={(e) => onChange({ value: e.target.value })}
+                />
+                {bins && (
+                  <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+                    Barème {segment} :{" "}
+                    {bins
+                      .slice()
+                      .sort((a, b) => b.score - a.score)
+                      .map(
+                        (b) =>
+                          `${b.score} → ${b.min === null ? "-∞" : b.min}${b.max === null ? " et +" : `–${b.max}`}`
+                      )
+                      .join(" | ")}
+                  </div>
+                )}
+                {criterion.specialCases && criterion.specialCases.length > 0 && (
+                  <label style={{ display: "block", marginTop: 6 }}>
+                    <span className="muted" style={{ fontSize: 11 }}>
+                      Cas particulier (prime sur la valeur mesurée)
+                    </span>
+                    <select
+                      value={state.specialCase}
+                      onChange={(e) => onChange({ specialCase: e.target.value })}
+                      style={{ marginTop: 3 }}
+                    >
+                      <option value="">— aucun —</option>
+                      {criterion.specialCases.map((sc) => (
+                        <option key={sc.code} value={sc.code}>
+                          {sc.labelFr} (score {sc.score})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            ) : (
+              <select
+                aria-label={`Ancrage retenu — ${name}`}
+                value={state.score}
+                onChange={(e) => onChange({ score: e.target.value })}
+              >
+                {criterion.anchors?.map((a) => (
+                  <option key={a.score} value={a.score}>
+                    {a.score} — {a.labelFr}
+                  </option>
+                ))}
+              </select>
+            )
+          ) : (
+            <div
+              className="muted"
+              style={{
+                fontSize: 12,
+                paddingTop: 6,
+                color: criterion.unavailablePolicy === "BLOCK" ? "var(--bad)" : undefined,
+              }}
+            >
+              {unavailableExplanation(criterion, state.status)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

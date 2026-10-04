@@ -28,6 +28,8 @@ jobs:
         run: npm run lint
       - name: Tests du moteur (golden vectors)
         run: npm test
+      - name: Alignement base, API, moteur et écrans
+        run: npm run check:alignment
       - name: Build
         run: npm run build
 

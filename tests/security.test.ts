@@ -385,3 +385,25 @@ describe("export CSV", () => {
     expect(csvLine(["a", null, undefined, 3])).toBe("a;;;3");
   });
 });
+
+describe("Contrat API : scores exposés en nombres (D-43)", () => {
+  it("convertit les colonnes décimales sans toucher aux autres champs", async () => {
+    const { runScoresAsNumbers } = await import("@/lib/api-utils");
+    const { Prisma } = await import("@/generated/prisma");
+    const run = {
+      id: "r1",
+      rawScore: new Prisma.Decimal("87.3125"),
+      confidenceScore: new Prisma.Decimal("92.5"),
+      finalGrade: "STD-P2",
+    };
+    const out = runScoresAsNumbers(run);
+    expect(out).toEqual({ id: "r1", rawScore: 87.3125, confidenceScore: 92.5, finalGrade: "STD-P2" });
+    expect(JSON.parse(JSON.stringify(out)).rawScore).toBe(87.3125);
+  });
+
+  it("préserve les valeurs nulles et les champs absents", async () => {
+    const { runScoresAsNumbers } = await import("@/lib/api-utils");
+    expect(runScoresAsNumbers({ id: "r2", rawScore: null })).toEqual({ id: "r2", rawScore: null });
+    expect(runScoresAsNumbers({ id: "r3" })).toEqual({ id: "r3" });
+  });
+});

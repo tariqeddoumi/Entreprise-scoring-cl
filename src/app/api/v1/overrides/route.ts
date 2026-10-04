@@ -83,6 +83,18 @@ export async function POST(req: NextRequest) {
   if (!model) {
     return problem(500, "Version de modèle du run indisponible.");
   }
+  // L'écart en crans se mesure sur l'échelle de la version qui a produit le
+  // grade. Une notation d'une version antérieure porte une autre échelle
+  // (G1…G10 en V1, STD-P1…P8 en V3) : la mesurer avec celle du modèle chargé
+  // échouait sur un message trompeur (« grade cible inconnu »), ou aurait
+  // mesuré un écart sur une échelle qui n'est pas la sienne (D-43).
+  if (run.modelVersion !== model.version) {
+    return problem(
+      409,
+      "Dérogation impossible sur une notation d'une version antérieure du modèle",
+      `Run produit par ${run.modelId} v${run.modelVersion} ; version chargée : v${model.version}. Produire une nouvelle notation, puis déroger sur celle-ci.`
+    );
+  }
   let notches: number;
   try {
     notches = Math.abs(
