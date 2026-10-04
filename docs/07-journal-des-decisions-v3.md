@@ -484,7 +484,7 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *Décision :* l'écran laisse l'analyste déclarer la matérialité, case par case. La justification de la méthode est affichée sous chaque case et la déclaration doit être justifiée au dossier. Elle est conservée dans l'instantané d'entrée de chaque notation, donc auditable. Non cochée, le comportement reste celui d'avant : critère écarté, poids transféré.
 
-*Confirmée par la banque le 4 octobre 2026 :* la déclaration reste confiée à l'analyste, sans rôle de validation dédié, jusqu'à l'alimentation du référentiel sectoriel. Elle pourra alors être dérivée du référentiel : la déclaration de l'analyste deviendra un contrôle de cohérence, et non plus la source.
+*Confirmée par la banque le 4 octobre 2026 :* la déclaration reste confiée à l'analyste, sans rôle de validation dédié, jusqu'à l'alimentation du référentiel sectoriel. Elle pourra alors être dérivée du référentiel : la déclaration de l'analyste deviendra un contrôle de cohérence, et non plus la source. Le libellé affiché sous chaque case (configuration du modèle), la note méthodologique et le code, qui disaient la matérialité « jamais » établie par l'analyste, sont alignés sur cette décision.
 
 ---
 
