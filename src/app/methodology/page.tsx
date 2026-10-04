@@ -64,19 +64,29 @@ export default async function MethodologyPage() {
 
       <section className="card" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 8 }}>Ordre de calcul du moteur</h2>
-        <ol style={{ paddingLeft: 20, fontSize: 13, display: "grid", gap: 3 }}>
-          <li>Routage du modèle (standard, TPE comportemental, modèle dédié)</li>
-          <li>Segmentation TPE / PME / GE</li>
-          <li>Contrôles de complétude et de validité</li>
-          <li>Calcul des indicateurs</li>
-          <li>Détermination des bandes et scores élémentaires (0/25/50/75/100)</li>
-          <li>Agrégation par domaine</li>
-          <li>Agrégation globale pondérée</li>
-          <li>Application des caps de qualité et de structure</li>
-          <li>Détection des red flags et routage</li>
-          <li>Grade moteur</li>
-          <li>Override éventuel sous maker-checker</li>
-          <li>Enregistrement du snapshot, des explications et des versions</li>
+        <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+          Pipeline canonique de la version 3, implémenté tel quel et couvert par des tests
+          de précédence (note méthodologique, § 5). Les exceptions non compensatoires
+          s&apos;appliquent <strong>après</strong> le grade moteur, jamais avant.
+        </p>
+        {/* Même ordre que src/core/engine.ts et la note méthodologique, § 5. */}
+        <ol style={{ paddingLeft: 24, fontSize: 13, display: "grid", gap: 3 }}>
+          <li>Identité, groupe et date d&apos;arrêté — en amont du moteur</li>
+          <li>Routage : segment, puis éligibilité du modèle</li>
+          <li>Contrôles de relation : statut conformité, produit séparément</li>
+          <li>Défaut : constat reçu d&apos;un moteur amont, qui force le grade de défaut</li>
+          <li>Qualité et couverture : classe de confiance et seuils de couverture observée</li>
+          <li>
+            Caractéristiques : barèmes, ancrages, cas spéciaux, catégorie « information
+            absente », transferts de non-applicabilité
+          </li>
+          <li>Score brut : agrégation à poids total constant</li>
+          <li>Grade moteur : échelle propre au modèle</li>
+          <li>Exceptions non compensatoires</li>
+          <li>Grade autonome, conservé séparément du grade final</li>
+          <li>Support groupe : relèvement plafonné et conditionné</li>
+          <li>Dérogation : hors moteur, sous double validation</li>
+          <li>Persistance et diffusion : instantané, versions, droits d&apos;usage</li>
         </ol>
       </section>
 
@@ -101,8 +111,10 @@ Confiance     = ${m.confidence.weights.completeness}% Complétude + ${m.confiden
           dénominateur : elle reçoit soit un blocage, soit la catégorie « information
           absente » au score prudent déclaré par la grille. Un <code>NOT_APPLICABLE</code>{" "}
           n&apos;est admis que si le modèle l&apos;a prévu et nomme le critère qui reçoit
-          le poids. Deux dossiers restent ainsi comparables, et l&apos;absence d&apos;une
-          information défavorable ne peut plus améliorer un score.
+          le poids. Deux dossiers restent ainsi comparables. Limite connue : la catégorie
+          « information absente » vaut 25 ; un critère qui vaudrait 0 gagne donc à être
+          déclaré absent. Le score de cette catégorie reste à arbitrer (journal des
+          décisions, D-32).
         </p>
         <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
           <strong>La confiance ne plafonne plus le grade.</strong> Elle est restituée
@@ -120,7 +132,7 @@ Confiance     = ${m.confidence.weights.completeness}% Complétude + ${m.confiden
           une probabilité de défaut. Une calibration établie sur données simulées porte
           le statut <code>CALIBRATED_SYNTHETIC</code> et{" "}
           <strong>aucune probabilité n&apos;est exposée hors environnement bac à sable</strong> :
-          en production, <code>pd_value</code> est nul et la finalité déclarée du
+          en production, <code>pd12m</code> est nul et la finalité déclarée du
           résultat est <code>PILOT_SHADOW</code>. Chaque résultat porte ses usages
           autorisés et ses restrictions, pour qu&apos;aucun système aval n&apos;ait à les
           deviner.

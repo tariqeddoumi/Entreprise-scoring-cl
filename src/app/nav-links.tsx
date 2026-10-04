@@ -19,7 +19,7 @@ export function NavLinks({ isAdmin = false }: { isAdmin?: boolean }) {
   const items = isAdmin ? [...NAV, { href: "/admin/users", label: "Utilisateurs" }] : NAV;
 
   return (
-    <nav style={{ display: "flex", gap: 20 }}>
+    <nav className="site-nav" aria-label="Navigation principale">
       {items.map((n) => {
         const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
         return (

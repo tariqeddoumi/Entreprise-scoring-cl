@@ -14,7 +14,10 @@ export async function safeQuery<T>(fn: () => Promise<T>, fallback: T): Promise<{
   try {
     const data = await fn();
     return { data, dbAvailable: true };
-  } catch {
+  } catch (e) {
+    // L'écran affiche « base indisponible » ; la cause, elle, doit rester
+    // lisible dans les journaux du serveur.
+    console.error("[base] requête impossible :", e instanceof Error ? e.message : e);
     return { data: fallback, dbAvailable: false };
   }
 }

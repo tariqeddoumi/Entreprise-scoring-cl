@@ -395,6 +395,43 @@ Revue du modèle, du moteur et de l'outil, conduite sur une instance locale Post
 
 ---
 
+# 2 septies. Revue des écrans du 4 octobre 2026
+
+Revue des treize écrans en format bureau et mobile, avec un audit d'accessibilité automatisé (axe-core, WCAG 2.1 AA), sur une copie locale à l'image de la production.
+
+## D-41 — Les écrans disent ce que fait le moteur V3, en français et sur tout support — **TECHNIQUE**
+
+*Constats et corrections, par ordre d'importance :*
+
+- **Le formulaire décrivait encore la V2.** Sous un critère déclaré manquant, il affichait « critère exclu du calcul », alors que la V3 applique le score prudent de la grille et conserve le poids. Sous un critère non applicable, il affichait « poids redistribué dans le domaine », un mécanisme supprimé. Un analyste pouvait donc croire qu'en déclarant une donnée absente il la retirait du calcul. Chaque statut affiche désormais ce que le moteur fera réellement de ce critère : score prudent et son montant, blocage, ou critère receveur du poids.
+- **Une donnée périmée restait saisissable**, alors que le moteur la traite comme absente. Le champ de valeur disparaît, et le compteur de critères renseignés n'en tient plus compte.
+- **La nature du défaut n'était pas saisissable** : l'écran envoyait toujours DEF1. On choisit maintenant DEF1, DEF2 ou DEF3.
+- **L'écran Méthodologie décrivait l'ordre de calcul de la V2**, plafonds avant grade moteur, précisément ce que le constat H14 a corrigé. Il reprend désormais les treize étapes du pipeline canonique. Il affirmait aussi qu'une information absente ne peut plus améliorer un score ; il mentionne désormais la limite, en renvoi à D-32.
+- **Divers :** le libellé du support groupe citait le plafond CAP01, supprimé ; la carte « Calibration PD » affichait « 2/2 calibré(s) » pour une calibration sur données simulées.
+- **Deux écrans divergeaient.** La liste des contreparties retenait la notation la plus récemment enregistrée, le tableau de bord celle du dernier arrêté : deux grades différents pour une même contrepartie. Les deux suivent maintenant la règle du tableau de bord (D-36).
+- **Les codes techniques sont traduits** : statuts de donnée, niveaux et sources de red flag, statut des modèles, de la PD, des moteurs distincts, des dérogations. Le code reste visible en infobulle, pour les échanges avec les équipes de validation.
+- **Mobile.** Les treize écrans débordaient de 650 à 950 px sur un écran de 390 px. L'en-tête passe sur deux lignes, avec une navigation qui défile. Les grilles s'adaptent à la largeur, et les tableaux défilent dans leur carte. Plus aucun débordement.
+- **Accessibilité.** De 111 éléments en défaut sur 8 écrans, dont 79 listes sans nom lisible par un lecteur d'écran, on passe à aucun :
+  - contrastes des badges portés à 4,5:1 ;
+  - liens soulignés au fil du texte ;
+  - en-têtes de colonne nommés ;
+  - focus clavier visible.
+
+## D-42 — Aucune requête vers une chaîne de connexion sans schéma applicatif — **TECHNIQUE**
+
+*Constat :* en production, `DATABASE_URL` ne désignait pas `corp_scoring`. Prisma interrogeait donc `public`, qui héberge la table `users` d'une autre application. La connexion échouait sur une colonne absente, avec un seul message à l'écran (« la base de données ne répond pas ») et aucune trace côté serveur : l'erreur était avalée. L'incident est resté invisible tant que l'écran d'accueil n'interrogeait pas la base.
+
+*Décision :*
+- en production sur PostgreSQL, une chaîne de connexion qui ne désigne pas exactement `corp_scoring` ne reçoit aucune requête : ni absence de schéma, ni `public`, ni faute de frappe, ni schéma d'une autre application (relevé par la revue automatique de la PR #7 ; une première version n'écartait que `public`) ;
+- le client lève une erreur qui nomme la correction à faire, et les écrans la traitent comme une base indisponible ;
+- les échecs de connexion et de lecture sont désormais journalisés côté serveur, sans jamais le mot de passe.
+
+Vérifié : avec une chaîne sans schéma, le message apparaît dans les journaux et `public.users` reste à zéro accès.
+
+*Pourquoi pas au démarrage :* le contrôle de configuration est aussi évalué par le middleware, qui s'exécute sur chaque requête. Y placer ce contrôle aurait rendu toutes les pages indisponibles, y compris celles qui n'utilisent pas la base, pour une erreur qui ne concerne que la base.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

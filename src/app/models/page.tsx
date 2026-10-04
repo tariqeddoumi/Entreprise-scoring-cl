@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listModels } from "@/models";
 import { requireSession } from "@/lib/session";
+import { CodeLabel, MODEL_STATUS_LABELS } from "@/app/ui-helpers";
 
 export default async function ModelsPage() {
   // Toute page porteuse de données exige une session authentifiée.
@@ -18,15 +19,18 @@ export default async function ModelsPage() {
       </div>
       {models.map((m) => (
         <section key={m.modelId} className="card" style={{ padding: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <h2 style={{ fontWeight: 600 }}>
-              <Link href={`/models/${m.modelId}`} style={{ color: "var(--brand)" }}>
+              <Link
+                href={`/models/${m.modelId}`}
+                style={{ color: "var(--brand)", textDecoration: "underline", textUnderlineOffset: 2 }}
+              >
                 {m.modelId}
               </Link>{" "}
               — {m.labelFr}
             </h2>
             <span className="muted" style={{ fontSize: 12 }}>
-              v{m.version} · {m.status} · effet {m.effectiveFrom}
+              v{m.version} · <CodeLabel code={m.status} labels={MODEL_STATUS_LABELS} /> · effet {m.effectiveFrom}
             </span>
           </div>
           <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>

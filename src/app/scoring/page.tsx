@@ -2,6 +2,7 @@ import { getModel } from "@/models";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { ScoringForm } from "./ScoringForm";
 import { requireSession } from "@/lib/session";
+import { CodeLabel, MODEL_STATUS_LABELS } from "@/app/ui-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,8 @@ export default async function ScoringPage({
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Nouvelle notation</h1>
         <p className="muted">
-          {model.labelFr} · version {model.version} · statut {model.status}. Le
+          {model.labelFr} · version {model.version} · statut{" "}
+          <CodeLabel code={model.status} labels={MODEL_STATUS_LABELS} />. Le
           formulaire est généré depuis la version de modèle publiée : poids, barèmes et
           agrégation sont appliqués côté serveur.
         </p>

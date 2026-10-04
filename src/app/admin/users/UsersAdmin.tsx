@@ -31,9 +31,17 @@ const smallButton = {
   whiteSpace: "nowrap" as const,
 };
 
-function RoleSelect({ name, defaultValue }: { name: string; defaultValue?: string }) {
+function RoleSelect({
+  name,
+  defaultValue,
+  ariaLabel,
+}: {
+  name: string;
+  defaultValue?: string;
+  ariaLabel?: string;
+}) {
   return (
-    <select name={name} defaultValue={defaultValue ?? "ANALYST"}>
+    <select name={name} defaultValue={defaultValue ?? "ANALYST"} aria-label={ariaLabel}>
       {Object.entries(ROLE_LABELS).map(([value, label]) => (
         <option key={value} value={value}>
           {label}
@@ -101,7 +109,7 @@ export function UsersAdmin({ me, users }: { me: string; users: UserRow[] }) {
         <h2 style={{ fontWeight: 600, marginBottom: 10 }}>Nouveau compte</h2>
         <form
           action={formAction}
-          style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr auto", gap: 10, alignItems: "end" }}
+          className="admin-create"
         >
           <input type="hidden" name="op" value="create" />
           <label>
@@ -183,7 +191,11 @@ export function UsersAdmin({ me, users }: { me: string; users: UserRow[] }) {
                         <form action={formAction} style={{ display: "flex", gap: 6 }}>
                           <input type="hidden" name="op" value="role" />
                           <input type="hidden" name="userId" value={u.id} />
-                          <RoleSelect name="role" defaultValue={u.role} />
+                          <RoleSelect
+                            name="role"
+                            defaultValue={u.role}
+                            ariaLabel={`Rôle de ${u.displayName}`}
+                          />
                           <button type="submit" disabled={pending} style={smallButton}>
                             Appliquer
                           </button>

@@ -69,7 +69,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
         <select
           value={segment}
           onChange={(e) => setSegment(e.target.value)}
-          style={{ maxWidth: 140 }}
+          style={{ width: "auto", minWidth: 160 }}
           aria-label="Filtrer par segment"
         >
           <option value="">Tous segments</option>
@@ -125,14 +125,14 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                       {c.name}
                     </Link>
                   </td>
-                  <td className="muted">{c.ice ?? "—"}</td>
+                  <td className="muted nowrap">{c.ice ?? "—"}</td>
                   <td>{c.segment ?? "—"}</td>
                   <td className="muted">{c.sectorCode ?? "—"}</td>
                   <td>{last?.rawScore ? Number(last.rawScore).toFixed(2) : "—"}</td>
                   <td>
                     <GradeBadge grade={last?.finalGrade ?? null} />
                   </td>
-                  <td className="muted">{last?.asOfDate ?? "—"}</td>
+                  <td className="muted nowrap">{last?.asOfDate ?? "—"}</td>
                 </tr>
               );
             })}

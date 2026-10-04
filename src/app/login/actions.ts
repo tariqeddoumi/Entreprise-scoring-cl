@@ -25,7 +25,11 @@ export async function loginAction(
       userAgent: h.get("user-agent") ?? undefined,
       clientIp: clientIp(h),
     });
-  } catch {
+  } catch (e) {
+    // Journalisée côté serveur : l'écran ne doit rien révéler de technique,
+    // mais l'exploitation doit pouvoir lire la cause (base injoignable,
+    // schéma mal désigné, table absente…). Jamais le mot de passe.
+    console.error("[connexion] échec technique :", e instanceof Error ? e.message : e);
     return {
       errorFr: "Service d'authentification indisponible : la base de données ne répond pas.",
     };

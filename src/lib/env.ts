@@ -99,6 +99,52 @@ function loadConfig(): AppConfig {
   };
 }
 
+/**
+ * Schéma applicatif PostgreSQL désigné par DATABASE_URL.
+ *
+ * Prisma interroge le schéma nommé par le paramètre `schema` de la chaîne de
+ * connexion, et « public » à défaut. Sur une base partagée — cas du projet
+ * Supabase, dont le schéma « public » héberge les tables d'autres applications,
+ * dont une table « users » —, oublier ce paramètre fait lire à l'outil les
+ * tables d'une autre application. C'est arrivé en octobre 2026 : la connexion
+ * échouait sur une colonne absente de `public.users`, sans autre indice.
+ *
+ * Seul le nom exact est admis : le script de durcissement et `db:check` le
+ * citent tous deux, et accepter « tout sauf public » laisserait passer une
+ * faute de frappe (`corp_scorng`) ou le schéma d'une autre application
+ * (`auth`).
+ *
+ * Renvoie un message d'erreur, ou null si la configuration est acceptable.
+ * Seule la production est contrôlée ; une chaîne illisible est laissée à
+ * Prisma, qui la refusera lui-même.
+ */
+export const APPLICATION_SCHEMA = "corp_scoring";
+
+export function applicationSchemaError(
+  databaseUrl: string | undefined,
+  provider: DbProvider,
+  isProduction: boolean
+): string | null {
+  if (!isProduction || provider !== "postgresql" || !databaseUrl) return null;
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    return null;
+  }
+  const schema = url.searchParams.get("schema");
+  if (schema === APPLICATION_SCHEMA) return null;
+  const constat = !schema
+    ? "aucun schéma n'est désigné, Prisma utiliserait « public »"
+    : `le schéma « ${schema} » est désigné au lieu de « ${APPLICATION_SCHEMA} »`;
+  return (
+    `DATABASE_URL : ${constat}. ` +
+    `Les tables de l'outil vivent dans le schéma dédié « ${APPLICATION_SCHEMA} » : la chaîne de connexion doit porter « schema=${APPLICATION_SCHEMA} » ` +
+    `(« &schema=${APPLICATION_SCHEMA} » si elle contient déjà « ? »), puis redéployez. Aucune requête n'est envoyée tant que ce n'est pas fait, ` +
+    "pour ne jamais lire ni écrire les tables d'une autre application."
+  );
+}
+
 let cached: AppConfig | null = null;
 
 export function config(): AppConfig {

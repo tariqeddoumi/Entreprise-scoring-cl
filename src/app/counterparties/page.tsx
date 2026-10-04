@@ -19,8 +19,12 @@ export default async function CounterpartiesPage() {
         orderBy: { createdAt: "desc" },
         take: 200,
         include: {
+          // Même règle que le tableau de bord : la note courante est celle du
+          // dernier arrêté, la plus récente à arrêté égal. Trier sur la seule
+          // date d'enregistrement afficherait un grade différent dès qu'une
+          // notation ancienne est saisie ou reprise après une plus récente.
           ratingRuns: {
-            orderBy: { createdAt: "desc" },
+            orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
             take: 1,
             select: { finalGrade: true, rawScore: true, asOfDate: true },
           },

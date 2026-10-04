@@ -199,13 +199,15 @@ export default async function CounterpartyPage({
                 <th>Grade final</th>
                 <th>Résultat</th>
                 <th>Demandeur</th>
-                <th></th>
+                <th>
+                  <span className="sr-only">Lien</span>
+                </th>
               </tr>
             </thead>
             <tbody>
               {runs.map((r) => (
                 <tr key={r.id}>
-                  <td>{r.asOfDate}</td>
+                  <td className="nowrap">{r.asOfDate}</td>
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore !== null ? Number(r.rawScore).toFixed(2) : "—"}</td>
                   <td><GradeBadge grade={r.engineGrade} /></td>
@@ -220,7 +222,11 @@ export default async function CounterpartyPage({
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>{r.requestedBy}</td>
                   <td>
-                    <Link href={`/rating-runs/${r.id}`} style={{ color: "var(--brand)" }}>
+                    <Link
+                      href={`/rating-runs/${r.id}`}
+                      style={{ color: "var(--brand)" }}
+                      aria-label={`Détail de la notation du ${r.asOfDate}`}
+                    >
                       détail
                     </Link>
                   </td>
