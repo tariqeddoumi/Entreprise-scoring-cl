@@ -278,6 +278,15 @@ describe("Schéma applicatif désigné par DATABASE_URL", () => {
     );
   });
 
+  it("refuse tout autre schéma : faute de frappe ou schéma d'une autre application", () => {
+    expect(applicationSchemaError(`${base}?schema=corp_scorng`, "postgresql", true)).toMatch(
+      /« corp_scorng » est désigné au lieu de « corp_scoring »/
+    );
+    expect(applicationSchemaError(`${base}?schema=auth`, "postgresql", true)).toMatch(
+      /« auth » est désigné/
+    );
+  });
+
   it("accepte le schéma dédié, quelle que soit la place du paramètre", () => {
     expect(applicationSchemaError(`${base}?schema=corp_scoring`, "postgresql", true)).toBeNull();
     expect(

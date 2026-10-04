@@ -422,7 +422,7 @@ Revue des treize écrans en format bureau et mobile, avec un audit d'accessibili
 *Constat :* en production, `DATABASE_URL` ne désignait pas `corp_scoring`. Prisma interrogeait donc `public`, qui héberge la table `users` d'une autre application. La connexion échouait sur une colonne absente, avec un seul message à l'écran (« la base de données ne répond pas ») et aucune trace côté serveur : l'erreur était avalée. L'incident est resté invisible tant que l'écran d'accueil n'interrogeait pas la base.
 
 *Décision :*
-- en production sur PostgreSQL, une chaîne de connexion sans paramètre `schema`, ou désignant `public`, ne reçoit aucune requête ;
+- en production sur PostgreSQL, une chaîne de connexion qui ne désigne pas exactement `corp_scoring` ne reçoit aucune requête : ni absence de schéma, ni `public`, ni faute de frappe, ni schéma d'une autre application (relevé par la revue automatique de la PR #7 ; une première version n'écartait que `public`) ;
 - le client lève une erreur qui nomme la correction à faire, et les écrans la traitent comme une base indisponible ;
 - les échecs de connexion et de lecture sont désormais journalisés côté serveur, sans jamais le mot de passe.
 
