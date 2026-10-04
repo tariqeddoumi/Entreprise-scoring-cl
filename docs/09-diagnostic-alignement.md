@@ -18,7 +18,7 @@
 
 **Aucune notation de production n'est modifiée.** Le moteur passe en 3.0.1 pour la règle de conformité. Aucune des treize notations V3 ne déclare de statut conformité, de matérialité ni de support groupe : vérifié en base.
 
-**Une décision revient à la banque (D-44).** Le référentiel sectoriel qui devait établir la matérialité ESG est vide. L'écran laisse provisoirement l'analyste la déclarer, avec justification au dossier.
+**Décision de la banque (D-44, confirmée le 4 octobre 2026).** Le référentiel sectoriel qui devait établir la matérialité ESG est vide. L'analyste la déclare à l'écran, avec justification au dossier, jusqu'à ce que le référentiel soit alimenté.
 
 **L'alignement est désormais contrôlé en continu.** Le vérificateur d'alignement compare les formes des contrats, plus seulement des listes de valeurs. Exécuté sur l'ancienne version du code, il relève treize écarts. Il n'était lancé par aucune étape de la CI : il l'est désormais.
 
