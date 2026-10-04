@@ -1537,7 +1537,7 @@ Trois changements issus du diagnostic :
 
 ## 19. Matérialité ESG
 
-Le domaine ESG pesait de 3 à 5 % et s'appliquait uniformément. La version 3 conditionne les deux critères réellement dépendants de l'exposition — risque physique et risque de transition — à une **porte de matérialité** alimentée par le référentiel sectoriel et la localisation des sites, jamais par le jugement libre de l'analyste. Lorsque le risque n'est pas matériel, le poids est transféré au critère receveur nommé dans la configuration, et le poids total reste constant.
+Le domaine ESG pesait de 3 à 5 % et s'appliquait uniformément. La version 3 conditionne les deux critères réellement dépendants de l'exposition — risque physique et risque de transition — à une **porte de matérialité** alimentée par le référentiel sectoriel et la localisation des sites. Tant que ce référentiel n'est pas alimenté, l'analyste déclare la matérialité et la justifie au dossier ; la déclaration est conservée dans l'instantané d'entrée de chaque notation (D-44). Lorsque le risque n'est pas matériel, le poids est transféré au critère receveur nommé dans la configuration, et le poids total reste constant.
 
 La conformité environnementale et la gouvernance d'adaptation restent évaluées pour tous : elles sont universelles, contrairement à l'exposition.
 

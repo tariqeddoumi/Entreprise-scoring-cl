@@ -435,8 +435,9 @@ export interface StructuralFlagsInput {
 /**
  * Matérialité des risques conditionnels (H09).
  *
- * Renseignée depuis le référentiel sectoriel et la localisation des sites, pas
- * au jugement libre de l'analyste.
+ * Renseignée depuis le référentiel sectoriel et la localisation des sites ; tant
+ * que ce référentiel n'est pas alimenté, déclarée par l'analyste et justifiée au
+ * dossier (D-44).
  */
 export interface MaterialityFlags {
   esgPhysicalMaterial?: boolean;

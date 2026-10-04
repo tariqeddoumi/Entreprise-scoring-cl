@@ -855,7 +855,7 @@ const criteria: CriterionConfig[] = [
     materialityGate: {
       flag: "esgPhysicalMaterial",
       rationaleFr:
-        "Matérialité établie par le référentiel sectoriel et la localisation des sites, jamais au jugement libre de l'analyste.",
+        "Matérialité établie par le référentiel sectoriel et la localisation des sites, sur pièces et non par appréciation générale. Tant que le référentiel sectoriel n'est pas alimenté, l'analyste la déclare et la justifie au dossier (D-44).",
     },
     notApplicableRule: {
       allowedCasesFr:
@@ -881,7 +881,7 @@ const criteria: CriterionConfig[] = [
     materialityGate: {
       flag: "esgTransitionMaterial",
       rationaleFr:
-        "Matérialité établie par l'intensité énergétique du secteur et l'exposition à des marchés d'exportation sous contrainte carbone.",
+        "Matérialité établie par l'intensité énergétique du secteur et l'exposition à des marchés d'exportation sous contrainte carbone. Tant que le référentiel sectoriel n'est pas alimenté, l'analyste la déclare et la justifie au dossier (D-44).",
     },
     notApplicableRule: {
       allowedCasesFr:

@@ -10,7 +10,7 @@
 
 > **Pourquoi ce document.** La remédiation a été conduite en autonomie. Une quarantaine d'arbitrages ont dû être pris — sur la granularité des échelles, les seuils de couverture, le sort de chaque plafond, le traitement des jeunes entreprises. Aucun n'est neutre. Ce journal les expose avec les options écartées et la raison du choix, afin que le comité modèles puisse les confirmer, les corriger ou les renverser sur pièces plutôt que de les découvrir dans le code.
 >
-> Chaque décision porte une mention **À CONFIRMER** lorsqu'elle engage une politique de la banque, et **TECHNIQUE** lorsqu'elle relève de la seule mise en œuvre.
+> Chaque décision porte une mention **À CONFIRMER** lorsqu'elle engage une politique de la banque, **TECHNIQUE** lorsqu'elle relève de la seule mise en œuvre, et **CONFIRMÉE** lorsque la banque l'a tranchée.
 
 ---
 
@@ -478,13 +478,13 @@ Diagnostic des représentations du système deux à deux : base de production et
 - **Saisie non disponible à l'écran.** La segmentation automatique et le statut conformité amont ne sont pas saisissables à l'écran.
 - **Deux notions de support groupe.** « Support juridiquement robuste » (routage des jeunes entreprises) et le support groupe à quatre conditions restent deux saisies distinctes. Les rapprocher relève de la méthode.
 
-## D-44 — Qui établit la matérialité ESG tant que le référentiel sectoriel est vide — **À CONFIRMER**
+## D-44 — L'analyste déclare la matérialité ESG tant que le référentiel sectoriel est vide — **CONFIRMÉE**
 
 *Constat :* la méthode veut que la matérialité soit établie par le référentiel sectoriel et la localisation des sites, « jamais au jugement libre de l'analyste ». Ce référentiel est livré vide (constats H04/H08). Sans saisie, D7.1 et D7.2 ne sont jamais évalués, y compris pour une conserverie du Souss.
 
-*Décision provisoire :* l'écran laisse l'analyste déclarer la matérialité, case par case. La justification de la méthode est affichée sous chaque case et la déclaration doit être justifiée au dossier. Elle est conservée dans l'instantané d'entrée de chaque notation, donc auditable. Non cochée, le comportement reste celui d'avant : critère écarté, poids transféré.
+*Décision :* l'écran laisse l'analyste déclarer la matérialité, case par case. La justification de la méthode est affichée sous chaque case et la déclaration doit être justifiée au dossier. Elle est conservée dans l'instantané d'entrée de chaque notation, donc auditable. Non cochée, le comportement reste celui d'avant : critère écarté, poids transféré.
 
-*À trancher :* confirmer cette déclaration provisoire, ou la réserver à un rôle de validation, jusqu'à l'alimentation du référentiel.
+*Confirmée par la banque le 4 octobre 2026 :* la déclaration reste confiée à l'analyste, sans rôle de validation dédié, jusqu'à l'alimentation du référentiel sectoriel. Elle pourra alors être dérivée du référentiel : la déclaration de l'analyste deviendra un contrôle de cohérence, et non plus la source. Le libellé affiché sous chaque case (configuration du modèle), la note méthodologique et le code, qui disaient la matérialité « jamais » établie par l'analyste, sont alignés sur cette décision.
 
 ---
 
@@ -501,7 +501,6 @@ Diagnostic des représentations du système deux à deux : base de production et
 9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Les dix contreparties ont été renotées (D-27) : les deux séries coexistent désormais sur des entrées identiques. Leur rapprochement suppose toujours une table de correspondance validée — treize dossiers de démonstration ne l'établissent pas.
 10. **Ce qui est repris lors d'une bascule de moteur de base** — les vingt-six notations, ou la seule série V3 (D-31). Conserver les deux préserve le point de comparaison du pilote et impose de transporter des instantanés d'un moteur retiré.
 11. **Dialecte cible et niveau de certification exigé** — un schéma validé n'est pas un dialecte certifié, et le durcissement de la base doit être réécrit dans ses termes avant toute mise en service (D-28).
-12. **Matérialité ESG tant que le référentiel sectoriel est vide** — déclaration provisoire par l'analyste, ou réservée à un rôle de validation (D-44).
 
 ---
 
