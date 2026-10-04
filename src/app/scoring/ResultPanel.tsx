@@ -2,13 +2,18 @@
 
 import type { ReactNode } from "react";
 import type { ModelConfig, RatingResult } from "@/core/types";
-import { GradeBadge, OutcomeLabel } from "../ui-helpers";
+import {
+  DATA_STATUS_LABELS,
+  EVALUATION_STATUS_LABELS,
+  GradeBadge,
+  OUTCOME_LABELS,
+  OutcomeLabel,
+  PD_STATUS_LABELS,
+  PURPOSE_LABELS,
+  RED_FLAG_LEVEL_LABELS,
+} from "../ui-helpers";
 
-const PURPOSE_LABELS: Record<string, string> = {
-  PRODUCTION_RATING: "Notation de production",
-  PILOT_SHADOW: "Pilote en mode fantôme",
-  SIMULATION_ONLY: "Simulation — bac à sable",
-};
+const evaluation = (code: string) => EVALUATION_STATUS_LABELS[code] ?? code;
 
 export function ResultPanel({
   result,
@@ -55,7 +60,7 @@ export function ResultPanel({
         {result.explanationFr}
       </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         <Metric
           label="Score brut"
           value={result.rawScore !== null ? result.rawScore.toFixed(2) : "—"}
@@ -89,11 +94,8 @@ export function ResultPanel({
         />
         <Metric
           label="PD 12 mois"
-          value={
-            result.pd12m !== null
-              ? `${(result.pd12m * 100).toFixed(2)} %`
-              : `non exposée (${result.pdStatus})`
-          }
+          value={result.pd12m !== null ? `${(result.pd12m * 100).toFixed(2)} %` : "non exposée"}
+          hint={`PD ${PD_STATUS_LABELS[result.pdStatus] ?? result.pdStatus}`}
         />
       </div>
 
@@ -165,11 +167,11 @@ export function ResultPanel({
         title="Statuts des cinq moteurs"
         color="var(--muted)"
         items={[
-          `Notation : ${result.ratingStatus}`,
-          `Conformité : ${result.complianceStatus}`,
-          `Décision de crédit : ${result.decisionStatus} (moteur distinct, non implémenté)`,
-          `Classification réglementaire : ${result.regulatoryClassStatus} (moteur distinct, non implémenté)`,
-          `IFRS 9 : ${result.ifrs9Status} (moteur distinct, non implémenté)`,
+          `Notation : ${OUTCOME_LABELS[result.ratingStatus] ?? result.ratingStatus}`,
+          `Conformité : ${evaluation(result.complianceStatus)}`,
+          `Décision de crédit : ${evaluation(result.decisionStatus)} (moteur distinct, non implémenté)`,
+          `Classification réglementaire : ${evaluation(result.regulatoryClassStatus)} (moteur distinct, non implémenté)`,
+          `IFRS 9 : ${evaluation(result.ifrs9Status)} (moteur distinct, non implémenté)`,
         ]}
       />
       {result.triggeredRedFlags.length > 0 && (
@@ -177,7 +179,8 @@ export function ResultPanel({
           title="Red flags"
           color="var(--bad)"
           items={result.triggeredRedFlags.map(
-            (f) => `${f.code} [${f.level}] ${f.labelFr} — ${f.treatmentFr}`
+            (f) =>
+              `${f.code} [${RED_FLAG_LEVEL_LABELS[f.level] ?? f.level}] ${f.labelFr} — ${f.treatmentFr}`
           )}
         />
       )}
@@ -196,7 +199,7 @@ export function ResultPanel({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
             gap: 20,
             marginTop: 16,
           }}
@@ -288,7 +291,9 @@ export function ResultPanel({
                     <td>
                       {c.code} — {c.labelFr}
                     </td>
-                    <td className="muted">{c.status}</td>
+                    <td className="muted" title={c.status}>
+                      {DATA_STATUS_LABELS[c.status] ?? c.status}
+                    </td>
                     <td>
                       {c.inputValue !== undefined
                         ? c.inputValue
@@ -317,19 +322,24 @@ export function ResultPanel({
         date d&apos;arrêté {result.asOfDate} · calculé le {result.computedAt}.{" "}
         {result.pdStatus === "UNCALIBRATED"
           ? "Aucune PD n'est produite : le modèle n'est pas calibré."
-          : `statut PD ${result.pdStatus}${result.calibrationId ? ` · calibration ${result.calibrationId}` : ""}.`}
+          : `PD ${PD_STATUS_LABELS[result.pdStatus] ?? result.pdStatus}${result.calibrationId ? ` · calibration ${result.calibrationId}` : ""}.`}
       </p>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: ReactNode }) {
+function Metric({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
     <div>
       <div className="muted" style={{ fontSize: 11, textTransform: "uppercase" }}>
         {label}
       </div>
       <div style={{ fontSize: 18, fontWeight: 700 }}>{value}</div>
+      {hint && (
+        <div className="muted" style={{ fontSize: 12 }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

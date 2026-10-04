@@ -3,6 +3,12 @@ import Link from "next/link";
 import { getModel } from "@/models";
 import type { Segment } from "@/core/types";
 import { requireSession } from "@/lib/session";
+import {
+  CodeLabel,
+  MODEL_STATUS_LABELS,
+  RED_FLAG_SOURCE_LABELS,
+  RedFlagLevelBadge,
+} from "@/app/ui-helpers";
 
 export default async function ModelDetailPage({
   params,
@@ -23,7 +29,8 @@ export default async function ModelDetailPage({
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>{model.modelId}</h1>
         <p className="muted">
-          {model.labelFr} · version {model.version} · statut {model.status} · date d&apos;effet{" "}
+          {model.labelFr} · version {model.version} · statut{" "}
+          <CodeLabel code={model.status} labels={MODEL_STATUS_LABELS} /> · date d&apos;effet{" "}
           {model.effectiveFrom}
         </p>
         <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
@@ -202,8 +209,12 @@ export default async function ModelDetailPage({
               <tr key={f.code}>
                 <td>{f.code}</td>
                 <td>{f.labelFr}</td>
-                <td>{f.level}</td>
-                <td className="muted">{f.source}</td>
+                <td>
+                  <RedFlagLevelBadge level={f.level} />
+                </td>
+                <td className="muted">
+                  <CodeLabel code={f.source} labels={RED_FLAG_SOURCE_LABELS} />
+                </td>
                 <td className="muted">{f.treatmentFr}</td>
               </tr>
             ))}

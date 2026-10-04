@@ -27,7 +27,7 @@ export function LegacyResultPanel({
       </h2>
       <p className="muted" style={{ marginBottom: 16 }}>{reasonFr}</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
         <Metric
           label="Score brut"
           value={

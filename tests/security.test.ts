@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { checkOutboundUrl } from "@/lib/url-safety";
 import { csvField, csvLine } from "@/lib/csv";
 import { checkRateLimit, resetRateLimits } from "@/lib/rate-limit";
-import { config, resetConfigCache } from "@/lib/env";
+import { applicationSchemaError, config, resetConfigCache } from "@/lib/env";
 import { buildCsp } from "@/middleware";
 import { signPayload, verifySignature } from "@/lib/webhooks";
 import {
@@ -262,6 +262,33 @@ describe("Configuration", () => {
       resetConfigCache();
       expect(config().dbProvider).toBe("postgresql");
     }
+  });
+});
+
+describe("Schéma applicatif désigné par DATABASE_URL", () => {
+  const base = "postgresql://u:p@db.example.ma:6543/postgres";
+
+  it("refuse en production une chaîne sans schéma ou désignant « public »", () => {
+    expect(applicationSchemaError(`${base}?pgbouncer=true`, "postgresql", true)).toMatch(
+      /schema=corp_scoring/
+    );
+    expect(applicationSchemaError(base, "postgresql", true)).toMatch(/aucun schéma/);
+    expect(applicationSchemaError(`${base}?schema=public`, "postgresql", true)).toMatch(
+      /« public » est désigné/
+    );
+  });
+
+  it("accepte le schéma dédié, quelle que soit la place du paramètre", () => {
+    expect(applicationSchemaError(`${base}?schema=corp_scoring`, "postgresql", true)).toBeNull();
+    expect(
+      applicationSchemaError(`${base}?pgbouncer=true&schema=corp_scoring`, "postgresql", true)
+    ).toBeNull();
+  });
+
+  it("ne contrôle ni le développement, ni les autres dialectes", () => {
+    expect(applicationSchemaError(base, "postgresql", false)).toBeNull();
+    expect(applicationSchemaError("sqlserver://x;database=y", "sqlserver", true)).toBeNull();
+    expect(applicationSchemaError(undefined, "postgresql", true)).toBeNull();
   });
 });
 

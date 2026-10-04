@@ -10,7 +10,8 @@ import type {
   Segment,
 } from "@/core/types";
 import { CAP_TRIGGER_TO_FLAG, RETIRED_CAP_OBSERVATIONS } from "@/core/structural-flags";
-import { RedFlagLevelBadge } from "../ui-helpers";
+import { DEFAULT_GRADES } from "@/reference/default-policy";
+import { DATA_STATUS_LABELS, RedFlagLevelBadge } from "../ui-helpers";
 import { runScoringAction } from "./actions";
 import { ResultPanel } from "./ResultPanel";
 
@@ -39,6 +40,42 @@ const CONFIDENCE_LEVELS = [100, 75, 50, 25, 0];
 
 const DEFAULT_CONFIDENCE = { completeness: 100, freshness: 100, reliability: 75, provenance: 75 };
 
+/**
+ * Statuts pour lesquels le moteur lit la valeur saisie. Une donnée périmée
+ * (STALE), invalide ou manquante est traitée comme indisponible : la saisir
+ * ne servirait à rien, et laisserait croire qu'elle compte.
+ */
+function carriesValue(status: DataStatus): boolean {
+  return status === "AVAILABLE" || status === "ESTIMATED";
+}
+
+const UNAVAILABLE_FR: Partial<Record<DataStatus, string>> = {
+  MISSING: "manquante",
+  INVALID: "invalide",
+  STALE: "périmée",
+};
+
+/**
+ * Ce que le moteur V3 fera réellement du critère, dit à l'analyste au moment
+ * où il choisit le statut — et non une règle générique, encore moins celle de
+ * la V2 (retrait du dénominateur, redistribution proportionnelle), que la V3
+ * a supprimée.
+ */
+function unavailableExplanation(criterion: CriterionConfig, status: DataStatus): string {
+  if (status === "NOT_APPLICABLE") {
+    const rule = criterion.notApplicableRule;
+    if (rule) {
+      return `Non applicable selon la règle du modèle : le poids est transféré à ${rule.transferWeightTo}, le poids total reste inchangé.`;
+    }
+    return "Le modèle ne prévoit pas de non-applicabilité pour ce critère : il sera traité comme une donnée manquante, et l'incohérence sera signalée.";
+  }
+  const etat = UNAVAILABLE_FR[status] ?? "indisponible";
+  if (criterion.unavailablePolicy === "BLOCK") {
+    return `Donnée critique ${etat} : aucune notation ne sera produite.`;
+  }
+  return `Donnée ${etat} : score prudent ${criterion.unavailableScore ?? 25} appliqué par la grille, poids conservé. La couverture observée diminue d'autant.`;
+}
+
 function initialCriteria(model: ModelConfig): Record<string, CriterionState> {
   return Object.fromEntries(
     model.criteria.map((c) => [
@@ -56,9 +93,7 @@ function initialCriteria(model: ModelConfig): Record<string, CriterionState> {
  * différent de AVAILABLE compte aussi comme une décision prise par l'analyste.
  */
 function isAnswered(criterion: CriterionConfig, state: CriterionState): boolean {
-  if (state.status !== "AVAILABLE" && state.status !== "ESTIMATED" && state.status !== "STALE") {
-    return true;
-  }
+  if (!carriesValue(state.status)) return true;
   if (state.specialCase) return true;
   if (criterion.type === "QUANTITATIVE") return state.value.trim() !== "";
   return true;
@@ -77,6 +112,7 @@ export function ScoringForm({ model, counterparties }: Props) {
   const [hasStrongGroupSupport, setHasStrongGroupSupport] = useState(false);
   const [redFlags, setRedFlags] = useState<string[]>([]);
   const [defaultTriggered, setDefaultTriggered] = useState(false);
+  const [defaultGrade, setDefaultGrade] = useState<string>(DEFAULT_GRADES[0].grade);
   const [pending, setPending] = useState(false);
 
   // Les cases d'exception sont dérivées du modèle chargé, jamais recopiées :
@@ -142,7 +178,7 @@ export function ScoringForm({ model, counterparties }: Props) {
     for (const c of applicable) {
       const state = criteria[c.code];
       const entry: CriterionInput = { status: state.status };
-      if (state.status === "AVAILABLE" || state.status === "ESTIMATED" || state.status === "STALE") {
+      if (carriesValue(state.status)) {
         if (state.specialCase) {
           entry.specialCase = state.specialCase;
         } else if (c.type === "QUANTITATIVE") {
@@ -176,6 +212,7 @@ export function ScoringForm({ model, counterparties }: Props) {
       },
       redFlags,
       defaultTriggered,
+      ...(defaultTriggered ? { defaultGrade } : {}),
     };
 
     try {
@@ -265,7 +302,7 @@ export function ScoringForm({ model, counterparties }: Props) {
 
       <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 12 }}>Cadrage du dossier</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <div className="grid-fields">
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
               Segment
@@ -301,15 +338,7 @@ export function ScoringForm({ model, counterparties }: Props) {
             </select>
           </label>
         </div>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "220px 1fr",
-            gap: 12,
-            marginTop: 12,
-            alignItems: "end",
-          }}
-        >
+        <div className="age-row">
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
               Ancienneté de l&apos;entreprise (années)
@@ -331,8 +360,9 @@ export function ScoringForm({ model, counterparties }: Props) {
               onChange={(e) => setHasStrongGroupSupport(e.target.checked)}
             />
             <span style={{ fontSize: 13 }}>
-              Support de groupe juridiquement robuste (lève le cap CAP01 pour une
-              entreprise de moins de deux ans)
+              Support de groupe juridiquement robuste (une entreprise de moins de deux
+              ans reste alors notée sur la grille au lieu d&apos;être routée vers le
+              traitement « jeune entreprise »)
             </span>
           </label>
         </div>
@@ -414,7 +444,7 @@ export function ScoringForm({ model, counterparties }: Props) {
           {model.confidence.weights.provenance} % provenance. Un niveau insuffisant
           empêche la production d&apos;un grade final.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
           {(
             [
               ["completeness", "Complétude"],
@@ -456,7 +486,7 @@ export function ScoringForm({ model, counterparties }: Props) {
             Ce modèle ne définit aucune exception non compensatoire.
           </p>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 8 }}>
             {exceptionFlags.map((f) => (
               <label key={f.key} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                 <input
@@ -513,7 +543,7 @@ export function ScoringForm({ model, counterparties }: Props) {
           Un signal BLOCK arrête la notation ; un signal DEFAULT_CHECK ou REFER n&apos;est
           jamais dilué dans la moyenne pondérée.
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 6 }}>
           {model.redFlags.map((rf) => (
             <label key={rf.code} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <input
@@ -550,6 +580,20 @@ export function ScoringForm({ model, counterparties }: Props) {
             score)
           </span>
         </label>
+        {defaultTriggered && (
+          <label style={{ display: "block", marginTop: 8, maxWidth: 520 }}>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Nature du défaut constaté
+            </div>
+            <select value={defaultGrade} onChange={(e) => setDefaultGrade(e.target.value)}>
+              {DEFAULT_GRADES.map((d) => (
+                <option key={d.grade} value={d.grade}>
+                  {d.grade} — {d.labelFr}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </section>
 
       <div
@@ -617,8 +661,8 @@ function CriterionRow({
 }) {
   const weight = (criterion.weightsBps[segment] ?? 0) / 100;
   const bins = criterion.binsBySegment?.[segment] ?? criterion.binsBySegment?.ALL;
-  const editable =
-    state.status === "AVAILABLE" || state.status === "ESTIMATED" || state.status === "STALE";
+  const editable = carriesValue(state.status);
+  const name = `${criterion.code} — ${criterion.labelFr}`;
 
   return (
     <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
@@ -643,22 +687,15 @@ function CriterionRow({
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "180px 1fr",
-          gap: 10,
-          marginTop: 8,
-          alignItems: "start",
-        }}
-      >
+      <div className="criterion-input">
         <select
+          aria-label={`Statut de la donnée — ${name}`}
           value={state.status}
           onChange={(e) => onChange({ status: e.target.value as DataStatus })}
         >
           {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {DATA_STATUS_LABELS[s] ?? s}
             </option>
           ))}
         </select>
@@ -669,6 +706,7 @@ function CriterionRow({
               <input
                 type="number"
                 step="any"
+                aria-label={`Valeur — ${name}`}
                 placeholder={`Valeur${criterion.unit ? ` (${criterion.unit.trim()})` : ""}`}
                 value={state.value}
                 onChange={(e) => onChange({ value: e.target.value })}
@@ -707,7 +745,11 @@ function CriterionRow({
               )}
             </div>
           ) : (
-            <select value={state.score} onChange={(e) => onChange({ score: e.target.value })}>
+            <select
+              aria-label={`Ancrage retenu — ${name}`}
+              value={state.score}
+              onChange={(e) => onChange({ score: e.target.value })}
+            >
               {criterion.anchors?.map((a) => (
                 <option key={a.score} value={a.score}>
                   {a.score} — {a.labelFr}
@@ -716,12 +758,15 @@ function CriterionRow({
             </select>
           )
         ) : (
-          <div className="muted" style={{ fontSize: 12, paddingTop: 6 }}>
-            {state.status === "NOT_APPLICABLE"
-              ? "Poids redistribué à l'intérieur du domaine."
-              : criterion.unavailablePolicy === "BLOCK"
-                ? "Donnée critique absente : la notation sera bloquée."
-                : "Critère exclu du calcul ; impact porté par le niveau de confiance."}
+          <div
+            className="muted"
+            style={{
+              fontSize: 12,
+              paddingTop: 6,
+              color: criterion.unavailablePolicy === "BLOCK" ? "var(--bad)" : undefined,
+            }}
+          >
+            {unavailableExplanation(criterion, state.status)}
           </div>
         )}
       </div>

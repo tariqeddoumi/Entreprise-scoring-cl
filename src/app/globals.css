@@ -8,8 +8,10 @@
   --muted: #5c6470;
   --brand: #0f3d63;
   --brand-soft: #e8eff5;
-  --good: #1a7f5a;
-  --warn: #b06f12;
+  /* Teintes assombries pour un contraste d'au moins 4,5:1 sur les badges
+     teintés (WCAG 2.1 AA) : #1a7f5a et #b06f12 descendaient à 4,2 et 3,6. */
+  --good: #146c4c;
+  --warn: #8a5508;
   --bad: #b3261e;
 }
 
@@ -49,6 +51,10 @@ body {
 table.data {
   width: 100%;
   border-collapse: collapse;
+  /* Contient les libellés réservés aux lecteurs d'écran (.sr-only, en position
+     absolue) : sans cela ils échappent au défilement du tableau sur mobile et
+     élargissent la page. */
+  position: relative;
 }
 table.data th,
 table.data td {
@@ -78,6 +84,151 @@ textarea {
 
 button {
   cursor: pointer;
+}
+
+/* Un lien au fil d'un texte ne se distingue pas par la seule couleur. */
+main p a,
+main li a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Texte destiné aux seuls lecteurs d'écran. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus clavier toujours visible. */
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* --- Mise en page ---------------------------------------------------------- */
+
+.site-header {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-height: 56px;
+}
+.site-brand {
+  font-weight: 700;
+  color: var(--brand);
+  font-size: 15px;
+  white-space: nowrap;
+}
+.site-nav {
+  display: flex;
+  gap: 20px;
+  white-space: nowrap;
+}
+.site-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.site-main {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.site-footer {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px 40px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Grilles de formulaire. */
+.grid-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.age-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  align-items: end;
+}
+.criterion-input {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px;
+  margin-top: 8px;
+  align-items: start;
+}
+.admin-create {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+/* Une cellule de grille s'élargit par défaut jusqu'à son contenu le plus
+   large : un tableau suffisait alors à élargir toute la page sur mobile. Elle
+   peut désormais rétrécir, et le tableau défile à l'intérieur de sa carte. */
+.site-main > *,
+.site-main > * > *,
+.card {
+  min-width: 0;
+}
+
+/* Les dates ne se coupent pas en fin de ligne (« 2025-12- / 31 »). */
+.nowrap {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .site-header {
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 8px 0 0;
+  }
+  /* Navigation sur sa propre ligne, défilant horizontalement. */
+  .site-nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    gap: 18px;
+    scrollbar-width: none;
+  }
+  .site-main {
+    padding: 16px;
+  }
+  .site-footer {
+    padding: 12px 16px 32px;
+  }
+  .age-row,
+  .criterion-input,
+  .admin-create {
+    grid-template-columns: 1fr;
+  }
+  /* Un tableau large défile dans sa carte au lieu d'élargir toute la page. */
+  table.data {
+    display: block;
+    overflow-x: auto;
+  }
+  table.data th,
+  table.data td {
+    padding: 8px 10px;
+  }
 }
 
 /*

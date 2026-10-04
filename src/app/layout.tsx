@@ -47,24 +47,12 @@ export default async function RootLayout({
             padding: "0 24px",
           }}
         >
-          <div
-            style={{
-              maxWidth: 1280,
-              margin: "0 auto",
-              display: "flex",
-              alignItems: "center",
-              gap: 32,
-              height: 56,
-            }}
-          >
-            <Link
-              href="/"
-              style={{ fontWeight: 700, color: "var(--brand)", fontSize: 15 }}
-            >
+          <div className="site-header">
+            <Link href="/" className="site-brand">
               Scoring Entreprises · Maroc
             </Link>
             {ready && <NavLinks isAdmin={session.identity.role === "ADMIN"} />}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="site-user">
               {session ? (
                 <>
                   <Link
@@ -99,19 +87,10 @@ export default async function RootLayout({
             </div>
           </div>
         </header>
-        <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px" }}>
+        <main className="site-main">
           {children}
         </main>
-        <footer
-          className="no-print"
-          style={{
-            maxWidth: 1280,
-            margin: "0 auto",
-            padding: "16px 24px 40px",
-            color: "var(--muted)",
-            fontSize: 12,
-          }}
-        >
+        <footer className="no-print site-footer">
           {calibrationFooterFr(models)} Une calibration sur données simulées valide la
           chaîne de traitement, jamais le niveau réel du risque. Les seuils ne
           constituent ni des règles Bank Al-Maghrib ni des paramètres IFRS 9 tant

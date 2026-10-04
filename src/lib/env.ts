@@ -99,6 +99,42 @@ function loadConfig(): AppConfig {
   };
 }
 
+/**
+ * Schéma applicatif PostgreSQL désigné par DATABASE_URL.
+ *
+ * Prisma interroge le schéma nommé par le paramètre `schema` de la chaîne de
+ * connexion, et « public » à défaut. Sur une base partagée — cas du projet
+ * Supabase, dont le schéma « public » héberge les tables d'autres applications,
+ * dont une table « users » —, oublier ce paramètre fait lire à l'outil les
+ * tables d'une autre application. C'est arrivé en octobre 2026 : la connexion
+ * échouait sur une colonne absente de `public.users`, sans autre indice.
+ *
+ * Renvoie un message d'erreur, ou null si la configuration est acceptable.
+ * Seule la production est contrôlée ; une chaîne illisible est laissée à
+ * Prisma, qui la refusera lui-même.
+ */
+export function applicationSchemaError(
+  databaseUrl: string | undefined,
+  provider: DbProvider,
+  isProduction: boolean
+): string | null {
+  if (!isProduction || provider !== "postgresql" || !databaseUrl) return null;
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    return null;
+  }
+  const schema = url.searchParams.get("schema");
+  if (schema && schema !== "public") return null;
+  return (
+    `DATABASE_URL : ${schema ? "le schéma « public » est désigné" : "aucun schéma n'est désigné, Prisma utiliserait « public »"}. ` +
+    "Les tables de l'outil vivent dans un schéma dédié : ajoutez « schema=corp_scoring » à la chaîne de connexion " +
+    "(« &schema=corp_scoring » si elle contient déjà « ? »), puis redéployez. Aucune requête n'est envoyée tant que ce n'est pas fait, " +
+    "pour ne jamais lire ni écrire les tables d'une autre application."
+  );
+}
+
 let cached: AppConfig | null = null;
 
 export function config(): AppConfig {

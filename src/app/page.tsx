@@ -3,7 +3,7 @@ import { getModel, listModels } from "@/models";
 import { gradeRank } from "@/core/grades";
 import { prisma, safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
-import { GradeBadge, OutcomeLabel } from "./ui-helpers";
+import { CodeLabel, GradeBadge, MODEL_STATUS_LABELS, OutcomeLabel } from "./ui-helpers";
 
 /**
  * Rang d'un grade DANS L'ÉCHELLE DE SON MODÈLE.
@@ -114,7 +114,10 @@ export default async function DashboardPage() {
   );
 
   const models = listModels();
-  const calibrated = models.filter((m) => m.calibration).length;
+  // Une calibration sur données simulées valide la chaîne de traitement, pas
+  // le niveau du risque : la carte ne doit pas la compter comme une calibration.
+  const observed = models.filter((m) => m.calibration?.dataSource === "OBSERVED").length;
+  const synthetic = models.filter((m) => m.calibration?.dataSource === "SYNTHETIC").length;
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -141,13 +144,20 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
         <StatCard label="Contreparties" value={stats.counterparties} />
-        <StatCard label="Runs de notation" value={stats.runs} />
-        <StatCard label="Modèles publiés" value={models.length} />
+        <StatCard label="Notations enregistrées" value={stats.runs} />
+        <StatCard label="Modèles disponibles" value={models.length} />
         <StatCard
           label="Calibration PD"
-          value={`${calibrated}/${models.length} calibré(s)`}
+          value={
+            observed > 0
+              ? `${observed}/${models.length} sur défauts observés`
+              : synthetic > 0
+                ? "Données simulées uniquement"
+                : "Aucune"
+          }
+          hint={observed === 0 ? "Aucune PD n'est exposée" : undefined}
           small
         />
       </section>
@@ -201,7 +211,9 @@ export default async function DashboardPage() {
                           <tr>
                             <th>Grade</th>
                             <th>Nombre</th>
-                            <th style={{ width: "50%" }}></th>
+                            <th style={{ width: "50%" }}>
+                              <span className="sr-only">Répartition</span>
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
@@ -289,7 +301,7 @@ export default async function DashboardPage() {
                       {r.counterparty.name}
                     </Link>
                   </td>
-                  <td>{r.asOfDate}</td>
+                  <td className="nowrap">{r.asOfDate}</td>
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore ? Number(r.rawScore).toFixed(2) : "—"}</td>
                   <td><GradeBadge grade={r.finalGrade} /></td>
@@ -327,7 +339,9 @@ export default async function DashboardPage() {
                 </td>
                 <td>{m.labelFr}</td>
                 <td>{m.version}</td>
-                <td className="muted">{m.status}</td>
+                <td className="muted">
+                  <CodeLabel code={m.status} labels={MODEL_STATUS_LABELS} />
+                </td>
                 <td>{m.segments.join(", ")}</td>
                 <td>{m.criteria.length}</td>
                 <td className="muted" style={{ fontSize: 12 }}>
@@ -335,7 +349,7 @@ export default async function DashboardPage() {
                     ? m.calibration.dataSource === "SYNTHETIC"
                       ? "simulée"
                       : "défauts observés"
-                    : "non calibré"}
+                    : "non calibrée"}
                 </td>
               </tr>
             ))}
@@ -350,10 +364,12 @@ function StatCard({
   label,
   value,
   small,
+  hint,
 }: {
   label: string;
   value: string | number;
   small?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="card" style={{ padding: 16 }}>
@@ -363,6 +379,11 @@ function StatCard({
       <div style={{ fontSize: small ? 15 : 26, fontWeight: 700, marginTop: 4 }}>
         {value}
       </div>
+      {hint && (
+        <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

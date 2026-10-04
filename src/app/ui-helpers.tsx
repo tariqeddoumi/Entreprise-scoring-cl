@@ -76,7 +76,82 @@ export function redFlagAccent(level: string): string {
 }
 
 export function RedFlagLevelBadge({ level }: { level: string }) {
-  return <span style={badgeStyle(redFlagAccent(level), 11)}>{level}</span>;
+  return (
+    <span style={badgeStyle(redFlagAccent(level), 11)} title={level}>
+      {RED_FLAG_LEVEL_LABELS[level] ?? level}
+    </span>
+  );
+}
+
+/*
+ * Libellés français des codes du moteur.
+ *
+ * Les codes restent la référence : ils voyagent dans l'API, les instantanés et
+ * la piste d'audit, et c'est eux que cite la documentation. À l'écran, un
+ * analyste lit « Disponible », pas « AVAILABLE » ; le code reste accessible en
+ * infobulle (`title`), pour qu'un échange avec les équipes techniques ou de
+ * validation puisse toujours s'appuyer sur lui.
+ */
+
+export const DATA_STATUS_LABELS: Record<string, string> = {
+  AVAILABLE: "Disponible",
+  ESTIMATED: "Estimée",
+  MISSING: "Manquante",
+  STALE: "Périmée",
+  INVALID: "Invalide",
+  NOT_APPLICABLE: "Non applicable",
+};
+
+export const RED_FLAG_LEVEL_LABELS: Record<string, string> = {
+  BLOCK: "Bloquant",
+  DEFAULT_CHECK: "Contrôle défaut",
+  REFER: "À instruire",
+  WARNING: "Vigilance",
+  INFO: "Information",
+};
+
+export const RED_FLAG_SOURCE_LABELS: Record<string, string> = {
+  COMPLIANCE: "Conformité",
+  CREDIT_POLICY: "Politique de crédit",
+  MODEL: "Modèle",
+  REGULATORY: "Réglementaire",
+  IFRS9: "IFRS 9",
+};
+
+export const MODEL_STATUS_LABELS: Record<string, string> = {
+  DRAFT_EXPERT_SEED: "Projet expert, non validé",
+  REVIEW: "En revue",
+  VALIDATED: "Validé",
+  PUBLISHED: "Publié",
+  RETIRED: "Retiré",
+};
+
+export const PD_STATUS_LABELS: Record<string, string> = {
+  UNCALIBRATED: "non calibrée",
+  CALIBRATED: "calibrée sur défauts observés",
+  CALIBRATED_SYNTHETIC: "calibrée sur données simulées",
+  TECHNICAL_ONLY_DISABLED: "désactivée",
+};
+
+/** Statuts des moteurs distincts (conformité, décision, BAM, IFRS 9). */
+export const EVALUATION_STATUS_LABELS: Record<string, string> = {
+  NOT_EVALUATED: "Non évalué",
+  CLEAR: "Conforme",
+  REFER: "À instruire",
+  BLOCKED: "Bloqué",
+};
+
+export const PURPOSE_LABELS: Record<string, string> = {
+  PILOT_SHADOW: "Pilote en mode fantôme",
+  SIMULATION_ONLY: "Simulation — bac à sable",
+  PRODUCTION_RATING: "Notation de production",
+};
+
+/** Libellé français d'un code, avec le code d'origine en infobulle. */
+export function CodeLabel({ code, labels }: { code: string; labels: Record<string, string> }) {
+  const label = labels[code];
+  if (!label) return <span>{code}</span>;
+  return <span title={code}>{label}</span>;
 }
 
 /**
@@ -92,7 +167,7 @@ export function RedFlagLevelBadge({ level }: { level: string }) {
  * masquée : une notation d'archive n'a pas été produite par les règles
  * d'aujourd'hui.
  */
-const OUTCOME_LABELS: Record<string, string> = {
+export const OUTCOME_LABELS: Record<string, string> = {
   // Vocabulaire courant (RatingResult.ratingStatus).
   RATED: "Notation produite",
   DEFAULTED: "Grade de défaut constaté",
