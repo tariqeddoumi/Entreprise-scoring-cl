@@ -1,14 +1,29 @@
 /**
- * Vérifie l'alignement entre les quatre représentations du système :
- * schéma Prisma, contrat OpenAPI, routes implémentées et schémas de
- * validation. Une divergence non détectée produit une API qui ment sur son
- * propre contrat.
+ * Vérifie l'alignement entre les représentations du système : schéma Prisma,
+ * contrat OpenAPI, routes implémentées, schémas de validation, moteur et
+ * écrans. Une divergence non détectée produit une API qui ment sur son propre
+ * contrat, ou un écran qui recueille une saisie que le moteur ne lit pas.
  *
- * Exécutable hors ligne : aucune connexion à la base n'est nécessaire.
- * Usage : npm run check:alignment
+ * Exécutable hors ligne : aucune connexion à la base n'est nécessaire. La
+ * structure de la base elle-même se contrôle par « npm run db:check ».
+ * Usage : npm run check:alignment (exécuté par la CI)
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import yaml from "js-yaml";
+import type { ZodTypeAny } from "zod";
+import {
+  DATA_STATUS_LABELS,
+  EVALUATION_STATUS_LABELS,
+  MODEL_STATUS_LABELS,
+  OVERRIDE_REASON_LABELS,
+  PD_STATUS_LABELS,
+  PURPOSE_LABELS,
+  RED_FLAG_LEVEL_LABELS,
+  RED_FLAG_SOURCE_LABELS,
+} from "../src/app/ui-helpers.js";
+import { computeRating } from "../src/core/engine.js";
+import * as requestSchemas from "../src/lib/schemas.js";
 import { tiedGrades, validateCalibration } from "../src/core/calibration.js";
 import {
   CAP_TRIGGER_TO_FLAG,
@@ -335,6 +350,177 @@ console.log("\n6. Calibration : artefact vs modèle et contrat\n");
       fail(`${model.modelId} — calibration simulée mais l'avertissement du modèle ne le dit pas`);
     } else if (cal.dataSource === "SYNTHETIC") {
       ok(`${model.modelId} — l'origine simulée est portée par l'avertissement du modèle`);
+    }
+  }
+}
+
+
+// --- Contrats de données : validation, OpenAPI, moteur, écrans ----------------
+// Les sections précédentes comparent des listes de valeurs. Celle-ci compare
+// les FORMES : champs acceptés par la validation et décrits par le contrat,
+// champs produits par le moteur et décrits par le contrat, champs que le
+// moteur lit et que l'écran envoie. C'est à ce niveau qu'étaient passés
+// inaperçus cinq champs de requête non documentés, un contrat illisible par
+// un analyseur strict et des critères ESG saisis puis ignorés (D-43).
+console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n");
+{
+  // 7a. Le contrat doit être lisible par un analyseur YAML strict : une clé
+  // dupliquée le rend inexploitable par les générateurs de clients.
+  let spec: any = null;
+  try {
+    spec = yaml.load(openapi);
+    ok("openapi.yaml lisible par un analyseur YAML strict (aucune clé dupliquée)");
+  } catch (e) {
+    fail(`openapi.yaml illisible par un analyseur strict : ${(e as Error).message.split("\n")[0]}`);
+    spec = yaml.load(openapi, { json: true });
+  }
+  const components = spec.components.schemas;
+  const resolve = (o: any) => (o?.$ref ? components[o.$ref.split("/").pop()] : o);
+  const bodyOf = (path: string, method: string) =>
+    resolve(spec.paths[path]?.[method]?.requestBody?.content?.["application/json"]?.schema);
+
+  // 7b. Champs acceptés par la validation (Zod, .strict) vs champs documentés,
+  // récursivement sur les objets imbriqués.
+  const shapeOf = (schema: ZodTypeAny): Record<string, ZodTypeAny> | null => {
+    let t: any = schema;
+    while (t?._def && t._def.typeName !== "ZodObject") {
+      t = t._def.schema ?? t._def.innerType ?? t._def.type;
+    }
+    return t?._def?.typeName === "ZodObject" ? t._def.shape() : null;
+  };
+  const compareShape = (label: string, schema: ZodTypeAny, doc: any): string[] => {
+    const shape = shapeOf(schema);
+    const resolved = resolve(doc);
+    if (!shape || !resolved?.properties) return [];
+    const documented = Object.keys(resolved.properties);
+    const gaps = [
+      ...Object.keys(shape)
+        .filter((k) => !documented.includes(k))
+        .map((k) => `${label}.${k} accepté mais non documenté`),
+      ...documented
+        .filter((k) => !(k in shape))
+        .map((k) => `${label}.${k} documenté mais refusé par la validation`),
+    ];
+    for (const k of Object.keys(shape)) {
+      if (documented.includes(k)) gaps.push(...compareShape(`${label}.${k}`, shape[k], resolved.properties[k]));
+    }
+    return gaps;
+  };
+  const contracts: Array<[string, ZodTypeAny, any]> = [
+    ["RatingRequest", requestSchemas.ratingRequestSchema, components.RatingRequest],
+    ["POST /counterparties", requestSchemas.counterpartySchema, bodyOf("/counterparties", "post")],
+    ["PATCH /counterparties/{id}", requestSchemas.counterpartyPatchSchema, bodyOf("/counterparties/{id}", "patch")],
+    ["OverrideRequest", requestSchemas.overrideRequestSchema, components.OverrideRequest],
+    ["POST /overrides/{id}/decision", requestSchemas.overrideDecisionSchema, bodyOf("/overrides/{id}/decision", "post")],
+    ["POST /webhook-subscriptions", requestSchemas.webhookSubscriptionSchema, bodyOf("/webhook-subscriptions", "post")],
+    ["POST /rating-runs/compare", requestSchemas.compareRequestSchema, bodyOf("/rating-runs/compare", "post")],
+  ];
+  for (const [label, schema, doc] of contracts) {
+    if (!doc) {
+      fail(`${label} : corps de requête introuvable dans le contrat`);
+      continue;
+    }
+    const gaps = compareShape(label, schema, doc);
+    if (gaps.length) gaps.forEach((g) => fail(g));
+    else ok(`${label} — champs validés et documentés identiques`);
+  }
+  const patchRequired = bodyOf("/counterparties/{id}", "patch")?.required ?? [];
+  if (patchRequired.length) fail(`PATCH /counterparties/{id} : champs requis dans le contrat (${patchRequired.join(", ")}) alors que la mise à jour est partielle`);
+
+  // 7c. Champs produits par le moteur vs champs documentés du résultat. Deux
+  // dossiers — l'un noté, l'autre sans grade — couvrent les deux formes.
+  const minimal = {
+    modelId: CORP_STD_V1.modelId,
+    segment: "PME" as const,
+    asOfDate: "2026-06-30",
+    criteria: {},
+    confidence: { completeness: 100, freshness: 100, reliability: 100, provenance: 100 },
+  };
+  const complete = {
+    ...minimal,
+    criteria: Object.fromEntries(
+      CORP_STD_V1.criteria.map((c) => [
+        c.code,
+        c.type === "QUANTITATIVE" ? { status: "AVAILABLE" as const, value: 1 } : { status: "AVAILABLE" as const, score: 50 as const },
+      ])
+    ),
+  };
+  const produced = new Set(
+    [computeRating(CORP_STD_V1, minimal), computeRating(CORP_STD_V1, complete)].flatMap((r) => Object.keys(r))
+  );
+  const documentedResult = Object.keys(components.RatingResult.properties);
+  const undocumented = [...produced].filter((k) => !documentedResult.includes(k));
+  const phantom = documentedResult.filter((k) => !produced.has(k));
+  if (undocumented.length) fail(`RatingResult : champs produits non documentés — ${undocumented.join(", ")}`);
+  if (phantom.length) fail(`RatingResult : champs documentés jamais produits — ${phantom.join(", ")}`);
+  if (!undocumented.length && !phantom.length) ok(`RatingResult — ${produced.size} champs produits, tous documentés`);
+
+  // 7d. Tout événement proposé à la souscription doit être émis quelque part :
+  // « counterparty.updated » était souscriptible sans jamais être publié.
+  const sources = (dir: string): string[] =>
+    readdirSync(dir).flatMap((e) => {
+      const full = join(dir, e);
+      if (statSync(full).isDirectory()) return e === "generated" ? [] : sources(full);
+      return /\.tsx?$/.test(e) ? [full] : [];
+    });
+  const emitters = sources("src")
+    .filter((f) => !f.endsWith("webhooks.ts") && !f.endsWith("schemas.ts"))
+    .map((f) => readFileSync(f, "utf8"))
+    .filter((src) => src.includes("publishEvent("))
+    .join("\n");
+  const neverEmitted = eventsCode.filter((e) => !emitters.includes(`"${e}"`));
+  if (neverEmitted.length) fail(`événements souscriptibles jamais publiés : ${neverEmitted.join(", ")}`);
+  else ok(`les ${eventsCode.length} événements souscriptibles sont publiés`);
+
+  // 7e. Libellés d'écran : chaque code du moteur ou de la validation a son
+  // libellé français, sans libellé orphelin.
+  const labelSets: Array<[string, string[], Record<string, string>]> = [
+    ["DataStatus", statusEngine, DATA_STATUS_LABELS],
+    ["RedFlagLevel", enumFrom(types, /export type RedFlagLevel = ([\s\S]*?);/), RED_FLAG_LEVEL_LABELS],
+    ["RuleSource", enumFrom(types, /export type RuleSource = ([\s\S]*?);/), RED_FLAG_SOURCE_LABELS],
+    ["PdStatus", enumFrom(types, /export type PdStatus =\s*([\s\S]*?);/), PD_STATUS_LABELS],
+    ["ComplianceStatus", enumFrom(types, /export type ComplianceStatus = ([\s\S]*?);/), EVALUATION_STATUS_LABELS],
+    ["ResultPurpose", enumFrom(types, /export type ResultPurpose = ([\s\S]*?);/), PURPOSE_LABELS],
+    ["Statut de modèle", enumFrom(types, /status: ("DRAFT_EXPERT_SEED"[^;]*);/), MODEL_STATUS_LABELS],
+    ["Motif de dérogation", enumFrom(schemas, /reasonCode: z\.enum\(\[([\s\S]*?)\]\)/), OVERRIDE_REASON_LABELS],
+  ];
+  for (const [label, codes, labels] of labelSets) {
+    compare(`Libellés « ${label} »`, codes, Object.keys(labels));
+  }
+
+  // 7f. Ce que l'écran envoie vs ce que la validation accepte. Les champs que
+  // l'écran n'envoie pas doivent l'être délibérément, et motivés ici.
+  const NOT_FROM_SCREEN: Record<string, string> = {
+    counterpartyId: "transmis à part par l'action serveur",
+    segmentationData: "segment choisi dans le cadrage (segmentation automatique non branchée)",
+    complianceStatus: "fourni par le système conformité amont ; l'écran transmet les red flags RF01 à RF03",
+    existingExposure: "sans effet sur le calcul",
+  };
+  const requestFields = Object.keys(shapeOf(requestSchemas.ratingRequestSchema) ?? {});
+  const payloadBlock = form.slice(form.indexOf("const payload = {"), form.indexOf("runScoringAction(payload"));
+  const notSent = requestFields.filter(
+    (k) => !(k in NOT_FROM_SCREEN) && !new RegExp(`\\b${k}\\b`).test(payloadBlock)
+  );
+  if (notSent.length) fail(`champs de notation que l'écran n'envoie pas : ${notSent.join(", ")}`);
+  else ok(`l'écran envoie les ${requestFields.length - Object.keys(NOT_FROM_SCREEN).length} champs de notation qu'il recueille ; ${Object.keys(NOT_FROM_SCREEN).length} exclus et motivés`);
+  if (!form.includes("materialityGate")) {
+    fail("le formulaire ne tient pas compte des portes de matérialité : les critères conditionnels seraient saisis puis ignorés");
+  }
+
+  // 7g. Une action serveur est un point d'entrée public : la session doit être
+  // vérifiée avant toute lecture, écriture ou calcul, comme le fait l'API.
+  const PUBLIC_ACTIONS = new Set(["loginAction", "logoutAction"]);
+  const actionFiles = sources("src/app").filter((f) => readFileSync(f, "utf8").startsWith('"use server"'));
+  for (const file of actionFiles) {
+    const src = readFileSync(file, "utf8");
+    for (const m of src.matchAll(/^export async function (\w+)\([\s\S]*?^}/gm)) {
+      const [body, name] = [m[0], m[1]];
+      if (PUBLIC_ACTIONS.has(name)) continue;
+      const guardAt = body.search(/getSessionIdentity\(|requireSession\(|getCurrentSession\(/);
+      const workAt = body.search(/simulateRating\(|computeRating\(|executeRatingRun\(|prisma\.|\$transaction\(|accounts?\./);
+      if (guardAt === -1) fail(`${file} : ${name} ne vérifie aucune session`);
+      else if (workAt !== -1 && workAt < guardAt) fail(`${file} : ${name} travaille avant de vérifier la session`);
+      else ok(`${name} — session vérifiée avant tout traitement`);
     }
   }
 }

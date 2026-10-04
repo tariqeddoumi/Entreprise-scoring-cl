@@ -29,6 +29,25 @@ export function ok<T>(data: T, status = 200): NextResponse {
   return NextResponse.json(data as unknown as Record<string, unknown>, { status });
 }
 
+/**
+ * Colonnes décimales d'un run exposées en nombres (D-43).
+ *
+ * Prisma restitue une colonne DECIMAL sous forme d'objet Decimal, que la
+ * sérialisation JSON transforme en chaîne (« 87.3125 »). Le même score
+ * apparaissait donc en chaîne dans la ligne du run et en nombre dans son
+ * instantané, au sein d'une même réponse — et en nombre dans le contrat
+ * OpenAPI comme dans les webhooks. La précision de la colonne (4 décimales)
+ * est conservée ; l'instantané reste la référence à pleine précision.
+ */
+export function runScoresAsNumbers<T extends object>(run: T): T {
+  const out = { ...run } as Record<string, unknown>;
+  for (const key of ["rawScore", "confidenceScore"]) {
+    const v = out[key];
+    if (v !== null && v !== undefined) out[key] = Number(v);
+  }
+  return out as T;
+}
+
 /** Sérialisation JSON déterministe (clés triées) pour snapshots et signatures. */
 export function stableStringify(value: unknown): string {
   return JSON.stringify(sortKeys(value));

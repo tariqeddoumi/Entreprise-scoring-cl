@@ -105,7 +105,7 @@ export const ratingRequestSchema = z
       .optional(),
     /** Statut conformité amont — porté séparément du risque (constat C06). */
     complianceStatus: z.enum(["NOT_EVALUATED", "CLEAR", "REFER", "BLOCKED"]).optional(),
-    /** Exposition déjà au bilan : autorise la notation sous voie contrôlée. */
+    /** Exposition déjà au bilan : conservée dans l'instantané, sans effet sur le calcul. */
     existingExposure: z.boolean().optional(),
     defaultTriggered: z.boolean().optional(),
     defaultGrade: z.enum(["DEF1", "DEF2", "DEF3"]).optional(),

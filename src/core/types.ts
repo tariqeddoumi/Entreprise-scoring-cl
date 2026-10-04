@@ -475,8 +475,9 @@ export interface RatingInput {
   /** Statut conformité amont. */
   complianceStatus?: ComplianceStatus;
   /**
-   * Exposition déjà au bilan : autorise la notation sous voie contrôlée même
-   * quand la conformité bloque l'entrée en relation (C06, étape 03 du pipeline).
+   * Exposition déjà au bilan. Conservée dans l'instantané d'entrée, sans effet
+   * sur le calcul : depuis C06, la notation est produite quel que soit le
+   * statut conformité, qui porte seul l'interdiction d'entrée en relation.
    */
   existingExposure?: boolean;
   /** Défaut avéré selon la définition applicable : force un grade défaut. */

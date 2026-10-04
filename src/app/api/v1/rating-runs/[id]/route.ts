@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { ok, problem } from "@/lib/api-utils";
+import { ok, problem, runScoresAsNumbers } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { guard } from "@/lib/route-guard";
 
@@ -24,7 +24,7 @@ export async function GET(
   if (!run) return problem(404, "Run de notation inconnu.");
 
   return ok({
-    ...run,
+    ...runScoresAsNumbers(run),
     inputSnapshot: JSON.parse(run.inputSnapshot),
     resultSnapshot: JSON.parse(run.resultSnapshot),
   });

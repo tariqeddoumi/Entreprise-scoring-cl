@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import type { RatingInput } from "@/core/types";
-import { ok, problem } from "@/lib/api-utils";
+import { ok, problem, runScoresAsNumbers } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { executeRatingRun, RatingServiceError } from "@/lib/rating-service";
 import { guard, readJsonBody } from "@/lib/route-guard";
@@ -77,5 +77,5 @@ export async function GET(req: NextRequest) {
       createdAt: true,
     },
   });
-  return ok({ items: runs });
+  return ok({ items: runs.map(runScoresAsNumbers) });
 }

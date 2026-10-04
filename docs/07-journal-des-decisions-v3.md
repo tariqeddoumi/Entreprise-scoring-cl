@@ -432,6 +432,62 @@ Vérifié : avec une chaîne sans schéma, le message apparaît dans les journau
 
 ---
 
+# 2 octies. Alignement base, back-end et écrans — 4 octobre 2026
+
+Diagnostic des représentations du système deux à deux : base de production et schéma Prisma, valeurs écrites et vocabulaire documenté, validation et contrat OpenAPI, moteur et contrat, écran et moteur, droits de l'écran et droits de l'API. Rapport complet : `docs/09-diagnostic-alignement.md`.
+
+## D-43 — Chaque champ accepté est documenté, lu et saisissable, sous les mêmes droits partout — **TECHNIQUE**
+
+*La base est alignée.* Toutes les colonnes de production sont identiques à une base créée depuis le schéma Prisma, et le durcissement est en place. Cela couvre les huit tables, les 90 colonnes avec leurs types, nullabilité et valeurs par défaut, ainsi que les index, l'unicité et les clés étrangères. Côté durcissement : sécurité au niveau des lignes, piste d'audit en ajout seul, aucun droit pour les rôles exposés. Les instantanés des treize notations V3 concordent avec leurs colonnes.
+
+*Corrections, par ordre d'importance :*
+
+- **Le moteur répondait à un appel anonyme.** L'action serveur de l'écran de notation ne vérifiait la session qu'avant d'enregistrer. Son identifiant figure dans le JavaScript livré au navigateur : une simulation complète s'obtenait sans compte, alors que `/rating-runs/simulate` répond 401. La session et le rôle ANALYST sont désormais vérifiés avant tout calcul. Un profil en lecture seule consulte la grille, mais ne la soumet pas.
+- **Les critères ESG saisis à l'écran étaient ignorés.** L'écran ne transmettait jamais la matérialité. D7.1 et D7.2 étaient donc toujours écartés, quelle que soit la saisie (0,5 à 1,5 % du poids chacun selon le segment) : aucune des treize notations V3 de production ne les a évalués. L'écran porte maintenant une section « Matérialité des risques ESG », dérivée du modèle. Tant qu'un risque n'y est pas coché, le critère s'affiche comme écarté avec son critère receveur, et rien n'est transmis.
+- **Le support groupe n'était pas saisissable**, alors que le moteur et le panneau de résultat le traitent. L'écran recueille maintenant la demande, les quatre conditions et le nombre de crans, plafonné par le modèle.
+- **Un statut conformité déclaré masquait un red flag de conformité observé.** Avec « CLEAR » et RF01 dans la même requête, le résultat affichait une relation conforme. Le statut retenu est désormais le plus sévère des deux. Le moteur passe en version 3.0.1. Aucune des treize notations V3 de production ne déclare de statut conformité : aucune ne change.
+- **Le contrat OpenAPI était illisible par un analyseur strict**, à cause de la clé `pd12m` dupliquée. Il omettait aussi :
+  - cinq champs acceptés par l'API (matérialité, support groupe, statut conformité, exposition existante, nature du défaut) ;
+  - quatre champs du résultat ;
+  - le caractère partiel de la mise à jour d'une contrepartie.
+
+  `existingExposure`, accepté mais sans effet sur le calcul, est désormais documenté comme tel.
+- **`counterparty.updated` était proposé à la souscription sans jamais être émis.** Il est publié après chaque mise à jour. La modification et son audit sont désormais écrits dans une même transaction, comme à la création.
+- **L'API et les écrans ne désignaient pas la même « dernière » notation.** L'historique d'une contrepartie était trié par date de calcul dans l'API, par date d'arrêté à l'écran. Une renotation d'un arrêté ancien passait donc en tête, ce qui se produit en production. L'API suit maintenant l'ordre des écrans.
+- **Les scores sortaient en chaînes dans les listes et le détail d'un run** (« 87.3125 »), et en nombres dans l'instantané de la même réponse. Ils sortent désormais en nombres.
+- **Une dérogation sur une notation d'une version antérieure** était mesurée avec l'échelle du modèle chargé. Elle échouait sur un message trompeur (« grade cible inconnu »). Elle est refusée explicitement (409), avec l'invitation à renoter.
+- **Les motifs de dérogation** s'affichent en français.
+
+*Garde-fou :*
+- **Contrôles ajoutés.** Le vérificateur d'alignement compare désormais les formes, et non plus seulement des listes de valeurs. Il vérifie :
+  - la lisibilité stricte du contrat ;
+  - les champs validés et documentés, récursivement ;
+  - les champs produits et documentés du résultat ;
+  - les événements publiés ;
+  - les libellés d'écran ;
+  - les champs envoyés par l'écran, et les exclusions motivées ;
+  - la session vérifiée avant tout traitement dans chaque action serveur.
+- **Preuve.** Exécuté sur la version précédente du code, il relève treize écarts : ceux du contrat, de l'événement jamais émis, des champs que l'écran n'envoyait pas et de l'action serveur sans contrôle de session. Le statut conformité, l'ordre de l'historique, le type des scores et la dérogation sur une version antérieure sont couverts par des tests et un contrôle de bout en bout.
+- **Exécution en CI.** Il n'était exécuté par aucune étape de la CI ; il l'est désormais (`npm run check:alignment`).
+
+*Laissé en l'état, signalé :*
+- **Données de démonstration.**
+  - Les treize notations de démonstration V1 n'ont aucun événement d'audit : elles ont été insérées par script SQL. Une trace a posteriori serait une trace fabriquée.
+  - Une contrepartie (Négoce Alimentaire) conserve le segment PME de sa notation précédente, alors que sa dernière notation n'a pas pu déterminer de segment. C'est le comportement documenté (« dernier segment calculé, indicatif »).
+- **Écrans manquants.** Dérogations (proposition et décision) et modification d'une contrepartie ne se font que par l'API.
+- **Saisie non disponible à l'écran.** La segmentation automatique et le statut conformité amont ne sont pas saisissables à l'écran.
+- **Deux notions de support groupe.** « Support juridiquement robuste » (routage des jeunes entreprises) et le support groupe à quatre conditions restent deux saisies distinctes. Les rapprocher relève de la méthode.
+
+## D-44 — Qui établit la matérialité ESG tant que le référentiel sectoriel est vide — **À CONFIRMER**
+
+*Constat :* la méthode veut que la matérialité soit établie par le référentiel sectoriel et la localisation des sites, « jamais au jugement libre de l'analyste ». Ce référentiel est livré vide (constats H04/H08). Sans saisie, D7.1 et D7.2 ne sont jamais évalués, y compris pour une conserverie du Souss.
+
+*Décision provisoire :* l'écran laisse l'analyste déclarer la matérialité, case par case. La justification de la méthode est affichée sous chaque case et la déclaration doit être justifiée au dossier. Elle est conservée dans l'instantané d'entrée de chaque notation, donc auditable. Non cochée, le comportement reste celui d'avant : critère écarté, poids transféré.
+
+*À trancher :* confirmer cette déclaration provisoire, ou la réserver à un rôle de validation, jusqu'à l'alimentation du référentiel.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.
@@ -445,6 +501,7 @@ Vérifié : avec une chaîne sans schéma, le message apparaît dans les journau
 9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Les dix contreparties ont été renotées (D-27) : les deux séries coexistent désormais sur des entrées identiques. Leur rapprochement suppose toujours une table de correspondance validée — treize dossiers de démonstration ne l'établissent pas.
 10. **Ce qui est repris lors d'une bascule de moteur de base** — les vingt-six notations, ou la seule série V3 (D-31). Conserver les deux préserve le point de comparaison du pilote et impose de transporter des instantanés d'un moteur retiré.
 11. **Dialecte cible et niveau de certification exigé** — un schéma validé n'est pas un dialecte certifié, et le durcissement de la base doit être réécrit dans ses termes avant toute mise en service (D-28).
+12. **Matérialité ESG tant que le référentiel sectoriel est vide** — déclaration provisoire par l'analyste, ou réservée à un rôle de validation (D-44).
 
 ---
 
