@@ -1,5 +1,5 @@
 import { getModel } from "@/models";
-import { prisma, safeQuery } from "@/lib/safe-db";
+import { safeQuery } from "@/lib/safe-db";
 import { ScoringForm } from "./ScoringForm";
 import { hasRole } from "@/lib/auth";
 import { requireSession } from "@/lib/session";
@@ -24,9 +24,8 @@ export default async function ScoringPage({
     return <p>Modèle inconnu.</p>;
   }
 
-  const { data: counterparties } = await safeQuery(
-    () =>
-      prisma.counterparty.findMany({
+  const { data: counterparties } = await safeQuery((db) =>
+      db.counterparty.findMany({
         where: { isActive: true },
         select: { id: true, name: true },
         orderBy: { name: "asc" },

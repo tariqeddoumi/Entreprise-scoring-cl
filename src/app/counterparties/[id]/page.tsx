@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compareRuns } from "@/core/compare";
 import { readResultSnapshot } from "@/lib/snapshot-compat";
-import { prisma, safeQuery } from "@/lib/safe-db";
+import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 
@@ -20,14 +20,13 @@ export default async function CounterpartyPage({
   await requireSession();
   const { id } = await params;
 
-  const { data, dbAvailable } = await safeQuery(
-    async () => {
-      const counterparty = await prisma.counterparty.findUnique({ where: { id } });
+  const { data, dbAvailable } = await safeQuery(async (db) => {
+      const counterparty = await db.counterparty.findUnique({ where: { id } });
       if (!counterparty) return null;
       // Historique sans les instantanés, qui pèsent plusieurs dizaines de
       // kilo-octets par run : seuls les deux derniers runs notés sont relus,
       // pour l'attribution d'écart.
-      const runs = await prisma.ratingRun.findMany({
+      const runs = await db.ratingRun.findMany({
         where: { counterpartyId: id },
         orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
         take: 50,
@@ -47,7 +46,7 @@ export default async function CounterpartyPage({
         .filter((r) => r.rawScore !== null)
         .slice(0, 2)
         .map((r) => r.id);
-      const snapshots = await prisma.ratingRun.findMany({
+      const snapshots = await db.ratingRun.findMany({
         where: { id: { in: lastScoredIds } },
         select: { id: true, resultSnapshot: true },
       });

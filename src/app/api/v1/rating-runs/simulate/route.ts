@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * Mêmes règles de validation ; aucun état modifié, aucun événement émis.
  */
 export async function POST(req: NextRequest) {
-  const g = guard(req, "ANALYST");
+  const g = await guard(req, "ANALYST");
   if (!g.ok) return g.response;
 
   const body = await readJsonBody(req, ratingRequestSchema);

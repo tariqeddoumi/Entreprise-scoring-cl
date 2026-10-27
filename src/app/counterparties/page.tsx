@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma, safeQuery } from "@/lib/safe-db";
+import { safeQuery } from "@/lib/safe-db";
 import { getSessionIdentity, requireSession } from "@/lib/session";
 import { CounterpartiesTable } from "./CounterpartiesTable";
 import { NewCounterpartyForm } from "./NewCounterpartyForm";
@@ -13,9 +13,8 @@ export default async function CounterpartiesPage() {
   // pour les identités habilitées à écrire, comme le fait déjà l'API REST.
   const canCreate = (await getSessionIdentity("ANALYST")).ok;
 
-  const { data: items, dbAvailable } = await safeQuery(
-    () =>
-      prisma.counterparty.findMany({
+  const { data: items, dbAvailable } = await safeQuery((db) =>
+      db.counterparty.findMany({
         orderBy: { createdAt: "desc" },
         take: 200,
         include: {

@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { ok, problem } from "@/lib/api-utils";
 import { audit } from "@/lib/audit";
-import { prisma } from "@/lib/prisma";
 import { guard } from "@/lib/route-guard";
 
 export const dynamic = "force-dynamic";
@@ -11,16 +10,19 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = guard(req, "ADMIN");
+  const g = await guard(req, "ADMIN");
   if (!g.ok) return g.response;
+  // Une souscription reçoit les événements de tout le groupe : sa gestion est
+  // réservée aux clés sans restriction d'entité.
+  if (!g.ctx.perimeter.all) return problem(403, "Réservé aux systèmes centraux du groupe.");
 
   const { id } = await params;
-  const disabled = await prisma.webhookSubscription.updateMany({
+  const disabled = await g.ctx.db.webhookSubscription.updateMany({
     where: { id, isActive: true },
     data: { isActive: false },
   });
   if (disabled.count === 0) {
-    const exists = await prisma.webhookSubscription.findUnique({
+    const exists = await g.ctx.db.webhookSubscription.findUnique({
       where: { id },
       select: { id: true },
     });

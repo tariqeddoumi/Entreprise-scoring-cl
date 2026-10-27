@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { ok, problem, runScoresAsNumbers } from "@/lib/api-utils";
-import { prisma } from "@/lib/prisma";
 import { guard } from "@/lib/route-guard";
 
 export const dynamic = "force-dynamic";
@@ -10,17 +9,17 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = guard(req, "READONLY");
+  const g = await guard(req, "READONLY");
   if (!g.ok) return g.response;
 
   const { id } = await params;
-  const counterparty = await prisma.counterparty.findUnique({
+  const counterparty = await g.ctx.db.counterparty.findUnique({
     where: { id },
     select: { id: true },
   });
   if (!counterparty) return problem(404, "Contrepartie inconnue.");
 
-  const runs = await prisma.ratingRun.findMany({
+  const runs = await g.ctx.db.ratingRun.findMany({
     where: { counterpartyId: id },
     // Même ordre que la fiche contrepartie et la liste : la date d'arrêté
     // d'abord, puis la date de calcul. Trié par date de calcul seule, l'API

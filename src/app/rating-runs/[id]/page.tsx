@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getModel } from "@/models";
-import { prisma, safeQuery } from "@/lib/safe-db";
+import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
 import { CodeLabel, GradeBadge, OVERRIDE_REASON_LABELS } from "@/app/ui-helpers";
@@ -31,9 +31,8 @@ export default async function RatingRunPage({
   await requireSession();
   const { id } = await params;
 
-  const { data: run, dbAvailable } = await safeQuery(
-    () =>
-      prisma.ratingRun.findUnique({
+  const { data: run, dbAvailable } = await safeQuery((db) =>
+      db.ratingRun.findUnique({
         where: { id },
         include: {
           counterparty: { select: { id: true, name: true, ice: true, segment: true } },

@@ -4,6 +4,7 @@
  *
  * Usage :
  *   npm run users:create -- --username a.admin --name "Prénom Nom" --role ADMIN
+ *   npm run users:create -- --username a.analyste --name "Prénom Nom" --role ANALYST --entity DEMO-MA
  *   npm run users:create -- --username a.admin --reset
  *
  * Le mot de passe provisoire est affiché UNE fois, sur la sortie standard ; il
@@ -19,6 +20,7 @@ import { parseArgs } from "node:util";
 import { AccountError, createUser, resetUserPassword, setUserActive } from "../src/lib/accounts";
 import type { Identity } from "../src/lib/auth";
 import { prisma } from "../src/lib/prisma";
+import { loadTree, PERIMETER_ALL } from "../src/lib/scope";
 import { normalizeUsername } from "../src/lib/password";
 
 const CONSOLE: Identity = { name: "console-administration", role: "ADMIN" };
@@ -29,6 +31,8 @@ const { values } = parseArgs({
     name: { type: "string" },
     role: { type: "string", default: "ADMIN" },
     reset: { type: "boolean", default: false },
+    entity: { type: "string" },
+    scope: { type: "string", default: "ENTITY" },
   },
 });
 
@@ -43,16 +47,26 @@ async function main(): Promise<void> {
   if (values.reset) {
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) throw new AccountError(`Compte « ${username} » introuvable.`);
-    if (!user.isActive) await setUserActive(CONSOLE, user.id, true);
-    const { temporaryPassword } = await resetUserPassword(CONSOLE, user.id);
+    if (!user.isActive) await setUserActive(CONSOLE, PERIMETER_ALL, user.id, true);
+    const { temporaryPassword } = await resetUserPassword(CONSOLE, PERIMETER_ALL, user.id);
     print(username, user.role, temporaryPassword, "réinitialisé");
     return;
   }
 
-  const { temporaryPassword } = await createUser(CONSOLE, {
+  // Le code d'entité (--entity) rattache le compte à une banque ou une filiale ;
+  // sans code, seul un administrateur du groupe peut être créé.
+  let entityId: string | null = null;
+  if (values.entity) {
+    const entity = (await loadTree()).find((e) => e.code === values.entity);
+    if (!entity) throw new AccountError(`Entité « ${values.entity} » inconnue.`);
+    entityId = entity.id;
+  }
+  const { temporaryPassword } = await createUser(CONSOLE, PERIMETER_ALL, {
     username,
     displayName: values.name ?? username,
     role: (values.role ?? "ADMIN").toUpperCase(),
+    entityId,
+    writeScope: (values.scope ?? "ENTITY").toUpperCase(),
   });
   print(username, (values.role ?? "ADMIN").toUpperCase(), temporaryPassword, "créé");
 }

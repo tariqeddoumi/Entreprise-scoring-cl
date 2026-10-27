@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { ok, problem } from "@/lib/api-utils";
 import { audit } from "@/lib/audit";
-import { prisma } from "@/lib/prisma";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { webhookSubscriptionSchema } from "@/lib/schemas";
 import { checkOutboundUrl } from "@/lib/url-safety";
@@ -10,10 +9,13 @@ export const dynamic = "force-dynamic";
 
 /** Liste des souscriptions. Le secret n'est jamais renvoyé. */
 export async function GET(req: NextRequest) {
-  const g = guard(req, "ADMIN");
+  const g = await guard(req, "ADMIN");
   if (!g.ok) return g.response;
+  // Une souscription reçoit les événements de tout le groupe : sa gestion est
+  // réservée aux clés sans restriction d'entité.
+  if (!g.ctx.perimeter.all) return problem(403, "Réservé aux systèmes centraux du groupe.");
 
-  const items = await prisma.webhookSubscription.findMany({
+  const items = await g.ctx.db.webhookSubscription.findMany({
     select: {
       id: true,
       url: true,
@@ -31,8 +33,11 @@ export async function GET(req: NextRequest) {
 
 /** Création d'une souscription. Le secret HMAC est fourni par l'intégrateur. */
 export async function POST(req: NextRequest) {
-  const g = guard(req, "ADMIN");
+  const g = await guard(req, "ADMIN");
   if (!g.ok) return g.response;
+  // Une souscription reçoit les événements de tout le groupe : sa gestion est
+  // réservée aux clés sans restriction d'entité.
+  if (!g.ctx.perimeter.all) return problem(403, "Réservé aux systèmes centraux du groupe.");
 
   const body = await readJsonBody(req, webhookSubscriptionSchema);
   if (!body.ok) return body.response;
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
     return problem(422, "URL de webhook refusée", urlCheck.reasonFr);
   }
 
-  const created = await prisma.webhookSubscription.create({
+  const created = await g.ctx.db.webhookSubscription.create({
     data: {
       url: urlCheck.url.toString(),
       secret: body.value.secret,

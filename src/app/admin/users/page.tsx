@@ -1,13 +1,24 @@
 import { listUsers } from "@/lib/accounts";
 import { safeQuery } from "@/lib/safe-db";
-import { requireSession } from "@/lib/session";
+import { loadTree, readableEntities, sortTree } from "@/lib/scope";
+import { getPerimeter, requireSession } from "@/lib/session";
 import { UsersAdmin } from "./UsersAdmin";
 
 export const dynamic = "force-dynamic";
 
 export default async function UsersAdminPage() {
   const me = await requireSession("ADMIN");
-  const { data: users, dbAvailable } = await safeQuery(listUsers, []);
+  const perimeter = await getPerimeter();
+  const { data, dbAvailable } = await safeQuery(
+    async (db) => ({ users: await listUsers(db), tree: await loadTree() }),
+    { users: [], tree: [] }
+  );
+  const { users } = data;
+  // Entités administrables : celles de la branche de l'administrateur.
+  const entities = readableEntities(sortTree(data.tree), perimeter).map((e) => ({
+    id: e.id,
+    label: `${"— ".repeat(e.level)}${e.name}${e.isActive ? "" : " (désactivée)"}`,
+  }));
   const now = Date.now();
 
   return (
@@ -28,7 +39,11 @@ export default async function UsersAdminPage() {
       ) : (
         <UsersAdmin
           me={me.name}
+          entities={entities}
+          groupAdmin={perimeter.all}
           users={users.map((u) => ({
+            entityId: u.entityId,
+            writeScope: u.writeScope,
             id: u.id,
             username: u.username,
             displayName: u.displayName,

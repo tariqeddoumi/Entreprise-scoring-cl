@@ -260,3 +260,10 @@ main li a {
     break-inside: avoid;
   }
 }
+
+/* Grille de cartes de synthèse (cours, compteurs, file À traiter). */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}

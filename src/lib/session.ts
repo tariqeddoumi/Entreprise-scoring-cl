@@ -1,8 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import type { PrismaClient } from "@/generated/prisma";
 import { resolveSession, type SessionInfo } from "./accounts";
 import { hasRole, type Identity, type Role } from "./auth";
+import { perimeterFor, PERIMETER_NONE, scopedPrisma, type Perimeter } from "./scope";
 
 /**
  * Session de l'interface web.
@@ -73,3 +75,27 @@ export async function requireSession(minRole: Role = "READONLY"): Promise<Identi
   if (!hasRole(session.identity.role, minRole)) redirect("/");
   return session.identity;
 }
+
+/**
+ * Périmètre de la session courante (banque, filiale et descendance). Sans
+ * session, aucun accès.
+ */
+export const getPerimeter = cache(async (): Promise<Perimeter> => {
+  const session = await getCurrentSession();
+  if (!session) return PERIMETER_NONE;
+  try {
+    return await perimeterFor({
+      entityId: session.identity.entityId ?? null,
+      writeScope: session.identity.writeScope,
+      role: session.identity.role,
+    });
+  } catch {
+    return PERIMETER_NONE;
+  }
+});
+
+/**
+ * Client de base de données cloisonné au périmètre de la session : le seul que
+ * les écrans et les actions serveur utilisent.
+ */
+export const getDb = cache(async (): Promise<PrismaClient> => scopedPrisma(await getPerimeter()));

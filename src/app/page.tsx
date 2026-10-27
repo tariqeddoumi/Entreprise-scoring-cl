@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getModel, listModels } from "@/models";
 import { gradeRank } from "@/core/grades";
-import { prisma, safeQuery } from "@/lib/safe-db";
+import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { CodeLabel, GradeBadge, MODEL_STATUS_LABELS, OutcomeLabel } from "./ui-helpers";
 
@@ -39,14 +39,13 @@ export default async function DashboardPage() {
   // Toute page porteuse de données exige une session authentifiée.
   await requireSession();
 
-  const { data: stats, dbAvailable } = await safeQuery(
-    async () => {
+  const { data: stats, dbAvailable } = await safeQuery(async (db) => {
       const [counterparties, runs, recent, latest] = await Promise.all([
-        prisma.counterparty.count(),
-        prisma.ratingRun.count(),
+        db.counterparty.count(),
+        db.ratingRun.count(),
         // Champs affichés seulement : les instantanés d'entrée et de résultat
         // pèsent plusieurs dizaines de kilo-octets par run.
-        prisma.ratingRun.findMany({
+        db.ratingRun.findMany({
           orderBy: { createdAt: "desc" },
           take: 10,
           select: {
@@ -63,7 +62,7 @@ export default async function DashboardPage() {
         // la plus récente à arrêté égal. Compter tous les runs ferait peser une
         // contrepartie autant de fois qu'elle a été notée, et mêlerait ses
         // notes successives — ce ne serait plus la distribution du portefeuille.
-        prisma.ratingRun.findMany({
+        db.ratingRun.findMany({
           distinct: ["counterpartyId"],
           orderBy: [{ counterpartyId: "asc" }, { asOfDate: "desc" }, { createdAt: "desc" }],
           select: { modelId: true, finalGrade: true },

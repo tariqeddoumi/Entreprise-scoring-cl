@@ -17,6 +17,20 @@ import { COUNTERPARTIES, OVERRIDES, RUNS } from "./seed-data";
 
 const prisma = new PrismaClient();
 const DEFAULT_MODEL = "CORP_STD_V1";
+
+/** Organisation fictive : un groupe, une banque au Maroc, une filiale africaine. */
+const ROOT_ENTITY_ID = "ent_groupe";
+const DEMO_BANK_ID = "ent_demo_maroc";
+const DEMO_ENTITIES = [
+  { id: ROOT_ENTITY_ID, code: "GROUPE", name: "Groupe", type: "GROUP", parentId: null, country: "MA", currency: "MAD" },
+  { id: DEMO_BANK_ID, code: "DEMO-MA", name: "Banque de démonstration Maroc", type: "BANK", parentId: ROOT_ENTITY_ID, country: "MA", currency: "MAD" },
+  { id: "ent_demo_afrique", code: "DEMO-AFR", name: "Filiales Afrique (démonstration)", type: "SUBSIDIARY_GROUP", parentId: ROOT_ENTITY_ID, country: null, currency: "XOF" },
+  { id: "ent_demo_ci", code: "DEMO-CI", name: "Filiale de démonstration Côte d'Ivoire", type: "SUBSIDIARY", parentId: "ent_demo_afrique", country: "CI", currency: "XOF" },
+];
+function pathOf(e: { id: string; parentId: string | null }): string {
+  const parent = DEMO_ENTITIES.find((x) => x.id === e.parentId);
+  return parent ? `${pathOf(parent)}${e.id}/` : `/${e.id}/`;
+}
 const reset = process.argv.includes("--reset");
 
 /** Sérialisation stable : mêmes clés, même ordre, donc même empreinte. */
@@ -67,11 +81,26 @@ async function main() {
     }
   }
 
+  // --- 0. Organisation de démonstration --------------------------------------
+  // La racine porte l'identifiant que crée aussi la migration
+  // prisma/sql/04-multi-entites-workflow-ia.sql, pour qu'un jeu installé sur une
+  // base migrée retrouve la même organisation.
+  for (const e of DEMO_ENTITIES) {
+    const parent = DEMO_ENTITIES.find((x) => x.id === e.parentId);
+    const path = parent ? `${pathOf(parent)}${e.id}/` : `/${e.id}/`;
+    await prisma.entity.upsert({
+      where: { id: e.id },
+      update: { name: e.name, type: e.type, country: e.country, currency: e.currency },
+      create: { ...e, path, level: path.split("/").filter(Boolean).length - 1 },
+    });
+  }
+  console.log(`  ${DEMO_ENTITIES.length} entités (groupe, banque, filiales)`);
+
   // --- 1. Contreparties ------------------------------------------------------
   const idByKey = new Map<string, string>();
   for (const c of COUNTERPARTIES) {
     const row = await prisma.counterparty.upsert({
-      where: { ice: c.ice },
+      where: { entityId_ice: { entityId: DEMO_BANK_ID, ice: c.ice } },
       update: {
         name: c.name,
         rc: c.rc,
@@ -81,6 +110,9 @@ async function main() {
         city: c.city,
       },
       create: {
+        entityId: DEMO_BANK_ID,
+        country: "MA",
+        currency: "MAD",
         name: c.name,
         ice: c.ice,
         rc: c.rc,

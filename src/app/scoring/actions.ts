@@ -4,7 +4,7 @@ import type { RatingInput, RatingResult } from "@/core/types";
 import { getModel } from "@/models";
 import { executeRatingRun, simulateRating } from "@/lib/rating-service";
 import { ratingRequestSchema } from "@/lib/schemas";
-import { getSessionIdentity } from "@/lib/session";
+import { getDb, getSessionIdentity } from "@/lib/session";
 
 export interface ScoringActionResult {
   ok: boolean;
@@ -70,6 +70,7 @@ export async function runScoringAction(
 
   try {
     const run = await executeRatingRun(
+      await getDb(),
       session.identity,
       input as RatingInput,
       counterpartyId

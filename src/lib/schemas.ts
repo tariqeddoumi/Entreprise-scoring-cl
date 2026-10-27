@@ -113,9 +113,18 @@ export const ratingRequestSchema = z
   })
   .strict();
 
+/** Codes ISO : pays (3166-1 alpha-2) et devise (4217). */
+export const countryCodeSchema = z.string().regex(/^[A-Z]{2}$/, "Code pays ISO à deux lettres (MA, CI, SN…)");
+export const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/, "Code devise ISO à trois lettres (MAD, XOF, EUR…)");
+
 export const counterpartySchema = z
   .object({
     name: z.string().min(1).max(300),
+    /** Banque ou filiale qui porte la relation ; à défaut, celle de l'appelant. */
+    entityId: z.string().min(1).max(40).optional(),
+    country: countryCodeSchema.optional(),
+    /** Devise des montants de la contrepartie ; à défaut, celle de l'entité. */
+    currency: currencyCodeSchema.optional(),
     ice: z.string().max(20).optional(),
     rc: z.string().max(30).optional(),
     fiscalId: z.string().max(30).optional(),
@@ -183,5 +192,13 @@ export const compareRequestSchema = z
   .object({
     previousRunId: z.string().min(1).max(64),
     currentRunId: z.string().min(1).max(64),
+  })
+  .strict();
+
+export const caseDecisionSchema = z
+  .object({
+    decision: z.enum(["VALIDATED", "REJECTED"]),
+    /** Obligatoire pour un rejet (10 caractères au moins). */
+    comment: z.string().max(4000).optional(),
   })
   .strict();
