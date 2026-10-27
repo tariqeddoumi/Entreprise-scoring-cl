@@ -6,9 +6,10 @@ import {
   createUser,
   resetUserPassword,
   setUserActive,
+  setUserEntity,
   setUserRole,
 } from "@/lib/accounts";
-import { getSessionIdentity } from "@/lib/session";
+import { getPerimeter, getSessionIdentity } from "@/lib/session";
 
 export interface AdminActionState {
   okFr?: string;
@@ -29,6 +30,8 @@ export async function adminUsersAction(
   const session = await getSessionIdentity("ADMIN");
   if (!session.ok) return { errorFr: session.reasonFr };
   const actor = session.identity;
+  const scope = await getPerimeter();
+  const entityOf = (v: FormDataEntryValue | null) => (v ? String(v) : null);
 
   const op = String(formData.get("op") ?? "");
   const userId = String(formData.get("userId") ?? "");
@@ -36,10 +39,12 @@ export async function adminUsersAction(
   try {
     switch (op) {
       case "create": {
-        const created = await createUser(actor, {
+        const created = await createUser(actor, scope, {
           username: String(formData.get("username") ?? ""),
           displayName: String(formData.get("displayName") ?? ""),
           role: String(formData.get("role") ?? ""),
+          entityId: entityOf(formData.get("entityId")),
+          writeScope: String(formData.get("writeScope") ?? "ENTITY"),
         });
         revalidatePath("/admin/users");
         return {
@@ -48,7 +53,7 @@ export async function adminUsersAction(
         };
       }
       case "reset": {
-        const reset = await resetUserPassword(actor, userId);
+        const reset = await resetUserPassword(actor, scope, userId);
         revalidatePath("/admin/users");
         return {
           okFr: `Mot de passe de « ${reset.username} » réinitialisé ; ses sessions sont fermées.`,
@@ -56,14 +61,24 @@ export async function adminUsersAction(
         };
       }
       case "role":
-        await setUserRole(actor, userId, String(formData.get("role") ?? ""));
+        await setUserRole(actor, scope, userId, String(formData.get("role") ?? ""));
         revalidatePath("/admin/users");
         return { okFr: "Rôle modifié." };
       case "deactivate":
       case "reactivate":
-        await setUserActive(actor, userId, op === "reactivate");
+        await setUserActive(actor, scope, userId, op === "reactivate");
         revalidatePath("/admin/users");
         return { okFr: op === "reactivate" ? "Compte réactivé." : "Compte désactivé ; ses sessions sont fermées." };
+      case "entity":
+        await setUserEntity(
+          actor,
+          scope,
+          userId,
+          entityOf(formData.get("entityId")),
+          String(formData.get("writeScope") ?? "ENTITY")
+        );
+        revalidatePath("/admin/users");
+        return { okFr: "Rattachement modifié ; les sessions du compte sont fermées." };
       default:
         return { errorFr: "Opération inconnue." };
     }

@@ -10,7 +10,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ modelId: string }> }
 ) {
-  const g = guard(req, "READONLY");
+  const g = await guard(req, "READONLY");
   if (!g.ok) return g.response;
 
   const { modelId } = await params;

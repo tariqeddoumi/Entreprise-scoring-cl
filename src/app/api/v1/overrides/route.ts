@@ -1,141 +1,32 @@
 import type { NextRequest } from "next/server";
-import { gradeRank } from "@/core/grades";
 import { ok, problem } from "@/lib/api-utils";
-import { auditWithin } from "@/lib/audit";
-import { prisma } from "@/lib/prisma";
+import { OverrideError, requestOverride } from "@/lib/overrides";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { overrideRequestSchema } from "@/lib/schemas";
-import { getModel } from "@/models";
+import { isOutOfScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
-
-/** Ampleur maximale d'une dérogation ordinaire, en crans. */
-const MAX_NOTCHES = 2;
 
 /**
  * POST /api/v1/overrides — proposition de dérogation (demandeur).
  *
- * Le résultat moteur n'est jamais écrasé : la dérogation est un objet
- * distinct, appliqué au grade final seulement après approbation par un
- * second acteur.
- *
- * RÉFÉRENCE — l'écart en crans se mesure depuis `cappedGrade`, qui porte le
- * grade produit par le moteur, support groupe compris. Deux raisons de ne pas
- * prendre `finalGrade` : il porte déjà le résultat d'une dérogation approuvée,
- * ce qui permettrait d'enchaîner les dérogations et de dépasser la limite par
- * accumulation ; et il doit rester la seule colonne qu'une décision réécrit.
+ * Règles dans src/lib/overrides.ts, partagées avec l'écran : grade moteur jamais
+ * écrasé, ampleur plafonnée par le paramétrage, défaut ni quitté ni atteint,
+ * notation validée et de la version de modèle chargée.
  */
 export async function POST(req: NextRequest) {
-  const g = guard(req, "RISK_MANAGER");
+  const g = await guard(req, "RISK_MANAGER");
   if (!g.ok) return g.response;
 
   const body = await readJsonBody(req, overrideRequestSchema);
   if (!body.ok) return body.response;
-  const { ratingRunId, toGrade, reasonCode, comment, evidence, expiresAt } = body.value;
 
-  const run = await prisma.ratingRun.findUnique({ where: { id: ratingRunId } });
-  if (!run) return problem(404, "Run de notation inconnu.");
-  if (!run.cappedGrade) {
-    return problem(409, "Ce run n'a pas de grade : une dérogation est impossible.");
-  }
-  if (run.cappedGrade.startsWith("DEF")) {
-    return problem(
-      409,
-      "Amélioration d'un grade défaut interdite",
-      "Un retour en encours sain relève du processus formel de guérison, hors dérogation ordinaire."
-    );
-  }
-
-  // Symétrique de la règle précédente : un défaut est un constat reçu d'un
-  // moteur amont (§ 10 de la note méthodologique), jamais un jugement. Une
-  // dérogation qui y ferait entrer le dossier laisserait en outre un run au
-  // statut RATED portant un grade de défaut, que les consommateurs aval
-  // liraient de deux façons contradictoires.
-  if (toGrade.startsWith("DEF")) {
-    return problem(
-      409,
-      "Passage en défaut par dérogation interdit",
-      "Le défaut se déclare comme un constat (defaultTriggered, defaultGrade) lors d'une nouvelle notation, pas par dérogation."
-    );
-  }
-
-  // Une dérogation déjà expirée à sa création ne serait jamais applicable.
-  if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) {
-    return problem(400, "Date d'expiration déjà passée.", `expiresAt = ${expiresAt}`);
-  }
-
-  // Une dérogation déjà en attente sur le même run doit être tranchée avant
-  // d'en proposer une autre : deux dérogations concurrentes produiraient un
-  // grade final dépendant de l'ordre d'approbation.
-  const pending = await prisma.override.findFirst({
-    where: { ratingRunId, status: "PENDING" },
-    select: { id: true },
-  });
-  if (pending) {
-    return problem(
-      409,
-      "Une dérogation est déjà en attente de décision sur ce run.",
-      `Dérogation ${pending.id}.`
-    );
-  }
-
-  const model = getModel(run.modelId);
-  if (!model) {
-    return problem(500, "Version de modèle du run indisponible.");
-  }
-  // L'écart en crans se mesure sur l'échelle de la version qui a produit le
-  // grade. Une notation d'une version antérieure porte une autre échelle
-  // (G1…G10 en V1, STD-P1…P8 en V3) : la mesurer avec celle du modèle chargé
-  // échouait sur un message trompeur (« grade cible inconnu »), ou aurait
-  // mesuré un écart sur une échelle qui n'est pas la sienne (D-43).
-  if (run.modelVersion !== model.version) {
-    return problem(
-      409,
-      "Dérogation impossible sur une notation d'une version antérieure du modèle",
-      `Run produit par ${run.modelId} v${run.modelVersion} ; version chargée : v${model.version}. Produire une nouvelle notation, puis déroger sur celle-ci.`
-    );
-  }
-  let notches: number;
   try {
-    notches = Math.abs(
-      gradeRank(model.gradeScale, toGrade) - gradeRank(model.gradeScale, run.cappedGrade)
-    );
-  } catch {
-    return problem(400, `Grade cible inconnu : ${toGrade}`);
+    const override = await requestOverride(g.ctx.db, g.ctx.identity, body.value, g.ctx.correlationId);
+    return ok(override, 201);
+  } catch (e) {
+    if (e instanceof OverrideError) return problem(e.status, e.message, e.detail);
+    if (isOutOfScope(e)) return problem(404, "Run de notation inconnu.");
+    throw e;
   }
-  if (notches === 0) return problem(400, "Le grade cible est identique au grade actuel.");
-  if (notches > MAX_NOTCHES) {
-    return problem(
-      422,
-      `Dérogation ordinaire limitée à ±${MAX_NOTCHES} crans (demandé : ${notches}).`,
-      "Passer par le comité."
-    );
-  }
-
-  const override = await prisma.$transaction(async (tx) => {
-    const created = await tx.override.create({
-      data: {
-        ratingRunId,
-        fromGrade: run.cappedGrade!,
-        toGrade,
-        reasonCode,
-        comment,
-        evidence,
-        requestedBy: g.ctx.identity.name,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-      },
-    });
-    await auditWithin(tx, {
-      actor: g.ctx.identity.name,
-      actorRole: g.ctx.identity.role,
-      action: "OVERRIDE_REQUESTED",
-      resourceType: "Override",
-      resourceId: created.id,
-      detail: { ratingRunId, fromGrade: run.cappedGrade, toGrade, reasonCode, notches },
-      correlationId: g.ctx.correlationId,
-    });
-    return created;
-  });
-
-  return ok(override, 201);
 }

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Liste des versions de modèle publiées (résumé). */
 export async function GET(req: NextRequest) {
-  const g = guard(req, "READONLY");
+  const g = await guard(req, "READONLY");
   if (!g.ok) return g.response;
 
   return ok({

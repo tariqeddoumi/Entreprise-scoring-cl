@@ -12,6 +12,7 @@ import {
 } from "./password";
 import { prisma } from "./prisma";
 import { checkRateLimit } from "./rate-limit";
+import { canRead, loadTree, WRITE_SCOPES, type Perimeter } from "./scope";
 
 /**
  * Comptes nominatifs de l'interface web.
@@ -203,7 +204,12 @@ export async function resolveSession(token: string | undefined): Promise<Session
   const { user } = session;
   if (!user.isActive || !isRole(user.role)) return null;
   return {
-    identity: { name: user.username, role: user.role },
+    identity: {
+      name: user.username,
+      role: user.role,
+      entityId: user.entityId,
+      writeScope: user.writeScope,
+    },
     displayName: user.displayName,
     userId: user.id,
     sessionId: session.id,
@@ -273,10 +279,55 @@ export async function changeOwnPassword(
 // Administration
 // ---------------------------------------------------------------------------
 
-export async function listUsers() {
-  return prisma.user.findMany({
+/**
+ * Règles d'administration multi-banques :
+ *  - un administrateur rattaché à une banque gère les comptes de sa branche
+ *    (son entité et sa descendance), jamais ceux de sa maison mère ni des
+ *    banques sœurs ;
+ *  - seul un administrateur du groupe (sans entité) attribue le rôle ADMIN ou
+ *    gère un compte sans entité ;
+ *  - un compte non-administrateur doit être rattaché à une entité active.
+ */
+function assertManageable(actor: Perimeter, user: { entityId: string | null; role: string }): void {
+  if (actor.all) return;
+  if (!user.entityId || !canRead(actor, user.entityId)) {
+    throw new AccountError("Ce compte n'appartient pas à votre périmètre d'administration.");
+  }
+  if (user.role === "ADMIN") {
+    throw new AccountError("Seul un administrateur du groupe gère les comptes administrateurs.");
+  }
+}
+
+async function assertAssignable(
+  actor: Perimeter,
+  target: { entityId: string | null; role: string; writeScope?: string }
+): Promise<void> {
+  if (target.writeScope && !(WRITE_SCOPES as readonly string[]).includes(target.writeScope)) {
+    throw new AccountError("Portée d'écriture inconnue.");
+  }
+  if (target.role === "ADMIN" && !actor.all) {
+    throw new AccountError("Seul un administrateur du groupe attribue le rôle Administrateur.");
+  }
+  if (!target.entityId) {
+    if (target.role !== "ADMIN") {
+      throw new AccountError("Rattachez le compte à une banque ou une filiale.");
+    }
+    if (!actor.all) throw new AccountError("Seul un administrateur du groupe crée un compte sans entité.");
+    return;
+  }
+  const entity = (await loadTree()).find((e) => e.id === target.entityId);
+  if (!entity || !entity.isActive) throw new AccountError("Entité inconnue ou désactivée.");
+  if (!actor.all && !canRead(actor, target.entityId)) {
+    throw new AccountError("Entité hors de votre périmètre d'administration.");
+  }
+}
+
+export async function listUsers(db: { user: typeof prisma.user }) {
+  return db.user.findMany({
     orderBy: { username: "asc" },
     select: {
+      entityId: true,
+      writeScope: true,
       id: true,
       username: true,
       displayName: true,
@@ -292,7 +343,8 @@ export async function listUsers() {
 
 export async function createUser(
   actor: Identity,
-  input: { username: string; displayName: string; role: string }
+  scope: Perimeter,
+  input: { username: string; displayName: string; role: string; entityId: string | null; writeScope: string }
 ): Promise<{ username: string; temporaryPassword: string }> {
   const username = normalizeUsername(input.username);
   if (!username) {
@@ -305,6 +357,7 @@ export async function createUser(
     throw new AccountError("Nom affiché requis (2 à 120 caractères).");
   }
   if (!isRole(input.role)) throw new AccountError(`Rôle inconnu : ${input.role}`);
+  await assertAssignable(scope, input);
   if (await prisma.user.findUnique({ where: { username } })) {
     throw new AccountError(`L'identifiant « ${username} » est déjà utilisé.`);
   }
@@ -320,6 +373,8 @@ export async function createUser(
         passwordHash,
         mustChangePassword: true,
         createdBy: actor.name,
+        entityId: input.entityId,
+        writeScope: input.writeScope,
       },
     });
     await auditWithin(tx, {
@@ -328,7 +383,8 @@ export async function createUser(
       action: "USER_CREATED",
       resourceType: "User",
       resourceId: user.id,
-      detail: { username, displayName, role: input.role },
+      entityId: input.entityId,
+      detail: { username, displayName, role: input.role, entityId: input.entityId, writeScope: input.writeScope },
     });
   });
   return { username, temporaryPassword };
@@ -336,10 +392,12 @@ export async function createUser(
 
 export async function resetUserPassword(
   actor: Identity,
+  scope: Perimeter,
   userId: string
 ): Promise<{ username: string; temporaryPassword: string }> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AccountError("Compte introuvable.");
+  assertManageable(scope, user);
   if (user.username === actor.name) {
     throw new AccountError(
       "Pour votre propre compte, utilisez « Changer de mot de passe » : une réinitialisation fermerait votre session."
@@ -403,10 +461,12 @@ function asConcurrencyError(e: unknown): unknown {
   return e;
 }
 
-export async function setUserRole(actor: Identity, userId: string, role: string): Promise<void> {
+export async function setUserRole(actor: Identity, scope: Perimeter, userId: string, role: string): Promise<void> {
   if (!isRole(role)) throw new AccountError(`Rôle inconnu : ${role}`);
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AccountError("Compte introuvable.");
+  assertManageable(scope, user);
+  await assertAssignable(scope, { entityId: user.entityId, role });
   if (user.role === role) return;
   if (user.username === actor.name) {
     throw new AccountError("Un administrateur ne modifie pas son propre rôle.");
@@ -429,9 +489,10 @@ export async function setUserRole(actor: Identity, userId: string, role: string)
     });
 }
 
-export async function setUserActive(actor: Identity, userId: string, active: boolean): Promise<void> {
+export async function setUserActive(actor: Identity, scope: Perimeter, userId: string, active: boolean): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AccountError("Compte introuvable.");
+  assertManageable(scope, user);
   if (user.isActive === active) return;
   if (!active && user.username === actor.name) {
     throw new AccountError("Un administrateur ne désactive pas son propre compte.");
@@ -462,6 +523,43 @@ export async function setUserActive(actor: Identity, userId: string, active: boo
     .catch((e) => {
       throw asConcurrencyError(e);
     });
+}
+
+/** Rattachement d'un compte à une entité, et portée d'écriture. */
+export async function setUserEntity(
+  actor: Identity,
+  scope: Perimeter,
+  userId: string,
+  entityId: string | null,
+  writeScope: string
+): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AccountError("Compte introuvable.");
+  assertManageable(scope, user);
+  await assertAssignable(scope, { entityId, role: user.role, writeScope });
+  if (user.entityId === entityId && user.writeScope === writeScope) return;
+  if (user.username === actor.name) {
+    throw new AccountError("Un administrateur ne modifie pas son propre rattachement.");
+  }
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { entityId, writeScope } });
+    // Le périmètre change : les sessions ouvertes sont fermées.
+    await tx.userSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: now } });
+    await auditWithin(tx, {
+      actor: actor.name,
+      actorRole: actor.role,
+      action: "USER_ENTITY_CHANGED",
+      resourceType: "User",
+      resourceId: user.id,
+      entityId,
+      detail: {
+        username: user.username,
+        avant: { entityId: user.entityId, writeScope: user.writeScope },
+        apres: { entityId, writeScope },
+      },
+    });
+  });
 }
 
 export type { Role };

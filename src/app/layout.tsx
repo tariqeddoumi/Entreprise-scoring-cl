@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/session";
+import { inheritedBranding, loadTree } from "@/lib/scope";
 import { listModels } from "@/models";
 import { logoutAction } from "./login/actions";
 import { NavLinks } from "./nav-links";
@@ -34,11 +35,27 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await getCurrentSession();
   const ready = session !== null && !session.mustChangePassword;
+  // Habillage de la banque ou filiale de l'utilisateur, hérité de son
+  // ascendance : nom de l'outil, logo, couleur principale.
+  let branding: ReturnType<typeof inheritedBranding> | null = null;
+  if (session?.identity.entityId) {
+    try {
+      branding = inheritedBranding(await loadTree(), session.identity.entityId);
+    } catch {
+      branding = null;
+    }
+  }
   const models = listModels();
 
   return (
     <html lang="fr">
-      <body>
+      <body
+        style={
+          branding?.primaryColor
+            ? ({ "--brand": branding.primaryColor } as React.CSSProperties)
+            : undefined
+        }
+      >
         <header
           className="no-print"
           style={{
@@ -48,10 +65,19 @@ export default async function RootLayout({
           }}
         >
           <div className="site-header">
-            <Link href="/" className="site-brand">
-              Scoring Entreprises · Maroc
+            <Link href="/" className="site-brand" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              {branding?.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={branding.logoUrl} alt="" style={{ height: 24, width: "auto" }} />
+              )}
+              {branding?.toolName ?? "Scoring Entreprises · Maroc"}
+              {branding?.entityName && (
+                <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
+                  {branding.entityName}
+                </span>
+              )}
             </Link>
-            {ready && <NavLinks isAdmin={session.identity.role === "ADMIN"} />}
+            {ready && <NavLinks role={session.identity.role} />}
             <div className="site-user">
               {session ? (
                 <>

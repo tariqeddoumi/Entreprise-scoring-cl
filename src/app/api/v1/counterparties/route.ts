@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ok, problem } from "@/lib/api-utils";
-import { auditWithin } from "@/lib/audit";
-import { prisma } from "@/lib/prisma";
+import { CounterpartyError, createCounterparty } from "@/lib/counterparties";
+import { isOutOfScope } from "@/lib/scope";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { counterpartySchema } from "@/lib/schemas";
 
@@ -11,7 +11,7 @@ const MAX_PAGE_SIZE = 100;
 
 /** Liste paginée (curseur stable par identifiant) avec filtre de recherche. */
 export async function GET(req: NextRequest) {
-  const g = guard(req, "READONLY");
+  const g = await guard(req, "READONLY");
   if (!g.ok) return g.response;
 
   const { searchParams } = new URL(req.url);
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     return problem(400, `Paramètre « limit » invalide (entier de 1 à ${MAX_PAGE_SIZE}).`);
   }
 
-  const items = await prisma.counterparty.findMany({
+  const items = await g.ctx.db.counterparty.findMany({
     // `contains` simple, sans mode : la sensibilité à la casse dépend de la
     // collation de la base, ce qui préserve la portabilité entre dialectes.
     where: q
@@ -39,35 +39,26 @@ export async function GET(req: NextRequest) {
   return ok({ items: page, nextCursor: hasMore ? page[page.length - 1].id : null });
 }
 
-/** Création d'une contrepartie. */
+/** Création d'une contrepartie, dans le périmètre d'écriture de l'appelant. */
 export async function POST(req: NextRequest) {
-  const g = guard(req, "ANALYST");
+  const g = await guard(req, "ANALYST");
   if (!g.ok) return g.response;
 
   const body = await readJsonBody(req, counterpartySchema);
   if (!body.ok) return body.response;
 
   try {
-    // Même règle que l'action serveur de l'interface : l'écriture métier et son
-    // audit sont indissociables, donc dans une seule transaction.
-    const created = await prisma.$transaction(async (tx) => {
-      const row = await tx.counterparty.create({ data: body.value });
-      await auditWithin(tx, {
-        actor: g.ctx.identity.name,
-        actorRole: g.ctx.identity.role,
-        action: "COUNTERPARTY_CREATED",
-        resourceType: "Counterparty",
-        resourceId: row.id,
-        detail: { name: row.name, ice: row.ice },
-        correlationId: g.ctx.correlationId,
-      });
-      return row;
-    });
+    const created = await createCounterparty(
+      g.ctx.db,
+      g.ctx.perimeter,
+      g.ctx.identity,
+      body.value,
+      g.ctx.correlationId
+    );
     return ok(created, 201);
   } catch (e) {
-    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-      return problem(409, "Conflit : cet ICE est déjà enregistré.");
-    }
+    if (e instanceof CounterpartyError) return problem(e.status, e.message);
+    if (isOutOfScope(e)) return problem(403, "Entité hors de votre périmètre d'écriture.");
     throw e;
   }
 }

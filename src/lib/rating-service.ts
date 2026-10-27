@@ -6,7 +6,7 @@ import { getModel } from "@/models";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { config } from "./env";
-import { prisma } from "./prisma";
+import type { Prisma, PrismaClient } from "@/generated/prisma";
 import { stableStringify } from "./api-utils";
 import { publishEvent } from "./webhooks";
 
@@ -57,18 +57,26 @@ export interface PersistedRun {
  *  - l'identité provient du contexte de sécurité, jamais du payload.
  */
 export async function executeRatingRun(
+  db: PrismaClient,
   identity: Identity,
   input: RatingInput,
   counterpartyId: string,
   idempotencyKey?: string,
-  correlationId?: string
+  correlationId?: string,
+  /**
+   * Écritures liées au run (dossier de notation), exécutées DANS la même
+   * transaction : un dossier ne peut pas pointer vers un run qui n'existe pas,
+   * ni un run exister sans son dossier.
+   */
+  link?: (tx: Prisma.TransactionClient, runId: string) => Promise<void>
 ): Promise<PersistedRun> {
   const model = getModel(input.modelId);
   if (!model) {
     throw new RatingServiceError(404, `Modèle inconnu : ${input.modelId}`);
   }
 
-  const counterparty = await prisma.counterparty.findUnique({
+  // Client cloisonné : une contrepartie hors du périmètre est introuvable.
+  const counterparty = await db.counterparty.findUnique({
     where: { id: counterpartyId },
   });
   if (!counterparty) {
@@ -84,14 +92,14 @@ export async function executeRatingRun(
     .digest("hex");
 
   if (idempotencyKey) {
-    const replay = await findReplay(idempotencyKey, payloadHash);
+    const replay = await findReplay(db, idempotencyKey, payloadHash);
     if (replay) return replay;
   }
 
   const result = computeRating(model, input, engineOptions());
 
   const persist = () =>
-    prisma.$transaction(async (tx) => {
+    db.$transaction(async (tx) => {
       const created = await tx.ratingRun.create({
         data: {
           counterpartyId,
@@ -133,6 +141,7 @@ export async function executeRatingRun(
         action: "RATING_RUN_CREATED",
         resourceType: "RatingRun",
         resourceId: created.id,
+        entityId: counterparty.entityId,
         detail: {
           counterpartyId,
           modelId: result.modelId,
@@ -145,6 +154,7 @@ export async function executeRatingRun(
         correlationId,
       });
 
+      if (link) await link(tx, created.id);
       return created;
     });
 
@@ -157,7 +167,7 @@ export async function executeRatingRun(
     // contrainte d'unicité. Le comportement attendu est de rejouer le résultat
     // déjà enregistré, jamais de renvoyer une erreur.
     if (idempotencyKey && isUniqueViolation(e)) {
-      const replay = await findReplay(idempotencyKey, payloadHash);
+      const replay = await findReplay(db, idempotencyKey, payloadHash);
       if (replay) return replay;
     }
     throw e;
@@ -202,10 +212,11 @@ export async function executeRatingRun(
  * explicite (409), conformément au constat M01.
  */
 async function findReplay(
+  db: PrismaClient,
   idempotencyKey: string,
   payloadHash: string
 ): Promise<PersistedRun | null> {
-  const existing = await prisma.ratingRun.findUnique({ where: { idempotencyKey } });
+  const existing = await db.ratingRun.findUnique({ where: { idempotencyKey } });
   if (!existing) return null;
 
   const storedInput = existing.inputSnapshot;

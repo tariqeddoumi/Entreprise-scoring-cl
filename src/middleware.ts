@@ -40,7 +40,9 @@ export function buildCsp(isProduction: boolean): string {
     // au-delà de l'amorçage du framework.
     "style-src 'self' 'unsafe-inline'",
     `script-src 'self' 'unsafe-inline'${isProduction ? "" : " 'unsafe-eval'"}`,
-    "img-src 'self' data:",
+    // Logos des banques et filiales (Paramétrage › Banques et filiales) :
+    // https uniquement ; une image ne peut pas exécuter de code.
+    "img-src 'self' data: https:",
     "font-src 'self'",
     // Aucun appel réseau vers un domaine tiers.
     "connect-src 'self'",

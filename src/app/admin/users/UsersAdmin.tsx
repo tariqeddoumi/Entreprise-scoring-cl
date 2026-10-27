@@ -10,7 +10,19 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrateur",
 };
 
+export interface EntityOption {
+  id: string;
+  label: string;
+}
+
+const SCOPE_LABELS: Record<string, string> = {
+  ENTITY: "Son entité",
+  BRANCH: "Toute sa branche",
+};
+
 interface UserRow {
+  entityId: string | null;
+  writeScope: string;
   id: string;
   username: string;
   displayName: string;
@@ -51,6 +63,41 @@ function RoleSelect({
   );
 }
 
+function EntitySelect({
+  entities,
+  defaultValue,
+  allowGroup,
+  ariaLabel,
+}: {
+  entities: EntityOption[];
+  defaultValue?: string | null;
+  allowGroup: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <select name="entityId" defaultValue={defaultValue ?? (allowGroup ? "" : entities[0]?.id)} aria-label={ariaLabel}>
+      {allowGroup && <option value="">— Groupe entier (administrateur) —</option>}
+      {entities.map((e) => (
+        <option key={e.id} value={e.id}>
+          {e.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ScopeSelect({ defaultValue, ariaLabel }: { defaultValue?: string; ariaLabel?: string }) {
+  return (
+    <select name="writeScope" defaultValue={defaultValue ?? "ENTITY"} aria-label={ariaLabel}>
+      {Object.entries(SCOPE_LABELS).map(([v, l]) => (
+        <option key={v} value={v}>
+          {l}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function statusOf(u: UserRow): { label: string; color: string } {
   if (!u.isActive) return { label: "Désactivé", color: "var(--muted)" };
   if (u.locked) return { label: "Verrouillé", color: "var(--bad)" };
@@ -58,7 +105,20 @@ function statusOf(u: UserRow): { label: string; color: string } {
   return { label: "Actif", color: "var(--good)" };
 }
 
-export function UsersAdmin({ me, users }: { me: string; users: UserRow[] }) {
+export function UsersAdmin({
+  me,
+  users,
+  entities,
+  groupAdmin,
+}: {
+  me: string;
+  users: UserRow[];
+  entities: EntityOption[];
+  /** Administrateur du groupe : attribue le rôle Administrateur et le rattachement au groupe. */
+  groupAdmin: boolean;
+}) {
+  const entityLabel = (id: string | null) =>
+    id ? (entities.find((e) => e.id === id)?.label.replace(/^[\s—]+/, "") ?? "—") : "Groupe entier";
   const [state, formAction, pending] = useActionState<AdminActionState, FormData>(
     adminUsersAction,
     {}
@@ -139,6 +199,18 @@ export function UsersAdmin({ me, users }: { me: string; users: UserRow[] }) {
             </div>
             <RoleSelect name="role" />
           </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Entité de rattachement
+            </div>
+            <EntitySelect entities={entities} allowGroup={groupAdmin} />
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Portée d&apos;écriture
+            </div>
+            <ScopeSelect />
+          </label>
           <button
             type="submit"
             disabled={pending}
@@ -168,6 +240,7 @@ export function UsersAdmin({ me, users }: { me: string; users: UserRow[] }) {
                 <th>Identifiant</th>
                 <th>Nom</th>
                 <th>Rôle</th>
+                <th>Entité et portée</th>
                 <th>État</th>
                 <th>Dernière connexion</th>
                 <th>Actions</th>
@@ -196,6 +269,28 @@ export function UsersAdmin({ me, users }: { me: string; users: UserRow[] }) {
                             defaultValue={u.role}
                             ariaLabel={`Rôle de ${u.displayName}`}
                           />
+                          <button type="submit" disabled={pending} style={smallButton}>
+                            Appliquer
+                          </button>
+                        </form>
+                      )}
+                    </td>
+                    <td>
+                      {self ? (
+                        <span style={{ fontSize: 13 }}>
+                          {entityLabel(u.entityId)} · {SCOPE_LABELS[u.writeScope] ?? u.writeScope}
+                        </span>
+                      ) : (
+                        <form action={formAction} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <input type="hidden" name="op" value="entity" />
+                          <input type="hidden" name="userId" value={u.id} />
+                          <EntitySelect
+                            entities={entities}
+                            defaultValue={u.entityId}
+                            allowGroup={groupAdmin}
+                            ariaLabel={`Entité de ${u.displayName}`}
+                          />
+                          <ScopeSelect defaultValue={u.writeScope} ariaLabel={`Portée de ${u.displayName}`} />
                           <button type="submit" disabled={pending} style={smallButton}>
                             Appliquer
                           </button>

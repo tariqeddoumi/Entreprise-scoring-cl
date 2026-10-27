@@ -2,88 +2,44 @@
 
 import type { RatingInput, RatingResult } from "@/core/types";
 import { getModel } from "@/models";
-import { executeRatingRun, simulateRating } from "@/lib/rating-service";
+import { draftToRequest, type CaseDraft } from "@/lib/case-input";
+import { simulateRating } from "@/lib/rating-service";
 import { ratingRequestSchema } from "@/lib/schemas";
 import { getSessionIdentity } from "@/lib/session";
 
-export interface ScoringActionResult {
+export interface SimulationResult {
   ok: boolean;
   result?: RatingResult;
-  runId?: string;
-  persisted: boolean;
   errorFr?: string;
-  persistenceWarningFr?: string;
 }
 
 /**
- * Action serveur du parcours analyste.
+ * Simulation du parcours analyste : calcul serveur, rien n'est enregistré.
  *
- * Le calcul est toujours effectué côté serveur à partir de la version de
- * modèle publiée : le navigateur n'envoie que des observations et des scores
- * qualitatifs ancrés, jamais des poids, formules ou score final.
+ * Une notation enregistrée passe désormais par un dossier (brouillon →
+ * soumission → validation) : l'ancienne action qui enregistrait directement un
+ * run créait une note officielle sans validation par une seconde personne.
  *
- * L'identité de l'analyste provient de la session authentifiée (cookie
- * HttpOnly vérifié côté serveur), jamais d'une valeur codée en dur ni d'un
- * champ de formulaire.
- *
- * Mêmes règles que l'API (D-43) :
- *  - la session est exigée AVANT tout calcul, simulation comprise. Une action
- *    serveur est un point d'entrée public — son identifiant figure dans le
- *    JavaScript livré au navigateur — et l'écran qui l'appelle ne la protège
- *    pas : sans ce contrôle, le moteur répondait à un appel anonyme alors que
- *    `/rating-runs/simulate` le refuse (401) ;
- *  - rôle ANALYST, comme `/rating-runs/simulate` et `/rating-runs` ;
- *  - options du moteur dérivées de l'environnement par le service de notation,
- *    pour qu'un même dossier donne le même résultat à l'écran et par l'API.
+ * Mêmes règles que l'API (D-43) : session exigée AVANT tout calcul — une action
+ * serveur est un point d'entrée public — et rôle ANALYST, comme
+ * `/rating-runs/simulate`. Sans montants convertis, la segmentation repose sur
+ * le segment imposé.
  */
-export async function runScoringAction(
-  payload: unknown,
-  counterpartyId?: string
-): Promise<ScoringActionResult> {
+export async function simulateDraftAction(modelId: string, draft: CaseDraft): Promise<SimulationResult> {
   const session = await getSessionIdentity("ANALYST");
-  if (!session.ok) {
-    return { ok: false, persisted: false, errorFr: session.reasonFr };
-  }
-
-  const parsed = ratingRequestSchema.safeParse(payload);
-  if (!parsed.success) {
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  const model = getModel(modelId);
+  if (!model) return { ok: false, errorFr: `Modèle inconnu : ${modelId}` };
+  if (!draft.segment) {
     return {
       ok: false,
-      persisted: false,
-      errorFr: parsed.error.issues
-        .map((i) => `${i.path.join(".")} : ${i.message}`)
-        .join(" ; "),
+      errorFr: "En simulation, imposez le segment : la conversion des montants n'est faite que dans un dossier.",
     };
   }
-
-  const { counterpartyId: _payloadCp, ...input } = parsed.data;
-  if (!getModel(input.modelId)) {
-    return { ok: false, persisted: false, errorFr: `Modèle inconnu : ${input.modelId}` };
+  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model));
+  if (!parsed.success) {
+    return { ok: false, errorFr: parsed.error.issues.map((i) => `${i.path.join(".")} : ${i.message}`).join(" ; ") };
   }
-
-  // Calcul systématique (pur, sans base) — jamais bloqué par l'infrastructure.
-  const result = simulateRating(input as RatingInput);
-
-  if (!counterpartyId) {
-    return { ok: true, result, persisted: false };
-  }
-
-  try {
-    const run = await executeRatingRun(
-      session.identity,
-      input as RatingInput,
-      counterpartyId
-    );
-    return { ok: true, result: run.result, runId: run.runId, persisted: true };
-  } catch (e) {
-    return {
-      ok: true,
-      result,
-      persisted: false,
-      persistenceWarningFr:
-        e instanceof Error
-          ? `Résultat calculé mais non enregistré : ${e.message}`
-          : "Résultat calculé mais non enregistré (base indisponible).",
-    };
-  }
+  const { counterpartyId: _ignored, ...input } = parsed.data;
+  return { ok: true, result: simulateRating(input as RatingInput) };
 }

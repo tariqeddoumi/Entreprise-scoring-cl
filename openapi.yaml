@@ -159,6 +159,10 @@ paths:
         Le serveur applique les poids, barèmes et règles de la version de modèle
         publiée. Une relance avec la même `Idempotency-Key` renvoie le run existant
         (`replayed: true`) sans créer de résultat contradictoire.
+
+        La notation est enregistrée dans un dossier au statut `SUBMITTED` : elle
+        ne fait foi (note de la contrepartie, dérogation possible) qu'après
+        validation par une seconde personne (`POST /rating-cases/{id}/decision`).
       parameters:
         - name: Idempotency-Key
           in: header
@@ -180,6 +184,8 @@ paths:
                 type: object
                 properties:
                   runId: { type: string }
+                  caseId: { type: string, description: Dossier de notation créé à la soumission }
+                  caseStatus: { type: string, enum: [DRAFT, SUBMITTED, VALIDATED, REJECTED, CANCELLED] }
                   replayed: { type: boolean }
                   result: { $ref: "#/components/schemas/RatingResult" }
         "200": { description: Run déjà existant (idempotence) }
@@ -313,6 +319,43 @@ paths:
         "200": { description: Décision enregistrée }
         "403": { description: Auto-approbation interdite (maker-checker) }
 
+  /rating-cases:
+    get:
+      tags: [Notation]
+      summary: Dossiers de notation du périmètre
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, SUBMITTED, VALIDATED, REJECTED, CANCELLED] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200": { description: "Dossiers (sans la saisie), du plus récent au plus ancien" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /rating-cases/{id}/decision:
+    post:
+      tags: [Notation]
+      summary: Validation ou rejet d'un dossier soumis (seconde personne)
+      description: |
+        Le valideur est distinct de tout contributeur du dossier (création,
+        enregistrements, soumission, décisions sur les propositions de l'IA). Le
+        rôle requis suit le paramétrage du workflow et la délégation par montant
+        (engagements convertis en MAD). Motif obligatoire en cas de rejet.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseDecision" }
+      responses:
+        "200": { description: Décision enregistrée }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { description: "Rôle insuffisant (délégation) ou valideur contributeur du dossier" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Dossier non soumis ou déjà décidé }
+
   /webhook-subscriptions:
     get:
       tags: [Webhooks]
@@ -412,6 +455,9 @@ components:
       required: [name]
       properties:
         name: { type: string, maxLength: 300 }
+        entityId: { type: string, maxLength: 40, description: "Banque ou filiale de rattachement ; à défaut, celle de l'appelant (dans son périmètre d'écriture)" }
+        country: { type: string, pattern: "^[A-Z]{2}$", description: "Pays (ISO 3166-1 alpha-2) ; à défaut, celui de l'entité" }
+        currency: { type: string, pattern: "^[A-Z]{3}$", description: "Devise des montants (ISO 4217) ; à défaut, celle de l'entité. Convertie en MAD au cours de la date d'arrêté" }
         ice: { type: string, description: Identifiant Commun de l'Entreprise }
         rc: { type: string, description: Registre de commerce }
         fiscalId: { type: string }
@@ -424,6 +470,9 @@ components:
       description: Mise à jour partielle — tous les champs sont facultatifs.
       properties:
         name: { type: string, maxLength: 300 }
+        entityId: { type: string, maxLength: 40, description: "Banque ou filiale de rattachement ; à défaut, celle de l'appelant (dans son périmètre d'écriture)" }
+        country: { type: string, pattern: "^[A-Z]{2}$", description: "Pays (ISO 3166-1 alpha-2) ; à défaut, celui de l'entité" }
+        currency: { type: string, pattern: "^[A-Z]{3}$", description: "Devise des montants (ISO 4217) ; à défaut, celle de l'entité. Convertie en MAD au cours de la date d'arrêté" }
         ice: { type: string, maxLength: 20 }
         rc: { type: string, maxLength: 30 }
         fiscalId: { type: string, maxLength: 30 }
@@ -701,6 +750,13 @@ components:
           items: { type: string }
         explanationFr: { type: string }
         computedAt: { type: string, format: date-time }
+
+    CaseDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [VALIDATED, REJECTED] }
+        comment: { type: string, maxLength: 4000, description: "Obligatoire (10 caractères au moins) en cas de rejet" }
 
     OverrideRequest:
       type: object

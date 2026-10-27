@@ -1,6 +1,5 @@
 import type { NextRequest } from "next/server";
 import { ok, problem, runScoresAsNumbers } from "@/lib/api-utils";
-import { prisma } from "@/lib/prisma";
 import { guard } from "@/lib/route-guard";
 
 export const dynamic = "force-dynamic";
@@ -10,11 +9,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const g = guard(req, "READONLY");
+  const g = await guard(req, "READONLY");
   if (!g.ok) return g.response;
 
   const { id } = await params;
-  const run = await prisma.ratingRun.findUnique({
+  const run = await g.ctx.db.ratingRun.findUnique({
     where: { id },
     include: {
       counterparty: { select: { id: true, name: true, ice: true, segment: true } },

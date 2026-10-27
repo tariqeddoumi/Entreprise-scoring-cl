@@ -1,7 +1,6 @@
 import type { NextRequest } from "next/server";
 import { compareRuns } from "@/core/compare";
 import { ok, problem } from "@/lib/api-utils";
-import { prisma } from "@/lib/prisma";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { compareRequestSchema } from "@/lib/schemas";
@@ -15,7 +14,7 @@ export const dynamic = "force-dynamic";
  * recalcul : elle reste donc valable même si le modèle a évolué depuis.
  */
 export async function POST(req: NextRequest) {
-  const g = guard(req, "READONLY");
+  const g = await guard(req, "READONLY");
   if (!g.ok) return g.response;
 
   const body = await readJsonBody(req, compareRequestSchema);
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
     return problem(400, "Les deux identifiants de run sont identiques.");
   }
 
-  const runs = await prisma.ratingRun.findMany({
+  const runs = await g.ctx.db.ratingRun.findMany({
     where: { id: { in: [previousRunId, currentRunId] } },
     select: { id: true, counterpartyId: true, asOfDate: true, resultSnapshot: true },
   });

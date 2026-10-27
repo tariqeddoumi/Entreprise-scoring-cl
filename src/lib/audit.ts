@@ -8,6 +8,8 @@ export interface AuditEntry {
   action: string;
   resourceType: string;
   resourceId: string;
+  /** Entité du dossier concerné : le journal suit le cloisonnement. */
+  entityId?: string | null;
   detail?: unknown;
   correlationId?: string;
 }
@@ -30,6 +32,7 @@ export async function auditWithin(
       action: entry.action,
       resourceType: entry.resourceType,
       resourceId: entry.resourceId,
+      entityId: entry.entityId ?? null,
       detail: entry.detail !== undefined ? stableStringify(entry.detail) : null,
       correlationId: entry.correlationId,
     },

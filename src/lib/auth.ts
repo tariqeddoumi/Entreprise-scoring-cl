@@ -7,9 +7,12 @@ import type { NextRequest } from "next/server";
  * banque — le contrat (identité + rôle dérivés du jeton, jamais du corps de
  * requête) reste identique.
  *
- * Configuration : API_KEYS="<clé>:<rôle>:<nom>;<clé2>:<rôle2>:<nom2>"
+ * Configuration : API_KEYS="<clé>:<rôle>:<nom>[:<code entité>[:BRANCH]];…"
  * Rôles : ANALYST (lecture + scoring), RISK_MANAGER (+ overrides),
  *         ADMIN (+ webhooks, administration), READONLY (lecture seule).
+ * Code entité : restreint la clé à une banque ou une filiale et à sa
+ * descendance (cloisonnement, src/lib/scope.ts). Sans code, la clé couvre le
+ * groupe entier : réservé aux systèmes centraux du groupe.
  *
  * Aucun secret par défaut : si API_KEYS est absent, toutes les requêtes
  * authentifiées sont refusées (deny-by-default), le démarrage est refusé en
@@ -21,6 +24,12 @@ export type Role = "READONLY" | "ANALYST" | "RISK_MANAGER" | "ADMIN";
 export interface Identity {
   name: string;
   role: Role;
+  /** Entité de rattachement ; nulle pour le groupe entier. */
+  entityId?: string | null;
+  /** Portée d'écriture : ENTITY (son entité) ou BRANCH (sa descendance). */
+  writeScope?: string | null;
+  /** Code d'entité d'une clé API, résolu en identifiant par le garde. */
+  entityCode?: string | null;
 }
 
 /** Longueur minimale d'une clé API, en caractères. */
@@ -49,6 +58,8 @@ interface KeyEntry {
   hash: Buffer; // SHA-256 de la clé — les clés ne sont jamais gardées en clair
   role: Role;
   name: string;
+  entityCode: string | null;
+  writeScope: string;
 }
 
 let cachedKeys: KeyEntry[] | null = null;
@@ -72,7 +83,7 @@ function loadKeys(): KeyEntry[] {
     .map((s) => s.trim())
     .filter(Boolean)
     .map((entry) => {
-      const [key, role, name] = entry.split(":");
+      const [key, role, name, entityCode, writeScope] = entry.split(":");
       if (!key || key.length < MIN_KEY_LENGTH) {
         throw new Error(
           `API_KEYS : chaque clé doit compter au moins ${MIN_KEY_LENGTH} caractères. ` +
@@ -87,6 +98,8 @@ function loadKeys(): KeyEntry[] {
         hash: createHash("sha256").update(key).digest(),
         role: r,
         name: name ?? "api-client",
+        entityCode: entityCode?.trim() || null,
+        writeScope: writeScope?.trim().toUpperCase() === "BRANCH" ? "BRANCH" : "ENTITY",
       };
     });
   return cachedKeys;
@@ -141,5 +154,13 @@ export function authenticateToken(token: string, minRole: Role): AuthResult {
       message: `Rôle ${match.role} insuffisant (requis : ${minRole}).`,
     };
   }
-  return { ok: true, identity: { name: match.name, role: match.role } };
+  return {
+    ok: true,
+    identity: {
+      name: match.name,
+      role: match.role,
+      entityCode: match.entityCode,
+      writeScope: match.writeScope,
+    },
+  };
 }

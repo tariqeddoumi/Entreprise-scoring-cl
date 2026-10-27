@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compareRuns } from "@/core/compare";
 import { readResultSnapshot } from "@/lib/snapshot-compat";
-import { prisma, safeQuery } from "@/lib/safe-db";
+import { isOfficialRun } from "@/lib/cases";
+import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
+import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 
@@ -20,14 +22,13 @@ export default async function CounterpartyPage({
   await requireSession();
   const { id } = await params;
 
-  const { data, dbAvailable } = await safeQuery(
-    async () => {
-      const counterparty = await prisma.counterparty.findUnique({ where: { id } });
+  const { data, dbAvailable } = await safeQuery(async (db) => {
+      const counterparty = await db.counterparty.findUnique({ where: { id } });
       if (!counterparty) return null;
       // Historique sans les instantanés, qui pèsent plusieurs dizaines de
       // kilo-octets par run : seuls les deux derniers runs notés sont relus,
       // pour l'attribution d'écart.
-      const runs = await prisma.ratingRun.findMany({
+      const runs = await db.ratingRun.findMany({
         where: { counterpartyId: id },
         orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
         take: 50,
@@ -41,18 +42,29 @@ export default async function CounterpartyPage({
           cappedGrade: true,
           finalGrade: true,
           requestedBy: true,
+          ratingCase: { select: { id: true, status: true } },
         },
       });
+      // L'évolution se mesure entre notations qui font foi.
       const lastScoredIds = runs
-        .filter((r) => r.rawScore !== null)
+        .filter((r) => r.rawScore !== null && isOfficialRun(r))
         .slice(0, 2)
         .map((r) => r.id);
-      const snapshots = await prisma.ratingRun.findMany({
+      const snapshots = await db.ratingRun.findMany({
         where: { id: { in: lastScoredIds } },
         select: { id: true, resultSnapshot: true },
       });
       const snapshotById = new Map(snapshots.map((r) => [r.id, r.resultSnapshot]));
-      return { counterparty, runs, snapshotById };
+      const [entity, cases] = await Promise.all([
+        db.entity.findUnique({ where: { id: counterparty.entityId }, select: { name: true, code: true } }),
+        db.ratingCase.findMany({
+          where: { counterpartyId: id },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { id: true, status: true, asOfDate: true, createdBy: true, submittedBy: true, decidedBy: true, updatedAt: true },
+        }),
+      ]);
+      return { counterparty, runs, snapshotById, entity, cases };
     },
     null
   );
@@ -66,13 +78,13 @@ export default async function CounterpartyPage({
   }
   if (!data) notFound();
 
-  const { counterparty, runs, snapshotById } = data;
+  const { counterparty, runs, snapshotById, entity, cases } = data;
 
   // Attribution de l'écart entre les deux dernières notations exploitables.
   // Deux instantanés ne se comparent que s'ils ont la même forme : un
   // instantané de moteur antérieur ne porte ni exceptions ni couverture, et le
   // comparer reviendrait à attribuer un écart à des champs absents.
-  const scored = runs.filter((r) => r.rawScore !== null);
+  const scored = runs.filter((r) => r.rawScore !== null && isOfficialRun(r));
   const snapshotOf = (runId: string) => snapshotById.get(runId) ?? "";
   const previousRead = scored.length >= 2 ? readResultSnapshot(snapshotOf(scored[1].id)) : null;
   const currentRead = scored.length >= 2 ? readResultSnapshot(snapshotOf(scored[0].id)) : null;
@@ -97,6 +109,9 @@ export default async function CounterpartyPage({
         <h1 style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{counterparty.name}</h1>
         <p className="muted">
           {[
+            entity && `${entity.name} (${entity.code})`,
+            counterparty.country && `pays ${counterparty.country}`,
+            `devise ${counterparty.currency}`,
             counterparty.ice && `ICE ${counterparty.ice}`,
             counterparty.legalForm,
             counterparty.city,
@@ -179,6 +194,42 @@ export default async function CounterpartyPage({
         </section>
       )}
 
+      {cases.length > 0 && (
+        <section className="card" style={{ padding: 16 }}>
+          <h2 style={{ fontWeight: 600, marginBottom: 10 }}>Dossiers de notation</h2>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Arrêté</th>
+                <th>Statut</th>
+                <th>Ouvert par</th>
+                <th>Soumis par</th>
+                <th>Décidé par</th>
+                <th>Mis à jour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cases.map((c) => (
+                <tr key={c.id}>
+                  <td>
+                    <Link href={`/cases/${c.id}`} style={{ color: "var(--brand)" }}>
+                      {c.asOfDate}
+                    </Link>
+                  </td>
+                  <td>
+                    <CaseStatusBadge status={c.status} />
+                  </td>
+                  <td className="muted">{c.createdBy}</td>
+                  <td className="muted">{c.submittedBy ?? "—"}</td>
+                  <td className="muted">{c.decidedBy ?? "—"}</td>
+                  <td className="muted nowrap">{c.updatedAt.toISOString().slice(0, 10)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       <section className="card" style={{ padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
           <h2 style={{ fontWeight: 600 }}>Historique des notations</h2>
@@ -215,6 +266,12 @@ export default async function CounterpartyPage({
                     <GradeBadge grade={r.finalGrade} />
                     {r.finalGrade !== r.cappedGrade && r.finalGrade && (
                       <span className="muted" style={{ fontSize: 11 }}> (dérogé)</span>
+                    )}
+                    {r.ratingCase && r.ratingCase.status !== "VALIDATED" && (
+                      <span className="muted" style={{ fontSize: 11 }}>
+                        {" "}
+                        {r.ratingCase.status === "REJECTED" ? "(rejetée)" : "(proposée, non validée)"}
+                      </span>
                     )}
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>

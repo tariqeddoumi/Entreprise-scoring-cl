@@ -1,8 +1,17 @@
 import type { NextRequest, NextResponse } from "next/server";
+import type { PrismaClient } from "@/generated/prisma";
 import { authenticate, type Identity, type Role } from "./auth";
 import { problem } from "./api-utils";
 import { config } from "./env";
 import { checkRateLimit } from "./rate-limit";
+import {
+  loadTree,
+  perimeterFor,
+  PERIMETER_ALL,
+  PERIMETER_NONE,
+  scopedPrisma,
+  type Perimeter,
+} from "./scope";
 
 /**
  * Garde unique appliqué à toute route métier.
@@ -10,7 +19,9 @@ import { checkRateLimit } from "./rate-limit";
  * Regroupe, dans un ordre volontaire, les contrôles transverses :
  *  1. authentification et autorisation (identité issue du jeton) ;
  *  2. limitation de débit par identité ;
- *  3. lecture du corps avec plafond de taille.
+ *  3. périmètre de l'identité (banque, filiale) et client de base de données
+ *     cloisonné : une route ne manipule jamais le client brut ;
+ *  4. lecture du corps avec plafond de taille.
  *
  * Centraliser ces contrôles évite qu'une route nouvelle en oublie un —
  * cause classique de point d'entrée non protégé.
@@ -18,6 +29,9 @@ import { checkRateLimit } from "./rate-limit";
 
 export interface GuardContext {
   identity: Identity;
+  perimeter: Perimeter;
+  /** Client cloisonné au périmètre de l'identité. */
+  db: PrismaClient;
   correlationId?: string;
   idempotencyKey?: string;
 }
@@ -26,7 +40,20 @@ export type GuardResult =
   | { ok: true; ctx: GuardContext }
   | { ok: false; response: NextResponse };
 
-export function guard(req: NextRequest, minRole: Role): GuardResult {
+/**
+ * Périmètre d'une clé API : sans code d'entité, le groupe entier (systèmes
+ * centraux) ; avec un code, l'entité et sa descendance. Un code inconnu ne
+ * donne accès à rien : une clé mal configurée est refusée, jamais élargie.
+ */
+async function apiKeyPerimeter(identity: Identity): Promise<Perimeter> {
+  if (!identity.entityCode) return PERIMETER_ALL;
+  const entity = (await loadTree()).find((e) => e.code === identity.entityCode);
+  if (!entity) return PERIMETER_NONE;
+  identity.entityId = entity.id;
+  return perimeterFor({ entityId: entity.id, writeScope: identity.writeScope, role: identity.role });
+}
+
+export async function guard(req: NextRequest, minRole: Role): Promise<GuardResult> {
   const auth = authenticate(req, minRole);
   if (!auth.ok) {
     return { ok: false, response: problem(auth.status, auth.message) };
@@ -45,10 +72,20 @@ export function guard(req: NextRequest, minRole: Role): GuardResult {
     return { ok: false, response };
   }
 
+  const perimeter = await apiKeyPerimeter(auth.identity);
+  if (!perimeter.all && perimeter.read.length === 0) {
+    return {
+      ok: false,
+      response: problem(403, "Clé API sans périmètre", "Le code d'entité de la clé est inconnu ou désactivé."),
+    };
+  }
+
   return {
     ok: true,
     ctx: {
       identity: auth.identity,
+      perimeter,
+      db: scopedPrisma(perimeter),
       correlationId: req.headers.get("x-correlation-id") ?? undefined,
       idempotencyKey: req.headers.get("idempotency-key") ?? undefined,
     },

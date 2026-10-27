@@ -412,6 +412,7 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
     ["PATCH /counterparties/{id}", requestSchemas.counterpartyPatchSchema, bodyOf("/counterparties/{id}", "patch")],
     ["OverrideRequest", requestSchemas.overrideRequestSchema, components.OverrideRequest],
     ["POST /overrides/{id}/decision", requestSchemas.overrideDecisionSchema, bodyOf("/overrides/{id}/decision", "post")],
+    ["POST /rating-cases/{id}/decision", requestSchemas.caseDecisionSchema, bodyOf("/rating-cases/{id}/decision", "post")],
     ["POST /webhook-subscriptions", requestSchemas.webhookSubscriptionSchema, bodyOf("/webhook-subscriptions", "post")],
     ["POST /rating-runs/compare", requestSchemas.compareRequestSchema, bodyOf("/rating-runs/compare", "post")],
   ];
@@ -488,21 +489,28 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
     compare(`Libellés « ${label} »`, codes, Object.keys(labels));
   }
 
-  // 7f. Ce que l'écran envoie vs ce que la validation accepte. Les champs que
-  // l'écran n'envoie pas doivent l'être délibérément, et motivés ici.
+  // 7f. Ce que l'écran envoie vs ce que la validation accepte. La requête est
+  // construite en un seul endroit (src/lib/case-input.ts, `draftToRequest`),
+  // pour l'aperçu, la simulation et la soumission. Les champs qu'elle n'envoie
+  // pas doivent l'être délibérément, et motivés ici.
   const NOT_FROM_SCREEN: Record<string, string> = {
-    counterpartyId: "transmis à part par l'action serveur",
-    segmentationData: "segment choisi dans le cadrage (segmentation automatique non branchée)",
+    counterpartyId: "porté par le dossier, jamais par la saisie",
     complianceStatus: "fourni par le système conformité amont ; l'écran transmet les red flags RF01 à RF03",
     existingExposure: "sans effet sur le calcul",
   };
+  const caseInput = readFileSync("src/lib/case-input.ts", "utf8");
   const requestFields = Object.keys(shapeOf(requestSchemas.ratingRequestSchema) ?? {});
-  const payloadBlock = form.slice(form.indexOf("const payload = {"), form.indexOf("runScoringAction(payload"));
+  const fnStart = caseInput.indexOf("export function draftToRequest(");
+  const payloadBlock = fnStart === -1 ? "" : caseInput.slice(fnStart, caseInput.indexOf("\n}\n", fnStart));
+  if (!payloadBlock) fail("draftToRequest introuvable dans src/lib/case-input.ts");
   const notSent = requestFields.filter(
     (k) => !(k in NOT_FROM_SCREEN) && !new RegExp(`\\b${k}\\b`).test(payloadBlock)
   );
   if (notSent.length) fail(`champs de notation que l'écran n'envoie pas : ${notSent.join(", ")}`);
   else ok(`l'écran envoie les ${requestFields.length - Object.keys(NOT_FROM_SCREEN).length} champs de notation qu'il recueille ; ${Object.keys(NOT_FROM_SCREEN).length} exclus et motivés`);
+  if (!/draftToRequest\(/.test(readFileSync("src/lib/cases.ts", "utf8"))) {
+    fail("la soumission d'un dossier ne passe pas par draftToRequest : l'aperçu et la notation enregistrée pourraient diverger");
+  }
   if (!form.includes("materialityGate")) {
     fail("le formulaire ne tient pas compte des portes de matérialité : les critères conditionnels seraient saisis puis ignorés");
   }
@@ -521,6 +529,31 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
       if (guardAt === -1) fail(`${file} : ${name} ne vérifie aucune session`);
       else if (workAt !== -1 && workAt < guardAt) fail(`${file} : ${name} travaille avant de vérifier la session`);
       else ok(`${name} — session vérifiée avant tout traitement`);
+    }
+  }
+}
+
+{
+  console.log("\n8. Cloisonnement par banque et filiale\n");
+  // Les écrans, actions serveur et routes de l'API passent par le client
+  // cloisonné (getDb, safeQuery, guard) : un import direct du client brut
+  // contournerait le périmètre. Exceptions motivées : écrans réservés à
+  // l'administrateur du groupe, qui le vérifient explicitement.
+  const RAW_ALLOWED: Record<string, string> = {
+    "src/app/admin/settings/actions.ts": "paramétrage global, administrateur du groupe uniquement",
+    "src/app/admin/currencies/actions.ts": "cours de change du groupe, administrateur du groupe uniquement",
+  };
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((d) =>
+      d.isDirectory() ? walk(`${dir}/${d.name}`) : /\.(ts|tsx)$/.test(d.name) ? [`${dir}/${d.name}`] : []
+    );
+  const raw = walk("src/app").filter((f) => /from "@\/lib\/prisma"/.test(readFileSync(f, "utf8")));
+  const unexpected = raw.filter((f) => !(f in RAW_ALLOWED));
+  if (unexpected.length) fail(`client de base non cloisonné importé par : ${unexpected.join(", ")}`);
+  else ok(`aucun écran ni route n'importe le client brut (${raw.length} exception(s) motivée(s))`);
+  for (const f of raw) {
+    if (!/\)\.all\b|perimeter\.all|groupAdmin|PERIMETER_ALL/.test(readFileSync(f, "utf8"))) {
+      fail(`${f} : client brut sans contrôle explicite de l'administrateur du groupe`);
     }
   }
 }
