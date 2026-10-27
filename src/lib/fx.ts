@@ -54,7 +54,12 @@ export async function convertToBase(
   date: string,
   amounts: Record<string, number | undefined>
 ): Promise<FxConversion> {
-  const ruleset = rulesetForDate(date);
+  let ruleset: ReturnType<typeof rulesetForDate>;
+  try {
+    ruleset = rulesetForDate(date);
+  } catch (e) {
+    throw new FxError(e instanceof Error ? e.message : `Aucune segmentation applicable au ${date}.`);
+  }
   if (ruleset.currency !== BASE_CURRENCY) {
     throw new FxError(
       `Le jeu de segmentation ${ruleset.rulesetId} est exprimé en ${ruleset.currency}, pas dans la devise de base ${BASE_CURRENCY}.`

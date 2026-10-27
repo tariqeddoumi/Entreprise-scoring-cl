@@ -117,6 +117,22 @@ premier administrateur, qui crée ensuite les autres comptes depuis l'écran
 **Utilisateurs**. En cas de perte du dernier accès administrateur :
 `npm run users:create -- --username <identifiant> --reset`.
 
+### Banques et filiales, devises, dossiers, IA (à partir de fin octobre 2026)
+
+À appliquer **avant** le déploiement de la version qui introduit ces fonctions
+(détail : `docs/11-workflow-multi-entites-ia.md`) :
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/04-multi-entites-workflow-ia.sql
+```
+
+Le script est idempotent et transactionnel. Il crée l'entité racine `GROUPE`, y
+rattache les contreparties existantes, crée les tables des cours, du paramétrage,
+des dossiers, des pièces et des propositions de l'IA, et les durcit. Ensuite,
+l'administrateur du groupe rattache chaque compte non administrateur à sa banque
+ou filiale (écran **Utilisateurs**) : sans rattachement, ces comptes n'ont plus
+accès à aucun dossier.
+
 ## 5. Migration vers PostgreSQL autonome
 
 Le passage ne demande aucune modification de code.

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getModel, listModels } from "@/models";
 import { gradeRank } from "@/core/grades";
+import { isOfficialRun, OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { CodeLabel, GradeBadge, MODEL_STATUS_LABELS, OutcomeLabel } from "./ui-helpers";
@@ -40,9 +41,9 @@ export default async function DashboardPage() {
   await requireSession();
 
   const { data: stats, dbAvailable } = await safeQuery(async (db) => {
-      const [counterparties, runs, recent, latest] = await Promise.all([
+      const [counterparties, runs, recent, latest, toValidate] = await Promise.all([
         db.counterparty.count(),
-        db.ratingRun.count(),
+        db.ratingRun.count({ where: OFFICIAL_RUN_WHERE }),
         // Champs affichés seulement : les instantanés d'entrée et de résultat
         // pèsent plusieurs dizaines de kilo-octets par run.
         db.ratingRun.findMany({
@@ -56,17 +57,22 @@ export default async function DashboardPage() {
             rawScore: true,
             finalGrade: true,
             counterparty: { select: { name: true } },
+            ratingCase: { select: { status: true } },
           },
         }),
         // Note COURANTE de chaque contrepartie : sa notation au dernier arrêté,
         // la plus récente à arrêté égal. Compter tous les runs ferait peser une
         // contrepartie autant de fois qu'elle a été notée, et mêlerait ses
         // notes successives — ce ne serait plus la distribution du portefeuille.
+        // Seules les notations qui font foi : validées, ou antérieures au
+        // workflow. Une notation soumise et non validée n'est qu'une proposition.
         db.ratingRun.findMany({
+          where: OFFICIAL_RUN_WHERE,
           distinct: ["counterpartyId"],
           orderBy: [{ counterpartyId: "asc" }, { asOfDate: "desc" }, { createdAt: "desc" }],
           select: { modelId: true, finalGrade: true },
         }),
+        db.ratingCase.count({ where: { status: "SUBMITTED" } }),
       ]);
       // Groupé PAR MODÈLE : deux modèles portent deux échelles que rien ne
       // déclare comparables (constat C03). Les additionner dans une seule
@@ -89,11 +95,12 @@ export default async function DashboardPage() {
         finalGrade: r.finalGrade,
         _count: { _all: r.n },
       }));
-      return { counterparties, runs, recent, gradeRows, ungraded };
+      return { counterparties, runs, recent, gradeRows, ungraded, toValidate };
     },
-    { counterparties: 0, runs: 0, recent: [], gradeRows: [], ungraded: 0 } as {
+    { counterparties: 0, runs: 0, recent: [], gradeRows: [], ungraded: 0, toValidate: 0 } as {
       counterparties: number;
       runs: number;
+      toValidate: number;
       recent: Array<{
         id: string;
         asOfDate: string;
@@ -102,6 +109,7 @@ export default async function DashboardPage() {
         rawScore: unknown;
         finalGrade: string | null;
         counterparty: { name: string };
+        ratingCase: { status: string } | null;
       }>;
       gradeRows: Array<{
         modelId: string;
@@ -145,7 +153,8 @@ export default async function DashboardPage() {
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
         <StatCard label="Contreparties" value={stats.counterparties} />
-        <StatCard label="Notations enregistrées" value={stats.runs} />
+        <StatCard label="Notations validées" value={stats.runs} />
+        <StatCard label="Dossiers à valider" value={stats.toValidate} hint="Soumis, en attente d'une seconde personne" />
         <StatCard label="Modèles disponibles" value={models.length} />
         <StatCard
           label="Calibration PD"
@@ -164,7 +173,7 @@ export default async function DashboardPage() {
       <section className="card" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Distribution des grades finaux</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Note courante de chaque contrepartie — sa notation au dernier arrêté. Une
+          Note courante de chaque contrepartie — sa dernière notation validée. Une
           distribution par modèle : les échelles ne sont pas comparables entre elles
           tant qu&apos;aucune correspondance sur probabilités de défaut n&apos;a été
           validée, et les additionner produirait un histogramme qui ne mesure rien.
@@ -303,7 +312,10 @@ export default async function DashboardPage() {
                   <td className="nowrap">{r.asOfDate}</td>
                   <td>{r.segment ?? "—"}</td>
                   <td>{r.rawScore ? Number(r.rawScore).toFixed(2) : "—"}</td>
-                  <td><GradeBadge grade={r.finalGrade} /></td>
+                  <td>
+                    <GradeBadge grade={r.finalGrade} />
+                    {!isOfficialRun(r) && <ProposedTag status={r.ratingCase?.status} />}
+                  </td>
                   <td className="muted" style={{ fontSize: 12 }}>
                     <OutcomeLabel outcome={r.outcome} />
                   </td>
@@ -384,5 +396,14 @@ function StatCard({
         </div>
       )}
     </div>
+  );
+}
+
+/** Une notation soumise ou rejetée n'est pas la note de la contrepartie. */
+function ProposedTag({ status }: { status?: string }) {
+  return (
+    <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
+      {status === "REJECTED" ? "rejetée" : "proposée, non validée"}
+    </span>
   );
 }

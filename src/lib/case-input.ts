@@ -54,7 +54,10 @@ export const ANCHOR_SCORES = [0, 25, 50, 75, 100] as const;
 export function emptyDraft(model: ModelConfig, asOfDate: string): CaseDraft {
   return {
     version: 1,
-    segment: model.segments.length === 1 ? model.segments[0] : "",
+    // Segment imposé par défaut (PME si le modèle le couvre) : un dossier reste
+    // calculable avant la saisie des montants ; l'analyste peut choisir
+    // « déterminé par les montants ».
+    segment: model.segments.includes("PME" as Segment) ? ("PME" as Segment) : model.segments[0],
     asOfDate,
     criteria: Object.fromEntries(
       model.criteria.map((c) => [c.code, { status: "AVAILABLE" as DataStatus, value: "", score: "50", specialCase: "" }])

@@ -65,6 +65,16 @@ w(`DELETE FROM ${SCHEMA}.rating_runs WHERE id LIKE 'seed_%';`);
 w(`DELETE FROM ${SCHEMA}.counterparties WHERE id LIKE 'seed_%';`);
 w();
 
+// --- Entité racine -------------------------------------------------------------
+// Celle que crée la migration 04 : les contreparties de démonstration lui sont
+// rattachées (visibles du seul administrateur du groupe tant qu'aucune banque
+// n'est paramétrée).
+w("-- --- Entité racine (créée aussi par 04-multi-entites-workflow-ia.sql) --------");
+w(
+  `INSERT INTO ${SCHEMA}.entities (id, code, name, type, "parentId", path, level, country, currency, "isActive", "createdAt", "updatedAt") VALUES ('ent_groupe', 'GROUPE', 'Groupe', 'GROUP', NULL, '/ent_groupe/', 0, 'MA', 'MAD', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING;`
+);
+w();
+
 // --- Contreparties -----------------------------------------------------------
 w("-- --- Contreparties ---------------------------------------------------------");
 const cpId = new Map<string, string>();
@@ -72,8 +82,8 @@ for (const c of COUNTERPARTIES) {
   const id = `seed_cp_${slug(c.key)}`;
   cpId.set(c.key, id);
   w(
-    `INSERT INTO ${SCHEMA}.counterparties (id, name, ice, rc, "fiscalId", "legalForm", "sectorCode", city, "isActive", "createdAt", "updatedAt") VALUES (` +
-      [lit(id), lit(c.name), lit(c.ice), lit(c.rc), lit(c.fiscalId), lit(c.legalForm), lit(c.sectorCode), lit(c.city)].join(", ") +
+    `INSERT INTO ${SCHEMA}.counterparties (id, "entityId", name, ice, rc, "fiscalId", "legalForm", "sectorCode", city, currency, "isActive", "createdAt", "updatedAt") VALUES (` +
+      [lit(id), lit("ent_groupe"), lit(c.name), lit(c.ice), lit(c.rc), lit(c.fiscalId), lit(c.legalForm), lit(c.sectorCode), lit(c.city), lit("MAD")].join(", ") +
       ", true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);"
   );
 }

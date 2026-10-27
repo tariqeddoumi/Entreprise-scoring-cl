@@ -370,7 +370,7 @@ model AiProposal {
   source     String?    @db.Text // pièce et passage d'où vient la valeur
   rationale  String?    @db.Text
   confidence Int // 0 à 100
-  status     String     @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  status     String     @default("PENDING") // PENDING | ACCEPTED | REJECTED | SUPERSEDED (remplacée par une nouvelle analyse)
   model      String
   decidedBy  String?
   decidedAt  DateTime?

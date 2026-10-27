@@ -13,6 +13,11 @@ const OVERRIDE_STATUS_LABELS: Record<string, string> = {
 };
 import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { LegacyResultPanel } from "./LegacyResultPanel";
+import { OverrideDecision, OverrideRequestForm } from "./OverridePanels";
+import { hasRole } from "@/lib/auth";
+import { isOfficialRun } from "@/lib/cases";
+import { settingInt } from "@/lib/settings";
+import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +33,7 @@ export default async function RatingRunPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireSession();
+  const identity = await requireSession();
   const { id } = await params;
 
   const { data: run, dbAvailable } = await safeQuery((db) =>
@@ -37,6 +42,7 @@ export default async function RatingRunPage({
         include: {
           counterparty: { select: { id: true, name: true, ice: true, segment: true } },
           overrides: { orderBy: { createdAt: "desc" } },
+          ratingCase: { select: { id: true, status: true, decidedBy: true } },
         },
       }),
     null
@@ -58,6 +64,17 @@ export default async function RatingRunPage({
   // L'instantané persisté peut provenir d'un moteur antérieur : sa forme n'est
   // pas garantie, il est donc reconnu avant d'être passé aux composants V3.
   const snapshot = readResultSnapshot(run.resultSnapshot);
+  const official = isOfficialRun(run);
+  const maxNotches = await settingInt("OVERRIDE_MAX_NOTCHES");
+  const canRequestOverride =
+    official &&
+    hasRole(identity.role, "ANALYST") &&
+    !!run.cappedGrade &&
+    !run.cappedGrade.startsWith("DEF") &&
+    !run.overrides.some((o) => o.status === "PENDING") &&
+    !!model;
+  const performingGrades = model ? model.gradeScale.bands.map((b) => b.grade).filter((g) => !g.startsWith("DEF")) : [];
+  const canDecideOverride = hasRole(identity.role, "RISK_MANAGER");
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -85,6 +102,37 @@ export default async function RatingRunPage({
         </p>
       </div>
 
+      {run.ratingCase && (
+        <div
+          className="card"
+          role="status"
+          style={{
+            padding: 12,
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            flexWrap: "wrap",
+            borderLeft: `4px solid ${official ? "var(--good)" : run.ratingCase.status === "REJECTED" ? "var(--bad)" : "var(--warn)"}`,
+          }}
+        >
+          <CaseStatusBadge status={run.ratingCase.status} />
+          <span style={{ fontSize: 13 }}>
+            {official
+              ? `Notation validée${run.ratingCase.decidedBy ? ` par ${run.ratingCase.decidedBy}` : ""} : c'est la note de la contrepartie.`
+              : run.ratingCase.status === "REJECTED"
+                ? "Notation rejetée : elle ne fait pas foi."
+                : "Notation proposée, en attente de validation : elle ne fait pas encore foi."}
+          </span>
+          <Link href={`/cases/${run.ratingCase.id}`} style={{ color: "var(--brand)", fontSize: 13 }}>
+            Ouvrir le dossier →
+          </Link>
+        </div>
+      )}
+
+      {canRequestOverride && model && (
+        <OverrideRequestForm runId={run.id} grades={performingGrades} currentGrade={run.cappedGrade!} maxNotches={maxNotches} />
+      )}
+
       {run.overrides.length > 0 && (
         <section className="card" style={{ padding: 16 }}>
           <h2 style={{ fontWeight: 600, marginBottom: 10 }}>Dérogations</h2>
@@ -111,7 +159,14 @@ export default async function RatingRunPage({
                   </td>
                   <td className="muted">{o.requestedBy}</td>
                   <td className="muted">{o.decidedBy ?? "—"}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>{o.comment}</td>
+                  <td className="muted" style={{ fontSize: 12 }}>
+                    {o.comment}
+                    {o.status === "PENDING" && canDecideOverride && o.requestedBy !== identity.name && (
+                      <div style={{ marginTop: 6 }}>
+                        <OverrideDecision overrideId={o.id} runId={run.id} />
+                      </div>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

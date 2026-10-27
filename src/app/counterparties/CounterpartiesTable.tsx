@@ -11,18 +11,25 @@ export interface CounterpartyRow {
   ice: string | null;
   segment: string | null;
   sectorCode: string | null;
+  entityCode: string;
+  currency: string;
+  /** Statut du dossier en cours (brouillon ou soumis), s'il y en a un. */
+  openCase: string | null;
+  /** Dernière notation OFFICIELLE (validée, ou antérieure au workflow). */
   ratingRuns: Array<{ finalGrade: string | null; rawScore: unknown; asOfDate: string }>;
 }
 
 const SEGMENTS = ["TPE", "PME", "GE"] as const;
 
 function downloadCsv(rows: CounterpartyRow[]) {
-  const header = ["Nom", "ICE", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
+  const header = ["Nom", "Entité", "ICE", "Devise", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
   const lines = rows.map((c) => {
     const last = c.ratingRuns[0];
     return csvLine([
       c.name,
+      c.entityCode,
       c.ice ?? "",
+      c.currency,
       c.segment ?? "",
       c.sectorCode ?? "",
       last?.rawScore ? Number(last.rawScore).toFixed(2) : "",
@@ -51,7 +58,11 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
     return items.filter((c) => {
       if (segment && c.segment !== segment) return false;
       if (!q) return true;
-      return c.name.toLowerCase().includes(q) || (c.ice ?? "").toLowerCase().includes(q);
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.ice ?? "").toLowerCase().includes(q) ||
+        c.entityCode.toLowerCase().includes(q)
+      );
     });
   }, [items, query, segment]);
 
@@ -60,7 +71,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <input
           type="search"
-          placeholder="Rechercher par nom ou ICE…"
+          placeholder="Rechercher par nom, ICE ou entité…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{ maxWidth: 280 }}
@@ -107,11 +118,13 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
           <thead>
             <tr>
               <th>Nom</th>
+              <th>Entité</th>
               <th>ICE</th>
+              <th>Devise</th>
               <th>Segment</th>
               <th>Secteur</th>
-              <th>Dernier score</th>
-              <th>Dernier grade</th>
+              <th>Score validé</th>
+              <th>Grade validé</th>
               <th>Arrêté</th>
             </tr>
           </thead>
@@ -124,8 +137,15 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }}>
                       {c.name}
                     </Link>
+                    {c.openCase && (
+                      <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                        {c.openCase === "SUBMITTED" ? "· dossier à valider" : "· dossier en cours"}
+                      </span>
+                    )}
                   </td>
+                  <td className="muted">{c.entityCode}</td>
                   <td className="muted nowrap">{c.ice ?? "—"}</td>
+                  <td className="muted">{c.currency}</td>
                   <td>{c.segment ?? "—"}</td>
                   <td className="muted">{c.sectorCode ?? "—"}</td>
                   <td>{last?.rawScore ? Number(last.rawScore).toFixed(2) : "—"}</td>

@@ -486,6 +486,74 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *Confirmée par la banque le 4 octobre 2026 :* la déclaration reste confiée à l'analyste, sans rôle de validation dédié, jusqu'à l'alimentation du référentiel sectoriel. Elle pourra alors être dérivée du référentiel : la déclaration de l'analyste deviendra un contrôle de cohérence, et non plus la source. Le libellé affiché sous chaque case (configuration du modèle), la note méthodologique et le code, qui disaient la matérialité « jamais » établie par l'analyste, sont alignés sur cette décision.
 
+## D-45 — Une banque ou une filiale ne voit que ses dossiers, et cela se contrôle dans la couche d'accès aux données — **À CONFIRMER**
+
+*Constat :* l'outil ne connaissait qu'une seule banque. Le déploiement dans les filiales africaines suppose que chaque filiale ne voie que ses contreparties, que le siège voie tout, et que l'habillage (nom, logo, couleur) suive l'entité.
+
+*Décision :*
+- **Organisation.** Un arbre d'entités (groupe › banque › banque régionale › groupe de filiales › filiale), avec chemin matérialisé. Chaque contrepartie est rattachée à une entité. Chaque compte aussi, sauf l'administrateur du groupe.
+- **Périmètre.** Lecture : l'entité et sa descendance. Écriture : l'entité seule (portée ENTITY) ou sa descendance (portée BRANCH). Un compte sans entité qui n'est pas ADMIN n'a accès à rien. Une entité désactivée ferme l'accès de toute sa descendance.
+- **Contrôle dans la couche de données, pas dans les écrans.** Les écrans, les actions serveur et l'API utilisent tous un client Prisma cloisonné. Il ajoute le filtre du périmètre à chaque lecture et à chaque modification, et vérifie l'entité de chaque création. Un dossier hors périmètre est « introuvable » (404), il n'est jamais « interdit ». Ainsi, son existence ne fuit pas.
+- **API.** Une clé peut porter un code d'entité (`clé:rôle:nom:CODE[:BRANCH]`). Sans code, elle couvre le groupe ; un code inconnu est refusé (403).
+- **Unicité de l'ICE par entité.** Un même ICE peut être suivi par la banque marocaine et par une filiale.
+- **Contrôle.** Le vérificateur d'alignement refuse tout écran ou toute route qui importerait le client non cloisonné. Exceptions motivées : les écrans de paramétrage global réservés à l'administrateur du groupe, qui le vérifient explicitement.
+
+*Reprise de l'existant (migration 04) :* entité racine « GROUPE » ; toutes les contreparties lui sont rattachées. Les comptes existants restent sans entité : un ADMIN garde l'accès au groupe, les autres profils doivent être rattachés par un administrateur avant de retrouver un accès.
+
+*À confirmer par la banque :* la liste des entités et leur hiérarchie ; la portée d'écriture des équipes du siège (ENTITY ou BRANCH) ; le fait qu'un analyste du siège ne crée pas de dossiers pour une filiale.
+
+## D-46 — Les montants se saisissent dans la devise de la contrepartie et se convertissent au cours publié de la date d'arrêté — **TECHNIQUE**
+
+*Constat :* les seuils de segmentation et le seuil de délégation sont exprimés en MAD ; une filiale tient ses comptes en XOF, XAF, GNF ou EUR.
+
+*Décision :*
+- Chaque entité et chaque contrepartie porte une devise ; les montants d'un dossier se saisissent dans la devise de la contrepartie.
+- **Conversion.** Les montants sont convertis en MAD au dernier cours publié à la date d'arrêté ou avant. La conversion (montant d'origine, cours, date du cours) est consignée dans le dossier. La notation reste ainsi rejouable, même si un cours est corrigé plus tard.
+- **Cours.** Ils sont saisis par l'administrateur du groupe (Paramétrage › Devises) et jamais modifiés une fois publiés : une correction est un nouveau cours daté.
+- **Cours manquant.** Il n'est jamais deviné : la soumission est bloquée avec un message qui dit quoi faire.
+
+## D-47 — Une notation ne fait foi qu'après validation par une seconde personne — **À CONFIRMER**
+
+*Constat :* une notation calculée à l'écran devenait immédiatement la note de la contrepartie, sans relecture. Le seul contrôle à quatre yeux portait sur les dérogations.
+
+*Décision :*
+- **Dossier de notation.** Brouillon → soumission → validation ou rejet, avec motif obligatoire (10 caractères au moins). Un dossier rejeté se reprend dans un **nouveau** brouillon ; le dossier rejeté et sa notation restent dans l'historique, sans jamais faire foi. Un brouillon peut être abandonné.
+- **Calcul figé à la soumission.** La notation est calculée par le serveur à la soumission, à partir du brouillon enregistré, puis figée. L'aperçu à l'écran et la soumission construisent la même requête, au même endroit du code.
+- **Séparation des fonctions.** Le valideur est distinct de tout contributeur du dossier : création, enregistrements, ajout de pièces, analyse par l'IA, décision sur une proposition de l'IA, soumission. Un dossier repris hérite des contributeurs du dossier rejeté.
+- **Rôle et délégation.** Le rôle du valideur est paramétrable, RISK_MANAGER par défaut. Au-delà d'un seuil d'engagements converti en MAD, un rôle supérieur est exigé (délégation par montant, désactivée par défaut).
+- **Note officielle.** Seule une notation validée devient la note de la contrepartie : tableau de bord, liste et évolution entre deux notations. Les notations antérieures au workflow restent officielles. Une dérogation ne porte que sur une notation validée.
+- **API.** `POST /rating-runs` crée un dossier soumis et renvoie son identifiant. `GET /rating-cases` et `POST /rating-cases/{id}/decision` complètent le contrat.
+- **Écran retiré.** L'écran « Nouvelle notation » n'enregistre plus directement une notation : il ouvre un dossier, ou simule sans rien enregistrer.
+
+*À confirmer par la banque :* le rôle du valideur, le seuil et le rôle de délégation, la durée de validité d'une notation (paramètre présent, sans effet sur le calcul).
+
+## D-48 — L'IA propose, l'analyste décide, et chaque décision est tracée — **À CONFIRMER**
+
+*Constat :* la saisie d'un dossier compte une cinquantaine de champs, dont une majorité de listes déroulantes à ancrages. L'essentiel de l'information figure déjà dans les états financiers et les rapports.
+
+*Décision :*
+- **Fournisseur paramétrable.** Anthropic (Claude) par défaut, ou toute API au format OpenAI (OpenAI, Azure OpenAI, modèle hébergé par la banque). Le fournisseur, le modèle et l'adresse se règlent à l'écran.
+- **Clé et adresse.** La clé reste une variable d'environnement, jamais en base. L'adresse doit être en https.
+- **Désactivée par défaut.** L'IA doit être activée explicitement par l'administrateur du groupe.
+- **Repli serveur (Anthropic).** Si le modèle principal décline une requête, l'API la rejoue sur un modèle de secours dans le même appel. Le modèle effectivement utilisé est consigné au journal.
+- **Pièces du dossier.** PDF, images, texte ou CSV, conservés en base avec leur empreinte SHA-256. Taille paramétrable : 4 Mo par défaut, limite d'une requête sur Vercel.
+- **Propositions bornées.** L'IA lit les pièces et propose des valeurs pour une liste fermée de champs de la grille, transmise comme schéma JSON. Chaque proposition cite sa source et son calcul. Elle est revérifiée contre la nature du champ (nombre, ancrage 0/25/50/75/100, statut, booléen) ; une proposition hors grille ou invalide est écartée et comptée.
+- **Décision humaine.** Rien n'est appliqué sans l'acceptation de l'analyste. Les valeurs acceptées portent un repère « IA » dans la grille. Accepter ou refuser rend contributeur du dossier, donc exclu de la validation.
+- **Fiche contrepartie.** L'IA pré-remplit aussi la fiche depuis un extrait RC, une attestation ICE ou un texte collé. Rien n'est enregistré sans relecture.
+- **Traçabilité.** Au journal : modèle, pièces lues, nombre de propositions retenues et écartées, jetons consommés, et chaque décision sur une proposition.
+
+*À confirmer par la banque :*
+- le fournisseur retenu et le lieu d'hébergement des données, au regard de la loi 09-08 et de la politique de sous-traitance ;
+- les types de pièces admis ;
+- la règle « accepter celles à 80 % et plus », offerte en commodité.
+
+## D-49 — Le paramétrage courant se règle à l'écran, borné et tracé — **TECHNIQUE**
+
+*Décision :*
+- **Paramètres.** Rôle du valideur, seuil et rôle de délégation, validité d'une notation, crans maximaux d'une dérogation, taille des pièces, fournisseur et modèle d'IA.
+- **Validation et repli.** Chaque valeur est validée par bornes et listes fermées. Une valeur invalide en base est ignorée au profit de la valeur par défaut, toujours la plus prudente.
+- **Droits et traçabilité.** Le paramétrage est réservé à l'administrateur du groupe ; chaque modification est journalisée (SETTINGS_UPDATED). Aucun secret n'est stocké en base.
+
 ---
 
 # 3. Ce qui reste à décider par la banque
@@ -501,6 +569,9 @@ Diagnostic des représentations du système deux à deux : base de production et
 9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Les dix contreparties ont été renotées (D-27) : les deux séries coexistent désormais sur des entrées identiques. Leur rapprochement suppose toujours une table de correspondance validée — treize dossiers de démonstration ne l'établissent pas.
 10. **Ce qui est repris lors d'une bascule de moteur de base** — les vingt-six notations, ou la seule série V3 (D-31). Conserver les deux préserve le point de comparaison du pilote et impose de transporter des instantanés d'un moteur retiré.
 11. **Dialecte cible et niveau de certification exigé** — un schéma validé n'est pas un dialecte certifié, et le durcissement de la base doit être réécrit dans ses termes avant toute mise en service (D-28).
+12. **Organisation et droits par entité** — hiérarchie des banques et filiales, portée d'écriture des équipes du siège (D-45).
+13. **Valideur et délégation** — rôle du valideur, seuil et rôle de délégation par montant (D-47).
+14. **Fournisseur d'IA et hébergement des données** — au regard de la loi 09-08 et de la politique d'externalisation ; types de pièces admis (D-48).
 
 ---
 

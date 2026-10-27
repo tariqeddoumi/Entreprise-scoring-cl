@@ -57,7 +57,8 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'counterparties', 'rating_runs', 'overrides',
     'webhook_subscriptions', 'webhook_deliveries', 'audit_events',
-    'users', 'user_sessions'
+    'users', 'user_sessions', 'entities', 'exchange_rates', 'app_settings',
+    'rating_cases', 'case_documents', 'ai_proposals'
   ] LOOP
     IF EXISTS (
       SELECT 1 FROM pg_tables

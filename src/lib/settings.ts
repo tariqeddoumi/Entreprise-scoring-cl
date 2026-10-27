@@ -91,9 +91,10 @@ export const SETTINGS: readonly SettingDef[] = [
     key: "DOCUMENT_MAX_MB",
     group: "Pièces",
     labelFr: "Taille maximale d'une pièce (Mo)",
-    helpFr: "Pièces conservées en base, pour rester portable d'un moteur de base à l'autre.",
+    helpFr:
+      "Pièces conservées en base, pour rester portable d'un moteur de base à l'autre. Sur Vercel, une requête ne dépasse pas 4,5 Mo : au-delà de 4 Mo, l'envoi échoue quel que soit ce paramètre (hébergement interne : jusqu'à 20 Mo).",
     kind: "integer",
-    default: "8",
+    default: "4",
     min: 1,
     max: 20,
   },

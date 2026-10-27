@@ -267,3 +267,116 @@ main li a {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
+
+/* Barre d'actions collante des écrans de saisie (dossier, simulation). */
+.action-bar {
+  position: sticky;
+  bottom: 16px;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--text) 12%, transparent);
+  z-index: 5;
+}
+
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 18px;
+  font-weight: 600;
+}
+.btn-primary:disabled,
+.btn-ghost:disabled,
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 14px;
+  color: var(--text);
+  font-size: 13px;
+}
+.btn-danger {
+  background: none;
+  border: 1px solid var(--bad);
+  border-radius: 6px;
+  padding: 7px 14px;
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/* Statut d'un dossier de notation. */
+.case-status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.case-status[data-status="DRAFT"] { color: var(--muted); }
+.case-status[data-status="SUBMITTED"] { color: var(--warn); }
+.case-status[data-status="VALIDATED"] { color: var(--good); }
+.case-status[data-status="REJECTED"] { color: var(--bad); }
+.case-status[data-status="CANCELLED"] { color: var(--muted); text-decoration: line-through; }
+
+/* Repère d'une valeur reprise d'une proposition de l'IA. */
+.ai-mark {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--brand);
+  background: var(--brand-soft);
+  vertical-align: middle;
+}
+
+/* Onglets de filtre (dossiers par statut). */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tabs a {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.tabs a[aria-current="page"] {
+  color: var(--brand);
+  border-color: var(--brand);
+  font-weight: 600;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.side-panel {
+  position: sticky;
+  top: 12px;
+  display: grid;
+  gap: 12px;
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+}

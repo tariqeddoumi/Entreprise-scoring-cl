@@ -388,6 +388,14 @@ export async function cancelCase(db: PrismaClient, identity: Identity, caseId: s
 }
 
 /**
+ * Filtre Prisma des notations officielles (même règle qu'`isOfficialRun`) :
+ * validées, ou antérieures au workflow.
+ */
+export const OFFICIAL_RUN_WHERE = {
+  OR: [{ ratingCase: { is: null } }, { ratingCase: { is: { status: "VALIDATED" } } }],
+};
+
+/**
  * Une notation fait foi si elle est validée, ou si elle précède le workflow
  * (notations historiques, sans dossier).
  */
