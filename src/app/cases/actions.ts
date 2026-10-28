@@ -192,7 +192,9 @@ export async function decideProposalAction(
 // --- Dérogations -------------------------------------------------------------------
 
 export async function requestOverrideAction(_prev: ActionResult, fd: FormData): Promise<ActionResult> {
-  const session = await getSessionIdentity("ANALYST");
+  // Même rôle que POST /overrides : la demande relève du gestionnaire des
+  // risques, la décision d'une seconde personne (D-43 : mêmes droits partout).
+  const session = await getSessionIdentity("RISK_MANAGER");
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   const parsed = overrideRequestSchema.safeParse({
     ratingRunId: String(fd.get("ratingRunId") ?? ""),
