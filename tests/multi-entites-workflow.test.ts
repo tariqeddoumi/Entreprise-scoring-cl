@@ -237,10 +237,11 @@ describe("Workflow : séparation des fonctions et note officielle", () => {
   });
 
   it("ne tient pour officielle qu'une notation validée ou antérieure au workflow", () => {
-    expect(isOfficialRun({ ratingCase: null })).toBe(true);
-    expect(isOfficialRun({ ratingCase: { status: "VALIDATED" } })).toBe(true);
-    expect(isOfficialRun({ ratingCase: { status: "SUBMITTED" } })).toBe(false);
-    expect(isOfficialRun({ ratingCase: { status: "REJECTED" } })).toBe(false);
+    expect(isOfficialRun({ ratingCase: null, origin: "API" })).toBe(true);
+    expect(isOfficialRun({ ratingCase: null, origin: "BATCH" })).toBe(false);
+    expect(isOfficialRun({ ratingCase: { status: "VALIDATED" }, origin: "CASE" })).toBe(true);
+    expect(isOfficialRun({ ratingCase: { status: "SUBMITTED" }, origin: "CASE" })).toBe(false);
+    expect(isOfficialRun({ ratingCase: { status: "REJECTED" }, origin: "CASE" })).toBe(false);
   });
 });
 

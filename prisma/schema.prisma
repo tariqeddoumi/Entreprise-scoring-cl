@@ -63,6 +63,7 @@ model Entity {
 
   users          User[]
   counterparties Counterparty[]
+  economicGroups EconomicGroup[]
 
   @@index([path])
   @@map("entities")
@@ -113,17 +114,45 @@ model Counterparty {
   sectorCode String? // code du référentiel sectoriel interne
   city       String?
   segment    String? // TPE | PME | GE — dernier segment calculé (indicatif)
+  // Groupe d'affaires (groupe économique) : sélection des renotations par lot,
+  // lecture des engagements du groupe. Distinct de l'organisation de la banque.
+  economicGroupId String?
+  economicGroup   EconomicGroup? @relation(fields: [economicGroupId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  ratingRuns  RatingRun[]
-  ratingCases RatingCase[]
+  ratingRuns       RatingRun[]
+  ratingCases      RatingCase[]
+  renotationItems  RenotationItem[]
 
   @@unique([entityId, ice])
   @@index([name])
   @@index([entityId])
+  @@index([economicGroupId])
   @@map("counterparties")
+}
+
+// Groupe d'affaires : ensemble de contreparties liées par le contrôle
+// (actionnaire commun, maison mère). Rattaché à l'entité qui le suit ; ses
+// membres sont des contreparties de cette entité ou de sa descendance.
+model EconomicGroup {
+  id        String   @id @default(cuid())
+  code      String // code court, unique dans l'entité
+  name      String
+  entityId  String
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  notes     String?  @db.Text
+  isActive  Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  counterparties Counterparty[]
+
+  @@unique([entityId, code])
+  @@index([entityId])
+  @@map("economic_groups")
 }
 
 // --- Runs de notation -------------------------------------------------------
@@ -159,11 +188,15 @@ model RatingRun {
   resultSnapshot String @db.Text
 
   requestedBy    String // identité dérivée du jeton, jamais du corps de requête
+  // Origine : API | CASE (dossier) | BATCH (renotation par lot). Une notation
+  // de lot est une notation de surveillance : elle ne fait jamais foi seule.
+  origin         String   @default("API")
   idempotencyKey String?  @unique
   createdAt      DateTime @default(now())
 
   overrides Override[]
   ratingCase RatingCase?
+  renotationItem RenotationItem?
 
   @@index([counterpartyId, createdAt])
   @@index([modelId, asOfDate])
@@ -383,4 +416,94 @@ model AiProposal {
 
   @@index([caseId, status])
   @@map("ai_proposals")
+}
+
+// --- Renotation par lot -----------------------------------------------------
+//
+// Un lot relance la dernière notation validée de chaque contrepartie
+// sélectionnée (groupe d'affaires, segment, secteur, entité), à une nouvelle
+// date d'arrêté et avec la version courante du modèle, après application des
+// données rafraîchies éventuelles. Le résultat est une notation de
+// surveillance : un changement de grade ouvre un dossier à instruire, il ne
+// remplace jamais la note validée.
+
+model RenotationSchedule {
+  id             String    @id @default(cuid())
+  name           String
+  // Périmètre d'exécution : entité de la personne qui a planifié (nulle :
+  // groupe entier) et portée d'écriture.
+  entityId       String?
+  writeScope     String    @default("ENTITY")
+  filters        String    @db.Text // JSON : critères de sélection
+  options        String    @db.Text // JSON : seuil de migration, dossiers
+  intervalMonths Int       @default(1) // 1 mensuel, 3 trimestriel, 6, 12
+  dayOfMonth     Int       @default(5) // jour d'exécution (1 à 28)
+  isActive       Boolean   @default(true)
+  nextRunAt      DateTime
+  lastRunAt      DateTime?
+  lastBatchId    String?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  batches RenotationBatch[]
+
+  @@index([isActive, nextRunAt])
+  @@map("renotation_schedules")
+}
+
+model RenotationBatch {
+  id         String    @id @default(cuid())
+  name       String
+  scheduleId String?
+  schedule   RenotationSchedule? @relation(fields: [scheduleId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  entityId   String?
+  writeScope String    @default("ENTITY")
+  filters    String    @db.Text
+  options    String    @db.Text
+  asOfDate   String // AAAA-MM-JJ
+  status     String    @default("QUEUED") // QUEUED | RUNNING | DONE | CANCELLED
+  total      Int       @default(0)
+  processed  Int       @default(0)
+  summary    String?   @db.Text // JSON : comptes par mouvement
+  lastError  String?   @db.Text
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  items RenotationItem[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("renotation_batches")
+}
+
+model RenotationItem {
+  id             String          @id @default(cuid())
+  batchId        String
+  batch          RenotationBatch @relation(fields: [batchId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  counterpartyId String
+  counterparty   Counterparty    @relation(fields: [counterpartyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // PENDING | PROCESSING | DONE | SKIPPED | ERROR
+  status         String          @default("PENDING")
+  // UNCHANGED | UPGRADE | DOWNGRADE | NO_RATING | DEFAULTED
+  movement       String?
+  updates        String?         @db.Text // JSON : champs rafraîchis par fichier
+  sourceCaseId   String?
+  previousRunId  String?
+  previousGrade  String?
+  newGrade       String?
+  outcome        String?
+  notchDelta     Int?
+  runId          String?         @unique
+  run            RatingRun?      @relation(fields: [runId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  caseId         String?
+  messageFr      String?         @db.Text
+  claimedAt      DateTime?
+  processedAt    DateTime?
+
+  @@unique([batchId, counterpartyId])
+  @@index([batchId, status])
+  @@map("renotation_items")
 }

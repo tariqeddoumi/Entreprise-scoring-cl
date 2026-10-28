@@ -7,7 +7,9 @@ const NAV = [
   { href: "/", label: "Tableau de bord" },
   { href: "/cases", label: "Dossiers" },
   { href: "/counterparties", label: "Contreparties" },
+  { href: "/groups", label: "Groupes" },
   { href: "/scoring", label: "Nouvelle notation" },
+  { href: "/renotation", label: "Renotation" },
   { href: "/models", label: "Modèles" },
   { href: "/methodology", label: "Méthodologie" },
 ];

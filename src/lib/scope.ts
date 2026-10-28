@@ -220,6 +220,12 @@ export const SCOPED_MODELS: Record<string, Filter> = {
   AiProposal: byCase,
   AuditEvent: (ids) => ({ entityId: { in: ids } }),
   User: (ids) => ({ entityId: { in: ids } }),
+  EconomicGroup: (ids) => ({ entityId: { in: ids } }),
+  // Lots et planifications : ceux du groupe entier (entité nulle) ne sont
+  // visibles que du périmètre groupe, qui n'est jamais filtré.
+  RenotationSchedule: (ids) => ({ entityId: { in: ids } }),
+  RenotationBatch: (ids) => ({ entityId: { in: ids } }),
+  RenotationItem: byCounterparty,
 };
 
 const READS = new Set([
@@ -279,6 +285,15 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
     case "CaseDocument":
     case "AiProposal":
       return writableCase(ref(data, "caseId", "ratingCase"));
+    case "EconomicGroup":
+    case "RenotationSchedule":
+    case "RenotationBatch": {
+      const target = ref(data, "entityId", "entity");
+      if (!target || !canWrite(p, target)) throw new OutOfScopeError("Entité hors de votre périmètre d'écriture.");
+      return;
+    }
+    case "RenotationItem":
+      return writableCounterparty(ref(data, "counterpartyId", "counterparty"));
     case "User": {
       const target = ref(data, "entityId", "entity");
       if (!target || !canWrite(p, target)) throw new OutOfScopeError("Entité hors de votre périmètre.");

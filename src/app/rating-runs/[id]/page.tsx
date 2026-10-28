@@ -43,6 +43,7 @@ export default async function RatingRunPage({
           counterparty: { select: { id: true, name: true, ice: true, segment: true } },
           overrides: { orderBy: { createdAt: "desc" } },
           ratingCase: { select: { id: true, status: true, decidedBy: true } },
+          renotationItem: { select: { batchId: true, caseId: true, previousGrade: true, batch: { select: { name: true } } } },
         },
       }),
     null
@@ -126,6 +127,27 @@ export default async function RatingRunPage({
           <Link href={`/cases/${run.ratingCase.id}`} style={{ color: "var(--brand)", fontSize: 13 }}>
             Ouvrir le dossier →
           </Link>
+        </div>
+      )}
+
+      {run.origin === "BATCH" && (
+        <div className="card" role="status" style={{ padding: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderLeft: "4px solid var(--warn)" }}>
+          <span style={{ fontSize: 13 }}>
+            Notation de surveillance produite par une renotation par lot
+            {run.renotationItem ? ` (« ${run.renotationItem.batch.name} »)` : ""} : elle ne fait pas foi. La note officielle
+            {run.renotationItem?.previousGrade ? ` reste ${run.renotationItem.previousGrade}` : " reste celle du dernier dossier validé"}
+            {run.renotationItem?.caseId ? " ; un dossier de revue a été ouvert." : "."}
+          </span>
+          {run.renotationItem && (
+            <Link href={`/renotation/${run.renotationItem.batchId}`} style={{ color: "var(--brand)", fontSize: 13 }}>
+              Voir le lot →
+            </Link>
+          )}
+          {run.renotationItem?.caseId && (
+            <Link href={`/cases/${run.renotationItem.caseId}`} style={{ color: "var(--brand)", fontSize: 13 }}>
+              Ouvrir le dossier de revue →
+            </Link>
+          )}
         </div>
       )}
 

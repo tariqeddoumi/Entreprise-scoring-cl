@@ -88,7 +88,14 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
     });
     const blocker = await validationBlocker(db, identity, c);
     const contributors = await contributorsOf(db, id);
-    return { c, entity, events, blocker, contributors };
+    // Dossier de revue ouvert par une renotation par lot : son origine et la
+    // migration constatée orientent l'instruction.
+    const fromBatch = await db.renotationItem.findFirst({
+      where: { caseId: id },
+      orderBy: { processedAt: "desc" },
+      select: { batchId: true, previousGrade: true, newGrade: true, notchDelta: true, movement: true, messageFr: true, batch: { select: { name: true } } },
+    });
+    return { c, entity, events, blocker, contributors, fromBatch };
   }, null);
 
   if (!dbAvailable) {
@@ -153,6 +160,20 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           {c.decidedBy && ` · ${c.status === "VALIDATED" ? "validé" : "décidé"} par ${c.decidedBy}`}
         </p>
       </div>
+
+      {data.fromBatch && c.status === "DRAFT" && (
+        <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--warn)", fontSize: 14 }}>
+          <strong>Dossier de revue</strong> ouvert par la renotation «{" "}
+          <Link href={`/renotation/${data.fromBatch.batchId}`} style={{ color: "var(--brand)" }}>
+            {data.fromBatch.batch.name}
+          </Link>{" "}
+          » : note officielle {data.fromBatch.previousGrade ?? "—"}, note de surveillance {data.fromBatch.newGrade ?? "sans note"}
+          {data.fromBatch.notchDelta ? ` (${data.fromBatch.notchDelta > 0 ? "+" : ""}${data.fromBatch.notchDelta} cran(s))` : ""}. La saisie
+          reprend le dernier dossier validé, avec les données rafraîchies et la nouvelle date d&apos;arrêté : vérifiez-la, complétez-la,
+          puis soumettez-la à validation.
+          {data.fromBatch.messageFr && <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>{data.fromBatch.messageFr}</div>}
+        </div>
+      )}
 
       {c.status === "VALIDATED" && (
         <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--good)" }}>
