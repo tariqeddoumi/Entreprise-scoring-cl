@@ -296,7 +296,7 @@ function AiPanel({
         )}
         <form action={upload} style={{ display: "grid", gap: 6 }}>
           <input type="hidden" name="caseId" value={caseId} />
-          <input type="file" name="file" multiple accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,application/pdf,image/png,image/jpeg,text/plain,text/csv" />
+          <input type="file" name="file" multiple aria-label="Pièces à ajouter au dossier" accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,application/pdf,image/png,image/jpeg,text/plain,text/csv" />
           <button type="submit" className="btn-ghost" disabled={uploading}>
             {uploading ? "Envoi…" : "Ajouter"}
           </button>

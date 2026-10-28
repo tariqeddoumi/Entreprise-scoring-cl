@@ -53,7 +53,7 @@ function RoleSelect({
   ariaLabel?: string;
 }) {
   return (
-    <select name={name} defaultValue={defaultValue ?? "ANALYST"} aria-label={ariaLabel}>
+    <select name={name} defaultValue={defaultValue ?? "ANALYST"} aria-label={ariaLabel} style={{ minWidth: 170 }}>
       {Object.entries(ROLE_LABELS).map(([value, label]) => (
         <option key={value} value={value}>
           {label}
@@ -75,7 +75,7 @@ function EntitySelect({
   ariaLabel?: string;
 }) {
   return (
-    <select name="entityId" defaultValue={defaultValue ?? (allowGroup ? "" : entities[0]?.id)} aria-label={ariaLabel}>
+    <select name="entityId" defaultValue={defaultValue ?? (allowGroup ? "" : entities[0]?.id)} aria-label={ariaLabel} style={{ minWidth: 220 }}>
       {allowGroup && <option value="">— Groupe entier (administrateur) —</option>}
       {entities.map((e) => (
         <option key={e.id} value={e.id}>

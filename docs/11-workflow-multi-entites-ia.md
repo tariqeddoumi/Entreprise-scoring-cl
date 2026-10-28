@@ -144,4 +144,4 @@ La clé se trouve dans une variable d'environnement : `ANTHROPIC_API_KEY`, ou `I
 - **Taille des pièces sur Vercel.** Une requête ne dépasse pas 4,5 Mo : les pièces plus lourdes sont à découper, ou l'outil à héberger en interne.
 - **Clés d'API sans code d'entité.** Elles couvrent tout le groupe, comme avant. Les intégrations des filiales doivent recevoir une clé portant leur code.
 - **SQL Server.** L'unicité de `rating_cases.runId`, nullable, et celle déjà existante de `rating_runs.idempotencyKey` n'admettent qu'une valeur nulle. Un index filtré est à prévoir avant une mise en service sur ce moteur (D-28).
-- **Validité d'une notation.** Le paramètre est en place, mais aucune alerte d'échéance n'est encore produite.
+- **Validité d'une notation.** Les notes à renouveler sont listées dans la file « À traiter » ; aucune alerte n'est envoyée par courriel.

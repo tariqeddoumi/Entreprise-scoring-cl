@@ -171,8 +171,8 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable }: Pro
             Joignez un extrait du registre de commerce, une attestation ICE ou les statuts, ou collez un texte : la fiche est
             remplie, vous la relisez avant d&apos;enregistrer.
           </span>
-          <textarea name="text" rows={3} maxLength={20000} placeholder="Texte collé (facultatif)" />
-          <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" />
+          <textarea name="text" rows={3} maxLength={20000} placeholder="Texte collé (facultatif)" aria-label="Texte à lire par l'IA" />
+          <input type="file" name="file" aria-label="Pièce à lire par l'IA" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" />
           <button type="submit" className="btn-ghost" disabled={extracting} style={{ justifySelf: "start" }}>
             {extracting ? "Lecture en cours…" : "Pré-remplir"}
           </button>

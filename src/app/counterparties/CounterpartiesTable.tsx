@@ -143,7 +143,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                       </span>
                     )}
                   </td>
-                  <td className="muted">{c.entityCode}</td>
+                  <td className="muted nowrap">{c.entityCode}</td>
                   <td className="muted nowrap">{c.ice ?? "—"}</td>
                   <td className="muted">{c.currency}</td>
                   <td>{c.segment ?? "—"}</td>

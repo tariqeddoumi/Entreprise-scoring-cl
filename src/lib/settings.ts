@@ -70,7 +70,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Workflow",
     labelFr: "Validité d'une note (mois)",
     helpFr:
-      "Au-delà, la note est signalée « à revoir » dans la file À traiter. La politique de revue annuelle correspond à 12.",
+      "Au-delà, la contrepartie apparaît dans « Notes à renouveler » (file À traiter des dossiers). La politique de revue annuelle correspond à 12.",
     kind: "integer",
     default: "12",
     min: 1,

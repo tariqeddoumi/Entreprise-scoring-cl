@@ -12,12 +12,7 @@ const NAV = [
   { href: "/methodology", label: "Méthodologie" },
 ];
 
-const ADMIN_NAV = [
-  { href: "/admin/users", label: "Utilisateurs" },
-  { href: "/admin/entities", label: "Banques et filiales" },
-  { href: "/admin/currencies", label: "Devises" },
-  { href: "/admin/settings", label: "Paramétrage" },
-];
+const ADMIN_NAV = [{ href: "/admin", label: "Administration" }];
 
 /** Repère visuel de la page courante — un utilisateur qui navigue entre sept
  * écrans doit pouvoir savoir où il se trouve sans lire l'URL. */

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Prisma } from "@/generated/prisma";
 import { hasRole } from "@/lib/auth";
-import { CASE_STATUSES } from "@/lib/cases";
+import { CASE_STATUSES, OFFICIAL_RUN_WHERE } from "@/lib/cases";
+import { settingInt } from "@/lib/settings";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { GradeBadge } from "@/app/ui-helpers";
@@ -63,6 +64,28 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   );
   const count = (s: string) => data.counts.find((c) => c.status === s)?._count._all ?? 0;
 
+  // Notes à renouveler : dernière notation officielle plus ancienne que la
+  // durée de validité paramétrée (Paramétrage › Workflow).
+  const validityMonths = await settingInt("RATING_VALIDITY_MONTHS");
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - validityMonths);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const { data: renewals } = await safeQuery(
+    async (db) => {
+      const latest = await db.ratingRun.findMany({
+        where: OFFICIAL_RUN_WHERE,
+        distinct: ["counterpartyId"],
+        orderBy: [{ counterpartyId: "asc" }, { asOfDate: "desc" }, { createdAt: "desc" }],
+        select: { asOfDate: true, finalGrade: true, counterparty: { select: { id: true, name: true, isActive: true } } },
+      });
+      return latest
+        .filter((r) => r.counterparty.isActive && r.asOfDate < cutoffIso)
+        .sort((a, b) => a.asOfDate.localeCompare(b.asOfDate))
+        .slice(0, 50);
+    },
+    [] as Array<{ asOfDate: string; finalGrade: string | null; counterparty: { id: string; name: string; isActive: boolean } }>
+  );
+
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
@@ -97,6 +120,39 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
           </Link>
         ))}
       </nav>
+
+      {tab === "todo" && renewals.length > 0 && (
+        <section className="card" style={{ padding: 16 }}>
+          <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Notes à renouveler ({renewals.length})</h2>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+            Dernière notation validée arrêtée avant le {cutoffIso} (validité de {validityMonths} mois, Paramétrage › Workflow).
+          </p>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Contrepartie</th>
+                <th>Dernier arrêté validé</th>
+                <th>Grade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {renewals.map((r) => (
+                <tr key={r.counterparty.id}>
+                  <td>
+                    <Link href={`/counterparties/${r.counterparty.id}`} style={{ color: "var(--brand)" }}>
+                      {r.counterparty.name}
+                    </Link>
+                  </td>
+                  <td>{r.asOfDate}</td>
+                  <td>
+                    <GradeBadge grade={r.finalGrade} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="card" style={{ padding: 16 }}>
         {!dbAvailable ? (

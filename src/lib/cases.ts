@@ -225,6 +225,16 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   const c = await loadCase(db, caseId);
   if (c.status !== "DRAFT") throw new CaseError(409, "Seul un brouillon se soumet.");
   const { input, fx } = await buildInput(db, c, draft);
+  // Un dossier se soumet pour faire valider une NOTE : un calcul sans grade
+  // (donnée critique manquante, couverture insuffisante) se complète, il ne se
+  // valide pas — sinon une « absence de note » deviendrait la note officielle.
+  const check = simulateRating(input);
+  if (check.finalGrade === null) {
+    throw new CaseError(
+      409,
+      `Le calcul ne produit pas de grade : complétez le dossier avant de le soumettre. ${check.explanationFr}`
+    );
+  }
   try {
     return await executeRatingRun(db, identity, input, c.counterparty.id, undefined, undefined, async (tx, runId) => {
       const updated = await tx.ratingCase.updateMany({
