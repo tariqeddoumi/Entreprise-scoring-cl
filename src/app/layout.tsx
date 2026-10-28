@@ -5,6 +5,7 @@ import { inheritedBranding, loadTree } from "@/lib/scope";
 import { listModels } from "@/models";
 import { logoutAction } from "./login/actions";
 import { NavLinks } from "./nav-links";
+import { TableFocus } from "./TableFocus";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -72,7 +73,7 @@ export default async function RootLayout({
               )}
               {branding?.toolName ?? "Scoring Entreprises · Maroc"}
               {branding?.entityName && (
-                <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
+                <span className="muted site-entity" style={{ fontSize: 12, fontWeight: 400 }}>
                   {branding.entityName}
                 </span>
               )}
@@ -114,6 +115,7 @@ export default async function RootLayout({
           </div>
         </header>
         <main className="site-main">
+          <TableFocus />
           {children}
         </main>
         <footer className="no-print site-footer">

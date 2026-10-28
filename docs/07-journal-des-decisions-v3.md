@@ -524,8 +524,10 @@ Diagnostic des représentations du système deux à deux : base de production et
 - **Note officielle.** Seule une notation validée devient la note de la contrepartie : tableau de bord, liste et évolution entre deux notations. Les notations antérieures au workflow restent officielles. Une dérogation ne porte que sur une notation validée.
 - **API.** `POST /rating-runs` crée un dossier soumis et renvoie son identifiant. `GET /rating-cases` et `POST /rating-cases/{id}/decision` complètent le contrat.
 - **Écran retiré.** L'écran « Nouvelle notation » n'enregistre plus directement une notation : il ouvre un dossier, ou simule sans rien enregistrer.
+- **Pas de soumission sans grade.** Un dossier dont le calcul ne produit pas de grade (donnée critique manquante, couverture ou confiance insuffisantes) ne peut pas être soumis : il se complète. Sinon, une « absence de note » validée deviendrait la note officielle. Un défaut constaté reste soumissible, puisqu'il produit un grade DEF.
+- **Notes à renouveler.** La file « À traiter » liste les contreparties dont la dernière notation validée est plus ancienne que la durée de validité paramétrée (12 mois par défaut).
 
-*À confirmer par la banque :* le rôle du valideur, le seuil et le rôle de délégation, la durée de validité d'une notation (paramètre présent, sans effet sur le calcul).
+*À confirmer par la banque :* le rôle du valideur, le seuil et le rôle de délégation, la durée de validité d'une notation (elle alimente la liste des notes à renouveler, sans effet sur le calcul).
 
 ## D-48 — L'IA propose, l'analyste décide, et chaque décision est tracée — **À CONFIRMER**
 

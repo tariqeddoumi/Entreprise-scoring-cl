@@ -380,3 +380,37 @@ main li a {
   max-height: calc(100vh - 24px);
   overflow: auto;
 }
+
+/* Vue d'ensemble de l'administration. */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+.admin-card {
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--text);
+}
+.admin-card:hover,
+.admin-card:focus-visible {
+  border-color: var(--brand);
+}
+/* Nom de l'entité dans l'en-tête : tronqué, masqué sur petit écran. */
+.site-entity {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 760px) {
+  .site-entity {
+    display: none;
+  }
+}
+table.data[data-scroll-focus]:focus-visible,
+pre[data-scroll-focus]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
