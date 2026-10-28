@@ -34,6 +34,7 @@ tags:
   - name: Contreparties
   - name: Notation
   - name: Overrides
+  - name: Renotation
   - name: Webhooks
 
 paths:
@@ -355,6 +356,94 @@ paths:
         "403": { description: "Rôle insuffisant (délégation) ou valideur contributeur du dossier" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Dossier non soumis ou déjà décidé }
+
+  /renotation-batches:
+    get:
+      tags: [Renotation]
+      summary: Derniers lots de renotation du périmètre
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 30 }
+      responses:
+        "200": { description: "Lots, du plus récent au plus ancien, avec leur synthèse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+    post:
+      tags: [Renotation]
+      summary: Crée un lot de renotation (gestionnaire des risques)
+      description: |
+        Sélection par entité (et sa descendance), groupe d'affaires, segment,
+        préfixe de secteur, ancienneté de la dernière validation ou liste de
+        contreparties, dans le périmètre d'écriture de l'appelant. Chaque
+        contrepartie est renotée à partir de la saisie de sa dernière notation
+        validée, à la date d'arrêté du lot et avec la version courante du modèle,
+        après application des données rafraîchies (`refresh`). La notation
+        produite est une notation de surveillance (origine BATCH) : elle ne fait
+        jamais foi seule. Une migration d'au moins `notchThreshold` crans, une
+        absence de note ou un défaut ouvre un dossier de revue pré-rempli. Le lot
+        est traité par POST /renotation-batches/{id}/process ou par la tâche
+        planifiée.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RenotationBatchRequest" }
+      responses:
+        "201": { description: "Lot créé (statut QUEUED)" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { description: Sélection hors du périmètre d'écriture }
+        "409": { description: Aucune contrepartie ne correspond à la sélection }
+
+  /renotation-batches/{id}:
+    get:
+      tags: [Renotation]
+      summary: Avancement, synthèse et résultats d'un lot
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+        - name: movement
+          in: query
+          schema: { type: string, enum: [UNCHANGED, UPGRADE, DOWNGRADE, NO_RATING, DEFAULTED] }
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, PROCESSING, DONE, SKIPPED, ERROR] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5000, default: 500 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200": { description: "Lot et résultats par contrepartie (note avant, note après, crans, dossier de revue)" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /renotation-batches/{id}/process:
+    post:
+      tags: [Renotation]
+      summary: Traite une tranche du lot (environ 50 secondes)
+      description: |
+        À rappeler tant que le statut n'est pas DONE. Reprenable : une
+        contrepartie est réclamée avant d'être traitée, et la clé d'idempotence
+        de sa notation empêche toute double notation après une interruption.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: "Avancement : status, processed, total" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /renotation/cron:
+    get:
+      tags: [Renotation]
+      summary: Tâche planifiée (Vercel Cron ou crontab)
+      description: |
+        Crée les lots des planifications échues (date d'arrêté : fin du mois
+        précédent) et poursuit les lots en cours, chacun dans le périmètre de
+        la personne qui l'a créé. Authentifiée par `Authorization: Bearer
+        <CRON_SECRET>` ; fermée tant que CRON_SECRET n'est pas configuré.
+      security: []
+      responses:
+        "200": { description: "Lots créés et avancement des lots poursuivis" }
+        "401": { description: Secret absent ou invalide }
+        "503": { description: CRON_SECRET non configuré }
 
   /webhook-subscriptions:
     get:
@@ -757,6 +846,43 @@ components:
       properties:
         decision: { type: string, enum: [VALIDATED, REJECTED] }
         comment: { type: string, maxLength: 4000, description: "Obligatoire (10 caractères au moins) en cas de rejet" }
+
+    RenotationBatchRequest:
+      type: object
+      required: [name, asOfDate]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 3, maxLength: 120 }
+        asOfDate: { type: string, format: date, example: "2026-09-30" }
+        filters:
+          type: object
+          additionalProperties: false
+          properties:
+            entityId: { type: string, description: "Entité et sa descendance" }
+            economicGroupId: { type: string }
+            segment: { type: string, enum: [TPE, PME, GE] }
+            sectorPrefix: { type: string, maxLength: 30, example: C10 }
+            validatedBeforeMonths: { type: integer, minimum: 1, maximum: 120 }
+            counterpartyIds: { type: array, maxItems: 20000, items: { type: string } }
+        options:
+          type: object
+          additionalProperties: false
+          properties:
+            notchThreshold: { type: integer, minimum: 1, maximum: 10, default: 1 }
+            openCases: { type: boolean, default: true }
+        refresh:
+          type: array
+          maxItems: 20000
+          description: "Données rafraîchies : clés de champ du dossier (ex. criteria.D3.1.value), contrôlées contre la grille"
+          items:
+            type: object
+            required: [ref, updates]
+            additionalProperties: false
+            properties:
+              ref: { type: string, description: "ICE ou identifiant de la contrepartie" }
+              updates:
+                type: object
+                additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }] }
 
     OverrideRequest:
       type: object

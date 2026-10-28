@@ -23,7 +23,10 @@ export default async function CounterpartyPage({
   const { id } = await params;
 
   const { data, dbAvailable } = await safeQuery(async (db) => {
-      const counterparty = await db.counterparty.findUnique({ where: { id } });
+      const counterparty = await db.counterparty.findUnique({
+        where: { id },
+        include: { economicGroup: { select: { id: true, code: true, name: true } } },
+      });
       if (!counterparty) return null;
       // Historique sans les instantanés, qui pèsent plusieurs dizaines de
       // kilo-octets par run : seuls les deux derniers runs notés sont relus,
@@ -42,6 +45,7 @@ export default async function CounterpartyPage({
           cappedGrade: true,
           finalGrade: true,
           requestedBy: true,
+          origin: true,
           ratingCase: { select: { id: true, status: true } },
         },
       });
@@ -120,6 +124,21 @@ export default async function CounterpartyPage({
           ]
             .filter(Boolean)
             .join(" · ")}
+        </p>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Groupe d&apos;affaires :{" "}
+          {counterparty.economicGroup ? (
+            <Link href={`/groups/${counterparty.economicGroup.id}`} style={{ color: "var(--brand)" }}>
+              {counterparty.economicGroup.code} — {counterparty.economicGroup.name}
+            </Link>
+          ) : (
+            <>
+              aucun ·{" "}
+              <Link href="/groups" style={{ color: "var(--brand)" }}>
+                rattacher à un groupe
+              </Link>
+            </>
+          )}
         </p>
       </div>
 
@@ -271,6 +290,12 @@ export default async function CounterpartyPage({
                       <span className="muted" style={{ fontSize: 11 }}>
                         {" "}
                         {r.ratingCase.status === "REJECTED" ? "(rejetée)" : "(proposée, non validée)"}
+                      </span>
+                    )}
+                    {r.origin === "BATCH" && (
+                      <span className="muted" style={{ fontSize: 11 }} title="Notation de surveillance d'un lot : ne fait pas foi">
+                        {" "}
+                        (renotation par lot)
                       </span>
                     )}
                   </td>

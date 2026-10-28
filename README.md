@@ -64,6 +64,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Score de confiance et caps de qualité | Opérationnel |
 | Caps structurels et red flags | Opérationnel |
 | Dérogations sous double validation | Opérationnel |
+| Renotation par lot (groupe d'affaires, segment, secteur, entité), ponctuelle ou planifiée | Opérationnel |
 | Interface REST v1 + événements sortants signés | Opérationnel |
 | Persistance multi-dialecte | Schéma validé sur 4 dialectes |
 | Décision de crédit (moteur B) | Spécifié — `docs/02-prompt-maitre-v2.md` §8.2 |
@@ -181,6 +182,19 @@ Quatre principes contractuels :
 - **erreurs au format RFC 9457**, sans trace d'exécution.
 
 Les événements sortants sont signés en HMAC SHA-256 sur `timestamp . corps brut`, avec identifiant anti-rejeu et horodatage. Le consommateur doit vérifier la signature, rejeter au-delà de 300 secondes et rester idempotent.
+
+### Renotation par lot
+
+Écran **Renotation** (gestionnaire des risques) ou `POST /api/v1/renotation-batches`. Un lot :
+
+- **sélectionne** les contreparties actives du périmètre d'écriture, par banque ou filiale, **groupe d'affaires**, segment, préfixe de secteur ou ancienneté de la dernière validation ;
+- **renote** chacune à partir de la saisie de sa dernière notation validée, à la date d'arrêté du lot et avec la version courante du modèle, après application d'un **fichier de mise à jour** facultatif (CSV : `ice` puis des clés de champ, par exemple `criteria.D3.1.value`) contrôlé contre la grille ;
+- produit une **notation de surveillance** (origine `BATCH`) qui ne fait jamais foi seule : une migration d'au moins N crans, une absence de note ou un défaut **ouvre un dossier de revue** pré-rempli, instruit et validé selon le workflow normal ;
+- restitue une **matrice de migration**, le détail par contrepartie et un export CSV. Une contrepartie sans notation validée réutilisable (nouvelle relation, notation antérieure au workflow) est écartée avec son motif.
+
+Le traitement est **reprenable** : par tranches depuis l'écran, par la tâche planifiée `GET /api/v1/renotation/cron` (Vercel Cron, quotidienne, secret `CRON_SECRET`) ou par `npm run renotation:run` depuis la crontab d'un serveur de la banque. Une contrepartie n'est jamais notée deux fois. Les **planifications** (mensuelle, trimestrielle, semestrielle, annuelle, au jour choisi) créent un lot à chaque échéance, arrêté à la fin du mois précédent, dans le périmètre de la personne qui les a créées.
+
+Migration d'une base existante : `prisma/sql/05-renotation-groupes.sql`.
 
 ### Rôles et accès
 

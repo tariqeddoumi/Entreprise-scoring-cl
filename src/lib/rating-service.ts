@@ -39,6 +39,8 @@ export function simulateRating(input: RatingInput): RatingResult {
   return computeRating(model, input, engineOptions());
 }
 
+export type RunOrigin = "API" | "CASE" | "BATCH";
+
 export interface PersistedRun {
   runId: string;
   result: RatingResult;
@@ -68,7 +70,9 @@ export async function executeRatingRun(
    * transaction : un dossier ne peut pas pointer vers un run qui n'existe pas,
    * ni un run exister sans son dossier.
    */
-  link?: (tx: Prisma.TransactionClient, runId: string) => Promise<void>
+  link?: (tx: Prisma.TransactionClient, runId: string) => Promise<void>,
+  /** API, CASE (dossier) ou BATCH (renotation par lot, jamais officielle seule). */
+  origin: RunOrigin = "API"
 ): Promise<PersistedRun> {
   const model = getModel(input.modelId);
   if (!model) {
@@ -122,6 +126,7 @@ export async function executeRatingRun(
           inputSnapshot: stableStringify(input),
           resultSnapshot: stableStringify(result),
           requestedBy: identity.name,
+          origin,
           idempotencyKey,
         },
       });
@@ -150,6 +155,7 @@ export async function executeRatingRun(
           rawScore: result.rawScore,
           finalGrade: result.finalGrade,
           asOfDate: result.asOfDate,
+          origin,
         },
         correlationId,
       });
@@ -183,6 +189,9 @@ export async function executeRatingRun(
         : "rating.blocked",
     data: {
       runId: run.id,
+      // Une notation de lot est une surveillance : le consommateur aval doit
+      // pouvoir l'écarter sans deviner.
+      origin,
       counterpartyId,
       modelId: result.modelId,
       modelVersion: result.modelVersion,

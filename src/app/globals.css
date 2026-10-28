@@ -189,6 +189,21 @@ main li a {
   min-width: 0;
 }
 
+/* Écran moyen : neuf entrées ne tiennent plus sur la ligne de la marque ; la
+   navigation passe sur sa propre ligne au lieu de pousser la page en largeur. */
+@media (min-width: 761px) and (max-width: 1440px) {
+  .site-header {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
+  .site-nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+}
+
 /* Les dates ne se coupent pas en fin de ligne (« 2025-12- / 31 »). */
 .nowrap {
   white-space: nowrap;

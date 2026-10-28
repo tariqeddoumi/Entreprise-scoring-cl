@@ -45,8 +45,10 @@ export default async function DashboardPage() {
         db.counterparty.count(),
         db.ratingRun.count({ where: OFFICIAL_RUN_WHERE }),
         // Champs affichés seulement : les instantanés d'entrée et de résultat
-        // pèsent plusieurs dizaines de kilo-octets par run.
+        // pèsent plusieurs dizaines de kilo-octets par run. Les notations de
+        // lot (surveillance) ont leur propre écran : elles noieraient la liste.
         db.ratingRun.findMany({
+          where: { origin: { not: "BATCH" } },
           orderBy: { createdAt: "desc" },
           take: 10,
           select: {
@@ -57,6 +59,7 @@ export default async function DashboardPage() {
             rawScore: true,
             finalGrade: true,
             counterparty: { select: { name: true } },
+            origin: true,
             ratingCase: { select: { status: true } },
           },
         }),
@@ -109,6 +112,7 @@ export default async function DashboardPage() {
         rawScore: unknown;
         finalGrade: string | null;
         counterparty: { name: string };
+        origin: string;
         ratingCase: { status: string } | null;
       }>;
       gradeRows: Array<{

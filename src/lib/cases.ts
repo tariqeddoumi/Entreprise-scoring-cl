@@ -194,8 +194,12 @@ async function convertAmounts(
   }
 }
 
-/** Requête de notation validée par le schéma de l'API, à partir d'un brouillon. */
-async function buildInput(db: PrismaClient, c: { modelId: string; counterparty: { currency: string } }, draft: CaseDraft) {
+/**
+ * Requête de notation validée par le schéma de l'API, à partir d'un brouillon.
+ * Partagée par la soumission d'un dossier et la renotation par lot : un lot
+ * calcule exactement ce qu'aurait calculé le dossier.
+ */
+export async function buildInput(db: PrismaClient, c: { modelId: string; counterparty: { currency: string } }, draft: CaseDraft) {
   const model = getModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const { base, fx } = await convertAmounts(db, draft, c.counterparty.currency);
@@ -262,7 +266,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
         entityId: c.counterparty.entityId,
         detail: { runId, devise: fx?.currency ?? BASE_CURRENCY, cours: fx?.rate ?? 1 },
       });
-    });
+    }, "CASE");
   } catch (e) {
     if (e instanceof RatingServiceError) throw new CaseError(e.status, e.message);
     throw e;
@@ -399,16 +403,21 @@ export async function cancelCase(db: PrismaClient, identity: Identity, caseId: s
 
 /**
  * Filtre Prisma des notations officielles (même règle qu'`isOfficialRun`) :
- * validées, ou antérieures au workflow.
+ * validées, ou antérieures au workflow. Une notation de renotation par lot
+ * n'a pas de dossier mais ne fait jamais foi : c'est une surveillance.
  */
 export const OFFICIAL_RUN_WHERE = {
-  OR: [{ ratingCase: { is: null } }, { ratingCase: { is: { status: "VALIDATED" } } }],
+  OR: [
+    { ratingCase: { is: null }, origin: { not: "BATCH" } },
+    { ratingCase: { is: { status: "VALIDATED" } } },
+  ],
 };
 
 /**
  * Une notation fait foi si elle est validée, ou si elle précède le workflow
- * (notations historiques, sans dossier).
+ * (notations historiques, sans dossier), hors renotation par lot.
  */
-export function isOfficialRun(run: { ratingCase: { status: string } | null }): boolean {
-  return !run.ratingCase || run.ratingCase.status === "VALIDATED";
+export function isOfficialRun(run: { ratingCase: { status: string } | null; origin: string }): boolean {
+  if (run.ratingCase) return run.ratingCase.status === "VALIDATED";
+  return run.origin !== "BATCH";
 }

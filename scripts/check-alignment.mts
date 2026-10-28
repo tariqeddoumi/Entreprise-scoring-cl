@@ -567,6 +567,8 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
     ["src/app/cases/actions.ts", "decideOverrideAction", "src/app/api/v1/overrides/[id]/decision/route.ts", "POST"],
     ["src/app/counterparties/actions.ts", "createCounterpartyAction", "src/app/api/v1/counterparties/route.ts", "POST"],
     ["src/app/scoring/actions.ts", "simulateDraftAction", "src/app/api/v1/rating-runs/simulate/route.ts", "POST"],
+    ["src/app/renotation/actions.ts", "createBatchAction", "src/app/api/v1/renotation-batches/route.ts", "POST"],
+    ["src/app/renotation/actions.ts", "processBatchAction", "src/app/api/v1/renotation-batches/[id]/process/route.ts", "POST"],
   ];
   const fnBody = (src: string, re: RegExp) => { const m = src.match(re); return m ? m[0] : ""; };
   for (const [actionFile, action, routeFile, method] of PAIRS) {

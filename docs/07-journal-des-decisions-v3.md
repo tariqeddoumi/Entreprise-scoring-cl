@@ -556,6 +556,21 @@ Diagnostic des représentations du système deux à deux : base de production et
 - **Validation et repli.** Chaque valeur est validée par bornes et listes fermées. Une valeur invalide en base est ignorée au profit de la valeur par défaut, toujours la plus prudente.
 - **Droits et traçabilité.** Le paramétrage est réservé à l'administrateur du groupe ; chaque modification est journalisée (SETTINGS_UPDATED). Aucun secret n'est stocké en base.
 
+## D-50 — Une renotation par lot surveille, elle ne remplace pas la note validée — **À CONFIRMER**
+
+*Décision :*
+- **Source.** Chaque contrepartie est renotée à partir de la saisie de sa dernière notation validée, à la date d'arrêté du lot et avec la version courante du modèle, après application des données rafraîchies. Les valeurs reçues par fichier sont contrôlées comme une proposition de l'IA : une valeur hors grille est refusée, jamais appliquée.
+- **Statut du résultat.** La notation produite porte l'origine `BATCH` et ne fait jamais foi seule (`OFFICIAL_RUN_WHERE`). Une migration d'au moins N crans (1 par défaut), une absence de note ou un défaut ouvre un dossier de revue pré-rempli, soumis au workflow normal : saisie, soumission, validation par une seconde personne.
+- **Pas de saisie fabriquée.** Une contrepartie sans notation validée réutilisable — nouvelle relation, notation antérieure au workflow — est écartée avec son motif : on ne reconstitue pas une saisie qui n'existe pas.
+- **Sélection.** Entité et descendance, groupe d'affaires, segment, préfixe de secteur, ancienneté de la dernière validation, toujours dans le périmètre d'écriture de la personne qui lance ou planifie le lot.
+- **Exécution.** Traitement par tranches, reprenable ; chaque contrepartie est réclamée avant d'être traitée et sa notation porte une clé d'idempotence : une reprise après interruption ne note jamais deux fois. Une planification ne produit qu'un lot par échéance, même si la tâche planifiée s'exécute deux fois.
+- **Groupes d'affaires.** Le groupe sert à sélectionner et à lire ; il ne relève jamais une note. Le support groupe reste soumis aux quatre conditions documentées du modèle.
+
+*À confirmer par la banque :*
+- le seuil de migration qui déclenche une revue, et s'il doit différer à la hausse et à la baisse ;
+- si un grade inchangé en surveillance peut, au-delà de la durée de validité, prolonger la note sans nouvelle validation (aujourd'hui : non) ;
+- la fréquence de rafraîchissement des données comportementales (D3) fournies par la DSI et le format du fichier d'échange.
+
 ---
 
 # 3. Ce qui reste à décider par la banque
@@ -574,6 +589,7 @@ Diagnostic des représentations du système deux à deux : base de production et
 12. **Organisation et droits par entité** — hiérarchie des banques et filiales, portée d'écriture des équipes du siège (D-45).
 13. **Valideur et délégation** — rôle du valideur, seuil et rôle de délégation par montant (D-47).
 14. **Fournisseur d'IA et hébergement des données** — au regard de la loi 09-08 et de la politique d'externalisation ; types de pièces admis (D-48).
+15. **Renotation par lot** — seuil de migration qui déclenche une revue, prolongation éventuelle d'une note inchangée, fréquence et format des données comportementales de la DSI (D-50).
 
 ---
 
