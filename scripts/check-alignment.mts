@@ -558,6 +558,28 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
   }
 }
 
+{
+  console.log("\n9. Mêmes droits à l'écran et par l'API\n");
+  // Une opération offerte par l'écran et par l'API exige le même rôle des deux
+  // côtés (D-43) : sinon l'écran ouvre ce que l'API ferme, ou l'inverse.
+  const PAIRS: Array<[string, string, string, string]> = [
+    ["src/app/cases/actions.ts", "requestOverrideAction", "src/app/api/v1/overrides/route.ts", "POST"],
+    ["src/app/cases/actions.ts", "decideOverrideAction", "src/app/api/v1/overrides/[id]/decision/route.ts", "POST"],
+    ["src/app/counterparties/actions.ts", "createCounterpartyAction", "src/app/api/v1/counterparties/route.ts", "POST"],
+    ["src/app/scoring/actions.ts", "simulateDraftAction", "src/app/api/v1/rating-runs/simulate/route.ts", "POST"],
+  ];
+  const fnBody = (src: string, re: RegExp) => { const m = src.match(re); return m ? m[0] : ""; };
+  for (const [actionFile, action, routeFile, method] of PAIRS) {
+    const a = fnBody(readFileSync(actionFile, "utf8"), new RegExp(`export async function ${action}\\([\\s\\S]*?^}`, "m"));
+    const r = fnBody(readFileSync(routeFile, "utf8"), new RegExp(`export async function ${method}\\([\\s\\S]*?^}`, "m"));
+    const aRole = a.match(/getSessionIdentity\("([A-Z_]+)"\)/)?.[1];
+    const rRole = r.match(/guard\(req, "([A-Z_]+)"/)?.[1];
+    if (!aRole || !rRole) fail(`${action} / ${method} ${routeFile} : rôle introuvable`);
+    else if (aRole !== rRole) fail(`${action} exige ${aRole}, ${method} ${routeFile.replace("src/app/api/v1", "")} exige ${rRole}`);
+    else ok(`${action} et ${method} ${routeFile.replace("src/app/api/v1", "").replace("/route.ts", "")} : ${aRole}`);
+  }
+}
+
 console.log(
   failures === 0
     ? "\nAlignement complet : aucune divergence.\n"

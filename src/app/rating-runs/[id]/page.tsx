@@ -68,7 +68,7 @@ export default async function RatingRunPage({
   const maxNotches = await settingInt("OVERRIDE_MAX_NOTCHES");
   const canRequestOverride =
     official &&
-    hasRole(identity.role, "ANALYST") &&
+    hasRole(identity.role, "RISK_MANAGER") &&
     !!run.cappedGrade &&
     !run.cappedGrade.startsWith("DEF") &&
     !run.overrides.some((o) => o.status === "PENDING") &&
