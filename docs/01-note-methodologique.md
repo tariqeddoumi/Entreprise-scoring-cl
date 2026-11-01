@@ -2,7 +2,7 @@
 
 ## Contreparties TPE, PME et Grandes Entreprises — contexte bancaire marocain
 
-**Version :** 2.0 · **Date :** 19 août 2026
+**Version :** 3.1 · **Date :** 1er novembre 2026 · **Moteur :** 3.1.0
 **Destinataires :** Direction générale, Direction des Risques, Comité modèles, Validation indépendante, Finance et IFRS 9, Conformité et Juridique, Direction des Systèmes d'Information
 **Classification :** usage interne
 
@@ -21,22 +21,27 @@
 2. Décisions sollicitées
 3. Proposition de valeur
 4. Choix structurants
-5. Risques de mise en œuvre et réponses
-6. Feuille de route
+5. Profil de pondération
+6. Risques de mise en œuvre et réponses
+7. Feuille de route
 
 **Partie II — Méthodologie du modèle**
-7. Objectifs et philosophie
-8. Périmètre, unité de notation et segmentation
-9. Architecture de calcul
-10. Justification économique des sept domaines
-11. Qualité des données et niveau de confiance
-12. Caps, red flags et dérogations
-13. Séparation avec la classification réglementaire, IFRS 9 et le capital
-14. Exemples de calcul complets
+8. Objectifs et philosophie
+9. Périmètre, unité de notation et segmentation
+10. Architecture de calcul
+11. Justification économique des sept domaines
+12. Qualité des données et niveau de confiance
+12 bis. Bilan, ratios et base financière de la notation
+13. Caps, red flags et dérogations
+14. Séparation avec la classification réglementaire, IFRS 9 et le capital
+15. Exemples de calcul complets
 
 **Partie III — Grilles détaillées** *(générées depuis le moteur)*
-15. Modèle standard CORP_STD_V1
-16. Modèle TPE comportemental CORP_TPE_BEHAV_V1
+16. Corrections du diagnostic du 1er novembre 2026 et grilles challenger
+16.1 Modèle standard CORP_STD_V1
+16.2 Modèle TPE comportemental CORP_TPE_BEHAV_V1
+16.3 Grille challenger standard CORP_STD_CHALLENGER_V1 (pilote)
+16.4 Grille challenger TPE CORP_TPE_CHALLENGER_V1 (pilote)
 
 **Partie IV — L'outil**
 17. Principes d'architecture
@@ -436,7 +441,7 @@ Résultat moteur : **G4 — Bon**. Un soutien de groupe ne modifie aucun score �
 
 > **Section générée automatiquement depuis la configuration exécutée par le moteur** (`src/models/`), au moyen de `scripts/generate-model-doc.mts`. Toute modification d'un poids, d'un seuil ou d'un ancrage dans le code se répercute ici à la régénération. Cette section ne peut donc pas diverger du calcul réellement appliqué.
 
-## 16 bis. Corrections du diagnostic du 1er novembre 2026 et grilles challenger
+## 16. Corrections du diagnostic du 1er novembre 2026 et grilles challenger
 
 Le diagnostic indépendant du 1er novembre 2026 (documents 01 à 03 et plan d'actions) a reproduit cinq défauts métier et relevé sept écarts de conception. Le moteur 3.1.0 et les grilles 3.1.0 les corrigent :
 
@@ -520,7 +525,7 @@ L'interface est décrite en OpenAPI 3.1 (`openapi.yaml`). Quatre principes la go
 
 **L'identité provient toujours du jeton**, jamais du corps de requête. Le champ identifiant l'auteur d'une exécution est renseigné par le serveur depuis le contexte de sécurité.
 
-**Le client ne fournit jamais un poids, une formule ni un score final.** Il transmet des observations — valeurs mesurées et scores qualitatifs ancrés. Le serveur applique les poids et barèmes de la version publiée et recalcule intégralement.
+**Le client ne fournit jamais un poids, une formule ni un score final.** Il transmet des observations — valeurs mesurées et scores qualitatifs ancrés. Le serveur applique les poids et barèmes de la version publiée et recalcule intégralement. La base financière (`financialBasis` : bilan, indicateurs, ratios calculés et retenus, contrôles) peut accompagner la requête ; elle est conservée dans l'instantané d'entrée et restituée sur la fiche, sans effet sur le calcul.
 
 **Les créations et calculs sont idempotents.** Une clé d'idempotence identique retourne l'exécution existante plutôt que d'en créer une seconde, contradictoire.
 
@@ -610,7 +615,11 @@ L'interface est intégralement consommatrice de la même logique que l'interface
 
 **Contreparties** — référentiel avec dernière notation connue, score et date d'arrêté.
 
+**Dossier de notation** — le bilan et le CPC (exercices N et N−1, N−2 facultatif) se chargent en tête du dossier : lecture par l'IA d'un PDF, d'une photo ou d'un Excel, gabarit Excel de la banque, ou saisie. Les contrôles (équilibre, totaux, résultat, fraîcheur) s'affichent sous le tableau ; les ratios de la grille sont calculés par l'outil et ne se corrigent qu'avec un motif. Les pièces, l'assistance de l'IA et l'historique du dossier sont à côté de la grille.
+
 **Notation** — le formulaire est **généré depuis la version de modèle publiée**, jamais codé en dur. Chaque critère affiche son libellé, sa description, son poids pour le segment sélectionné, son état de donnée, le barème ou les cinq ancrages, et son caractère critique. Le changement de segment recompose immédiatement le formulaire avec les poids et barèmes correspondants.
+
+**Fiche de notation** — en tête, la base financière de la notation : exercice, date de clôture, modèle comptable, certification, pièce source et son empreinte, postes clés, ratios calculés et retenus avec le motif de toute correction, tous les indicateurs (y compris hors grille) et les contrôles du bilan, tels qu'ils ont été figés à la soumission.
 
 **Résultat** — score brut, grade moteur, grade après caps, niveau de confiance, statut de calibration, décomposition par domaine puis par critère, caps appliqués avec leur source, red flags avec leur traitement, avertissements et motifs de blocage.
 

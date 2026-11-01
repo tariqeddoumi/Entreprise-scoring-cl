@@ -244,9 +244,9 @@ function renderModel(model: ModelConfig, title: string) {
   w();
 }
 
-renderModel(CORP_STD_V1, "Modèle standard — CORP_STD_V1");
-renderModel(CORP_TPE_BEHAV_V1, "Modèle TPE comportemental — CORP_TPE_BEHAV_V1");
-renderModel(CORP_STD_CHALLENGER_V1, "Grille challenger standard — CORP_STD_CHALLENGER_V1 (pilote)");
-renderModel(CORP_TPE_CHALLENGER_V1, "Grille challenger TPE comportementale — CORP_TPE_CHALLENGER_V1 (pilote)");
+renderModel(CORP_STD_V1, "16.1 Modèle standard — CORP_STD_V1");
+renderModel(CORP_TPE_BEHAV_V1, "16.2 Modèle TPE comportemental — CORP_TPE_BEHAV_V1");
+renderModel(CORP_STD_CHALLENGER_V1, "16.3 Grille challenger standard — CORP_STD_CHALLENGER_V1 (pilote)");
+renderModel(CORP_TPE_CHALLENGER_V1, "16.4 Grille challenger TPE comportementale — CORP_TPE_CHALLENGER_V1 (pilote)");
 
 process.stdout.write(out.join("\n"));
