@@ -25,7 +25,7 @@ export function validateModel(model: ModelConfig): string[] {
   // Plafond de concentration : aucune variable isolée ne doit déterminer la
   // note. Le seuil est plus élevé sur le modèle comportemental, où les
   // retards de paiement sont la variable la plus discriminante disponible.
-  const maxWeightBps = model.modelId === "CORP_TPE_BEHAV_V1" ? 800 : 600;
+  const maxWeightBps = model.concentrationCapBps ?? (model.modelId === "CORP_TPE_BEHAV_V1" ? 800 : 600);
   for (const c of model.criteria) {
     for (const seg of model.segments) {
       const w = c.weightsBps[seg] ?? 0;

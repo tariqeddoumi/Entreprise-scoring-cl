@@ -145,6 +145,51 @@ export function applicationSchemaError(
   );
 }
 
+/**
+ * Forme de DATABASE_URL, contrôlée avant toute requête (incident Vercel du
+ * 30 octobre 2026 : « the URL must start with the protocol postgresql:// »,
+ * restitué à l'écran comme une base qui ne répond pas). Les erreurs courantes
+ * — variable vide, guillemets ou espaces recopiés, nom de la variable collé
+ * dans la valeur, mauvais protocole — sont nommées sans jamais afficher la
+ * valeur, qui contient le mot de passe.
+ */
+export function databaseUrlError(databaseUrl: string | undefined, provider: DbProvider): string | null {
+  if (provider === "sqlite") return null;
+  const raw = databaseUrl ?? "";
+  if (raw.trim() === "") {
+    return "DATABASE_URL est absente ou vide : renseignez la chaîne de connexion dans les variables d'environnement de l'hébergeur, puis redéployez.";
+  }
+  if (raw !== raw.trim()) {
+    return "DATABASE_URL commence ou finit par un espace ou un retour à la ligne : retirez-le dans les variables d'environnement, puis redéployez.";
+  }
+  if (/^["']|["']$/.test(raw)) {
+    return "DATABASE_URL est entourée de guillemets : dans les variables d'environnement de l'hébergeur, saisissez la valeur sans guillemets, puis redéployez.";
+  }
+  if (/^[A-Z_]+=/.test(raw)) {
+    return "DATABASE_URL contient « NOM= » au début de sa valeur : ne collez que la chaîne de connexion, sans le nom de la variable.";
+  }
+  const expected: Record<DbProvider, RegExp> = {
+    postgresql: /^postgres(ql)?:\/\//,
+    mysql: /^mysql:\/\//,
+    sqlserver: /^sqlserver:\/\//,
+    sqlite: /^file:/,
+  };
+  if (!expected[provider].test(raw)) {
+    const scheme = raw.match(/^([a-z0-9+.-]+):\/\//i)?.[1];
+    return `DATABASE_URL doit commencer par ${provider === "postgresql" ? "postgresql://" : `${provider}://`}${scheme ? ` (protocole reçu : « ${scheme}:// »)` : " (aucun protocole reconnu)"} : copiez la chaîne de connexion de la base (Supabase › Connect › Transaction pooler), puis redéployez.`;
+  }
+  return null;
+}
+
+/** Problème de configuration de la base, ou null : lu par les écrans pour un message exact. */
+export function databaseConfigProblem(): string | null {
+  const provider = (process.env.DATABASE_PROVIDER?.trim() || "postgresql").toLowerCase() as DbProvider;
+  return (
+    databaseUrlError(process.env.DATABASE_URL, provider) ??
+    applicationSchemaError(process.env.DATABASE_URL, provider, process.env.NODE_ENV === "production")
+  );
+}
+
 let cached: AppConfig | null = null;
 
 export function config(): AppConfig {

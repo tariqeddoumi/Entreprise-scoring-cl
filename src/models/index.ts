@@ -2,6 +2,7 @@ import type { ModelConfig } from "@/core/types";
 import { validateModel } from "@/core/validate-model";
 import { CORP_STD_V1 } from "./corp-std-v1";
 import { CORP_TPE_BEHAV_V1 } from "./corp-tpe-behav-v1";
+import { CORP_STD_CHALLENGER_V1, CORP_TPE_CHALLENGER_V1 } from "./corp-challengers";
 
 /**
  * Registre des versions de modèle embarquées (seeds).
@@ -10,7 +11,7 @@ import { CORP_TPE_BEHAV_V1 } from "./corp-tpe-behav-v1";
  * le démarrage plutôt que de produire des résultats faux.
  */
 const registry: Record<string, ModelConfig> = Object.fromEntries(
-  [CORP_STD_V1, CORP_TPE_BEHAV_V1].map((m) => {
+  [CORP_STD_V1, CORP_TPE_BEHAV_V1, CORP_STD_CHALLENGER_V1, CORP_TPE_CHALLENGER_V1].map((m) => {
     const issues = validateModel(m);
     if (issues.length > 0) {
       throw new Error(
@@ -29,4 +30,4 @@ export function listModels(): ModelConfig[] {
   return Object.values(registry);
 }
 
-export { CORP_STD_V1, CORP_TPE_BEHAV_V1 };
+export { CORP_STD_V1, CORP_TPE_BEHAV_V1, CORP_STD_CHALLENGER_V1, CORP_TPE_CHALLENGER_V1 };

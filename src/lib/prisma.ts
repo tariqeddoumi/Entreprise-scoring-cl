@@ -1,5 +1,5 @@
 import { PrismaClient } from "@/generated/prisma";
-import { applicationSchemaError, type DbProvider } from "./env";
+import { databaseConfigProblem } from "./env";
 
 /**
  * Client Prisma singleton (pattern recommandé Next.js).
@@ -9,18 +9,13 @@ import { applicationSchemaError, type DbProvider } from "./env";
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
 /**
- * Garde-fou de schéma : en production, une chaîne de connexion PostgreSQL qui
- * ne désigne pas le schéma applicatif ne reçoit aucune requête. Toute
+ * Garde-fou de configuration : une chaîne de connexion mal formée, ou qui ne
+ * désigne pas le schéma applicatif en production, ne reçoit aucune requête. Toute
  * utilisation du client lève l'erreur explicative, que les écrans traitent
  * comme une base indisponible et que les journaux du serveur restituent.
  */
 function createClient(): PrismaClient {
-  const provider = (process.env.DATABASE_PROVIDER?.trim() || "postgresql").toLowerCase() as DbProvider;
-  const message = applicationSchemaError(
-    process.env.DATABASE_URL,
-    provider,
-    process.env.NODE_ENV === "production"
-  );
+  const message = databaseConfigProblem();
   if (!message) return new PrismaClient();
 
   console.error(`[configuration] ${message}`);

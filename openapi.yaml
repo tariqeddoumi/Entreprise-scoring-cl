@@ -472,6 +472,7 @@ paths:
                       - rating.completed
                       - rating.blocked
                       - rating.overridden
+                      - rating.override_expired
                       - counterparty.updated
                       - "*"
       responses:
@@ -637,15 +638,36 @@ components:
         materiality:
           type: object
           description: >
-            Matérialité des risques conditionnels. Un critère soumis à une porte de
-            matérialité (D7.1, D7.2) n'est évalué que si l'indicateur vaut true ;
-            sinon il est écarté et son poids transféré au critère désigné par le
-            modèle, quelle que soit la valeur transmise.
+            Matérialité des risques conditionnels, à trois états : true matériel,
+            false non matériel, absent inconnu. Un critère soumis à une porte de
+            matérialité (D7.1, D7.2) n'est écarté — poids transféré au critère
+            désigné par le modèle — que sur false accompagné d'une justification
+            dans materialityEvidence. Inconnu : critère évalué et signalé pour revue.
           properties:
             esgPhysicalMaterial: { type: boolean }
             esgTransitionMaterial: { type: boolean }
             esgComplianceMaterial: { type: boolean, description: Aucun critère ne s'y rattache dans la version actuelle }
             covenantsMaterial: { type: boolean, description: Aucun critère ne s'y rattache dans la version actuelle }
+        materialityEvidence:
+          type: object
+          description: Justification d'une non-matérialité déclarée (référence de pièce, analyse) ; 500 caractères au plus.
+          properties:
+            esgPhysicalMaterial: { type: string, maxLength: 500 }
+            esgTransitionMaterial: { type: string, maxLength: 500 }
+            esgComplianceMaterial: { type: string, maxLength: 500 }
+            covenantsMaterial: { type: string, maxLength: 500 }
+        routing:
+          type: object
+          required: [reliableFinancialStatements, behavioralHistoryMonths]
+          description: >
+            Éléments de routage. Le serveur en déduit la famille de modèle :
+            standard avec des comptes exploitables, comportementale pour une TPE
+            sans comptes fiables et avec 24 mois d'historique au moins. Un modèle
+            d'une autre famille refuse le dossier (NO_RATING_ROUTED_OTHER_MODEL).
+            Obligatoire pour le modèle comportemental.
+          properties:
+            reliableFinancialStatements: { type: boolean }
+            behavioralHistoryMonths: { type: integer, minimum: 0, maximum: 600 }
         groupSupport:
           type: object
           required: [claimed]
@@ -732,6 +754,18 @@ components:
         segmentSource: { type: string, enum: [PROVIDED, COMPUTED, UNDETERMINED] }
         segmentationRulesetId: { type: string }
         asOfDate: { type: string, format: date }
+        scoreUpperBound:
+          type: number
+          nullable: true
+          description: >
+            Borne haute du score : chaque information absente supposée au meilleur
+            niveau. Le grade repose sur rawScore, borne basse (une absence ne vaut
+            jamais mieux qu'une mauvaise valeur).
+        mandatoryReviewsFr:
+          type: array
+          items: { type: string }
+          description: Revues risques obligatoires déclenchées par un ratio sous son seuil ; aucune décision automatique.
+        routingFr: { type: string, nullable: true, description: Décision de routage du serveur. }
         rawScore:
           type: number
           nullable: true

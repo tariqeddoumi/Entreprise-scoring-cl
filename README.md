@@ -203,7 +203,7 @@ Migration d'une base existante : `prisma/sql/05-renotation-groupes.sql`.
 | Accès | Qui | Comment |
 |---|---|---|
 | Interface web | Personnes | Compte nominatif : identifiant et mot de passe, créés par un administrateur depuis l'écran **Utilisateurs** (ou `npm run users:create` pour le premier) |
-| API REST | Systèmes | Clé porteuse, `Authorization: Bearer <clé>`, configurée via `API_KEYS="<clé>:<rôle>:<nom>;…"` |
+| API REST | Systèmes | Clé porteuse, `Authorization: Bearer <clé>`, configurée via `API_KEYS="<clé>:<rôle>:<nom>:<code entité ou *>;…"` — sans code d'entité, la clé n'ouvre aucun accès ; `*` donne la portée groupe, réservée aux systèmes centraux approuvés |
 
 Une clé API n'ouvre pas de session dans l'interface, et une session de l'interface n'ouvre pas l'API.
 

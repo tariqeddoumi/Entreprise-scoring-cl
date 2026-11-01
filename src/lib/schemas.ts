@@ -49,10 +49,11 @@ export const structuralFlagsSchema = z
   .strict();
 
 /**
- * Matérialité des risques conditionnels (constat H09).
+ * Matérialité des risques conditionnels (constat H09, diagnostic M03).
  *
- * Renseignée depuis le référentiel sectoriel et la localisation des sites : un
- * critère ESG n'est évalué que si l'exposition existe.
+ * Trois états : true matériel, false non matériel (à justifier dans
+ * materialityEvidence), absent inconnu. Seul un « non matériel » justifié écarte
+ * le critère.
  */
 export const materialitySchema = z
   .object({
@@ -98,6 +99,23 @@ export const ratingRequestSchema = z
     confidence: confidenceSchema,
     structuralFlags: structuralFlagsSchema.optional(),
     materiality: materialitySchema.optional(),
+    materialityEvidence: z
+      .object({
+        esgPhysicalMaterial: z.string().max(500).optional(),
+        esgTransitionMaterial: z.string().max(500).optional(),
+        esgComplianceMaterial: z.string().max(500).optional(),
+        covenantsMaterial: z.string().max(500).optional(),
+      })
+      .strict()
+      .optional(),
+    /** Éléments de routage : le serveur en déduit la famille de modèle (diagnostic M06). */
+    routing: z
+      .object({
+        reliableFinancialStatements: z.boolean(),
+        behavioralHistoryMonths: z.number().int().min(0).max(600),
+      })
+      .strict()
+      .optional(),
     groupSupport: groupSupportSchema.optional(),
     redFlags: z
       .array(z.string().regex(/^RF\d{2}$/, "Code de red flag attendu au format RFnn"))
@@ -151,6 +169,7 @@ export const webhookSubscriptionSchema = z
           "rating.completed",
           "rating.blocked",
           "rating.overridden",
+          "rating.override_expired",
           "counterparty.updated",
           "*",
         ])

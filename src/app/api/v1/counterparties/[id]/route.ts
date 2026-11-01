@@ -55,16 +55,19 @@ export async function PATCH(
     });
 
     // L'événement « counterparty.updated » était proposé à la souscription
-    // (contrat OpenAPI, validation) sans jamais être émis (D-43). Publication
-    // après validation de la transaction, au mieux, comme pour les notations.
-    void publishEvent({
-      type: "counterparty.updated",
-      data: {
-        counterpartyId: id,
-        changedFields: Object.keys(body.value).sort(),
-        isActive: updated.isActive,
+    // (contrat OpenAPI, validation) sans jamais être émis (D-43). Il passe par
+    // l'outbox et n'est livré qu'aux souscriptions du périmètre de l'entité.
+    void publishEvent(
+      {
+        type: "counterparty.updated",
+        data: {
+          counterpartyId: id,
+          changedFields: Object.keys(body.value).sort(),
+          isActive: updated.isActive,
+        },
       },
-    }).catch(() => undefined);
+      updated.entityId
+    ).catch(() => undefined);
 
     return ok(updated);
   } catch (e) {

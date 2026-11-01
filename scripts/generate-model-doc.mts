@@ -9,7 +9,12 @@
  *
  * Usage : npx tsx scripts/generate-model-doc.mts > docs/_grilles-generees.md
  */
-import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "../src/models/index.js";
+import {
+  CORP_STD_CHALLENGER_V1,
+  CORP_STD_V1,
+  CORP_TPE_BEHAV_V1,
+  CORP_TPE_CHALLENGER_V1,
+} from "../src/models/index.js";
 import type { Bin, CriterionConfig, ModelConfig, Segment } from "../src/core/types.js";
 
 const out: string[] = [];
@@ -241,5 +246,7 @@ function renderModel(model: ModelConfig, title: string) {
 
 renderModel(CORP_STD_V1, "Modèle standard — CORP_STD_V1");
 renderModel(CORP_TPE_BEHAV_V1, "Modèle TPE comportemental — CORP_TPE_BEHAV_V1");
+renderModel(CORP_STD_CHALLENGER_V1, "Grille challenger standard — CORP_STD_CHALLENGER_V1 (pilote)");
+renderModel(CORP_TPE_CHALLENGER_V1, "Grille challenger TPE comportementale — CORP_TPE_CHALLENGER_V1 (pilote)");
 
 process.stdout.write(out.join("\n"));

@@ -60,7 +60,7 @@ const criteria: CriterionConfig[] = [
       "> 30 jours, dépassement permanent, compte bloqué ou absence d'autorisation"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B1.3",
@@ -90,7 +90,7 @@ const criteria: CriterionConfig[] = [
       "> 100 % non autorisé ou besoin structurel non financé"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B1.5",
@@ -106,7 +106,7 @@ const criteria: CriterionConfig[] = [
       "Incident grave/non régularisé, interdiction ou signal bloquant"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // --- B2 — Capacité par flux (20 %) ---------------------------------------
@@ -145,7 +145,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B2.3",
@@ -160,8 +160,7 @@ const criteria: CriterionConfig[] = [
       "16–30 jours débiteurs ou solde < 10 jours de charges",
       "> 30 jours débiteurs ou rupture de trésorerie"
     ),
-    unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailablePolicy: "BLOCK",
   },
   {
     code: "B2.4",
@@ -174,7 +173,7 @@ const criteria: CriterionConfig[] = [
     weightsBps: { TPE: 400 },
     binsBySegment: { ALL: bins5("HIGHER_IS_BETTER", [1.3, 1.15, 1.0, 0.8]) },
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // --- B3 — Activité (18 %) -------------------------------------------------
@@ -192,7 +191,7 @@ const criteria: CriterionConfig[] = [
       "S5 — secteur très vulnérable/crise structurelle"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B3.2",
@@ -212,7 +211,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B3.3",
@@ -228,7 +227,7 @@ const criteria: CriterionConfig[] = [
       "Concentration critique, mono-client ou mono-source vital"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B3.4",
@@ -244,7 +243,7 @@ const criteria: CriterionConfig[] = [
       "< P10, négative ou non fiable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B3.5",
@@ -260,7 +259,7 @@ const criteria: CriterionConfig[] = [
       "Aucune visibilité, carnet artificiel ou arrêt prévisible"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // --- B4 — Management (12 %) -----------------------------------------------
@@ -278,7 +277,7 @@ const criteria: CriterionConfig[] = [
       "Incompétence manifeste ou information trompeuse"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B4.2",
@@ -294,7 +293,7 @@ const criteria: CriterionConfig[] = [
       "Indisponibilité compromettant immédiatement l'activité"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B4.3",
@@ -310,7 +309,7 @@ const criteria: CriterionConfig[] = [
       "Absence de contrôle ou irrégularités"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B4.4",
@@ -326,7 +325,7 @@ const criteria: CriterionConfig[] = [
       "Continuité immédiatement menacée"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // --- B5 — Transparence et conformité (12 %) --------------------------------
@@ -344,7 +343,7 @@ const criteria: CriterionConfig[] = [
       "Documents faux/refusés ou activité non autorisée"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B5.2",
@@ -380,7 +379,7 @@ const criteria: CriterionConfig[] = [
       "Dette non soutenable ou mesure d'exécution majeure"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "B5.4",
@@ -396,25 +395,27 @@ const criteria: CriterionConfig[] = [
       "UBO impossible à établir ou blocage KYC"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // --- B6 — Groupe / support (5 %) -------------------------------------------
   {
     code: "B6.1",
     domainCode: "B6",
-    labelFr: "Groupe, garant et soutien démontré",
+    labelFr: "Groupe et liens actionnariaux (hors soutien)",
+    descriptionFr:
+      "Risque propre lié au groupe : contagion, ponctions de trésorerie, dépendance. Le soutien n'apporte aucun point dans la note de base (diagnostic M11) ; il relève de la méthode de support groupe.",
     type: "QUALITATIVE",
     weightsBps: { TPE: 500 },
     anchors: anchors(
-      "Support juridiquement engageant d'un tiers très solide, historique démontré",
-      "Soutien documenté mais non totalement contraignant",
-      "Entité autonome sans besoin de support",
-      "Soutien incertain ou garant lui-même fragile",
-      "Groupe en difficulté, ponctions de cash ou soutien promis non honoré"
+      "Aucun lien de groupe, ou groupe sain sans flux ni dépendance de trésorerie",
+      "Flux de groupe limités, documentés et à des conditions normales",
+      "Flux ou dépendance de groupe matériels, sans difficulté connue",
+      "Groupe fragile ou remontées de trésorerie excessives",
+      "Groupe en difficulté, ponctions de cash ou contagion probable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // --- B7 — ESG / climat (3 %) -----------------------------------------------
@@ -432,7 +433,7 @@ const criteria: CriterionConfig[] = [
       "Activité menacée à court terme sans solution viable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 ];
 
@@ -449,9 +450,13 @@ const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
 
 export const CORP_TPE_BEHAV_V1: ModelConfig = {
   modelId: "CORP_TPE_BEHAV_V1",
-  version: "3.0.0",
+  version: "3.1.0",
   labelFr: "Modèle TPE comportemental — flux bancaires et informations alternatives",
   status: "DRAFT_EXPERT_SEED",
+  routeFamily: "BEHAVIORAL",
+  mandatoryReviews: [
+    { criterion: "B2.1", operator: "LT", threshold: 1, labelFr: "service de la dette non couvert par les flux observés" },
+  ],
   effectiveFrom: "2026-09-17",
   conventionFr: "Score 100 = risque le plus faible ; score 0 = risque le plus élevé.",
   segments: ["TPE"],

@@ -236,7 +236,10 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   if (check.finalGrade === null) {
     throw new CaseError(
       409,
-      `Le calcul ne produit pas de grade : complétez le dossier avant de le soumettre. ${check.explanationFr}`
+      `Le calcul ne produit pas de grade : complétez le dossier avant de le soumettre. ${check.explanationFr}` +
+        // Le motif exact (critère du noyau obligatoire non instruit, routage…)
+        // est nommé : « donnée critique manquante » seul laissait chercher.
+        (check.blockingReasonsFr.length > 0 ? ` À compléter : ${check.blockingReasonsFr.slice(0, 6).join(" ; ")}` : "")
     );
   }
   try {

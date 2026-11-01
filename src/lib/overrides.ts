@@ -6,7 +6,7 @@ import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import type { overrideRequestSchema } from "./schemas";
 import { settingInt } from "./settings";
-import { publishEvent } from "./webhooks";
+import { dispatchOutbox, enqueueEvent } from "./webhooks";
 
 /**
  * Dérogations (maker-checker) — chemin unique de l'API et de l'écran.
@@ -74,6 +74,9 @@ export async function requestOverride(
   if (pending) {
     throw new OverrideError(409, "Une dérogation est déjà en attente de décision sur ce run.", `Dérogation ${pending.id}.`);
   }
+  // Le contrôle ci-dessus ne protège pas de deux demandes simultanées : l'index
+  // unique partiel « une seule dérogation en attente par run » (SQL 06) le
+  // fait, et sa violation est traduite en conflit métier.
 
   const model = getModel(run.modelId);
   if (!model) throw new OverrideError(500, "Version de modèle du run indisponible.");
@@ -96,31 +99,40 @@ export async function requestOverride(
     throw new OverrideError(422, `Dérogation ordinaire limitée à ±${maxNotches} crans (demandé : ${notches}).`, "Passer par le comité.");
   }
 
-  return db.$transaction(async (tx) => {
-    const created = await tx.override.create({
-      data: {
-        ratingRunId,
-        fromGrade: run.cappedGrade!,
-        toGrade,
-        reasonCode,
-        comment,
-        evidence,
-        requestedBy: identity.name,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
-      },
+  try {
+    return await db.$transaction(async (tx) => {
+      const again = await tx.override.findFirst({ where: { ratingRunId, status: "PENDING" }, select: { id: true } });
+      if (again) throw new OverrideError(409, "Une dérogation est déjà en attente de décision sur ce run.", `Dérogation ${again.id}.`);
+      const created = await tx.override.create({
+        data: {
+          ratingRunId,
+          fromGrade: run.cappedGrade!,
+          toGrade,
+          reasonCode,
+          comment,
+          evidence,
+          requestedBy: identity.name,
+          expiresAt: expiresAt ? new Date(expiresAt) : null,
+        },
+      });
+      await auditWithin(tx, {
+        actor: identity.name,
+        actorRole: identity.role,
+        action: "OVERRIDE_REQUESTED",
+        resourceType: "Override",
+        resourceId: created.id,
+        entityId: run.counterparty.entityId,
+        detail: { ratingRunId, fromGrade: run.cappedGrade, toGrade, reasonCode, notches },
+        correlationId,
+      });
+      return created;
     });
-    await auditWithin(tx, {
-      actor: identity.name,
-      actorRole: identity.role,
-      action: "OVERRIDE_REQUESTED",
-      resourceType: "Override",
-      resourceId: created.id,
-      entityId: run.counterparty.entityId,
-      detail: { ratingRunId, fromGrade: run.cappedGrade, toGrade, reasonCode, notches },
-      correlationId,
-    });
-    return created;
-  });
+  } catch (e) {
+    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
+      throw new OverrideError(409, "Une dérogation est déjà en attente de décision sur ce run.");
+    }
+    throw e;
+  }
 }
 
 class ConcurrentDecisionError extends Error {}
@@ -147,6 +159,28 @@ export async function decideOverride(
   if (override.requestedBy === identity.name) {
     throw new OverrideError(403, "Auto-approbation interdite", "Le valideur doit être distinct du demandeur (principe des quatre yeux).");
   }
+  // Recontrôle de l'expiration au moment de la décision (diagnostic, dérogations) :
+  // une dérogation échue ne s'approuve plus, et le grade ne change pas.
+  if (decision === "APPROVED" && override.expiresAt && override.expiresAt.getTime() <= Date.now()) {
+    await db.$transaction(async (tx) => {
+      const claimed = await tx.override.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: "EXPIRED", decidedBy: identity.name, decidedAt: new Date(), decisionComment: "Expirée avant décision." },
+      });
+      if (claimed.count === 0) return;
+      await auditWithin(tx, {
+        actor: identity.name,
+        actorRole: identity.role,
+        action: "OVERRIDE_EXPIRED",
+        resourceType: "Override",
+        resourceId: id,
+        entityId: override.ratingRun.counterparty.entityId,
+        detail: { ratingRunId: override.ratingRunId, expiresAt: override.expiresAt, avantDecision: true },
+        correlationId,
+      });
+    });
+    throw new OverrideError(409, "Dérogation expirée avant décision : elle ne peut plus être approuvée.");
+  }
 
   try {
     const updated = await db.$transaction(async (tx) => {
@@ -157,6 +191,21 @@ export async function decideOverride(
       if (claimed.count === 0) throw new ConcurrentDecisionError();
       if (decision === "APPROVED") {
         await tx.ratingRun.update({ where: { id: override.ratingRunId }, data: { finalGrade: override.toGrade } });
+        await enqueueEvent(
+          tx,
+          {
+            type: "rating.overridden",
+            data: {
+              runId: override.ratingRunId,
+              overrideId: id,
+              fromGrade: override.fromGrade,
+              toGrade: override.toGrade,
+              reasonCode: override.reasonCode,
+              expiresAt: override.expiresAt,
+            },
+          },
+          override.ratingRun.counterparty.entityId
+        );
       }
       await auditWithin(tx, {
         actor: identity.name,
@@ -176,18 +225,7 @@ export async function decideOverride(
       return tx.override.findUniqueOrThrow({ where: { id } });
     });
 
-    if (decision === "APPROVED") {
-      void publishEvent({
-        type: "rating.overridden",
-        data: {
-          runId: override.ratingRunId,
-          overrideId: id,
-          fromGrade: override.fromGrade,
-          toGrade: override.toGrade,
-          reasonCode: override.reasonCode,
-        },
-      }).catch(() => undefined);
-    }
+    if (decision === "APPROVED") void dispatchOutbox().catch(() => undefined);
     return updated;
   } catch (e) {
     if (e instanceof ConcurrentDecisionError) {
@@ -195,4 +233,65 @@ export async function decideOverride(
     }
     throw e;
   }
+}
+
+/**
+ * Note effective à une date : grade du moteur, ou celui de la dérogation
+ * approuvée encore en vigueur. Une dérogation échue ne s'applique plus, même si
+ * la tâche d'expiration n'est pas encore passée.
+ */
+export function effectiveGrade(
+  run: { cappedGrade: string | null },
+  overrides: Array<{ status: string; toGrade: string; expiresAt: Date | null; decidedAt: Date | null }>,
+  now = new Date()
+): { grade: string | null; overridden: boolean } {
+  const active = overrides
+    .filter((o) => o.status === "APPROVED" && (!o.expiresAt || o.expiresAt.getTime() > now.getTime()))
+    .sort((a, b) => (b.decidedAt?.getTime() ?? 0) - (a.decidedAt?.getTime() ?? 0))[0];
+  return active ? { grade: active.toGrade, overridden: true } : { grade: run.cappedGrade, overridden: false };
+}
+
+/**
+ * Tâche d'expiration (planifiée) : une dérogation approuvée arrivée à échéance
+ * est close, la note revient au grade du moteur (ou à une autre dérogation
+ * encore en vigueur), un événement est émis et la revue est tracée. La note
+ * initiale du moteur n'est jamais détruite.
+ */
+export async function expireOverrides(db: PrismaClient, now = new Date()): Promise<number> {
+  const due = await db.override.findMany({
+    where: { status: "APPROVED", expiresAt: { lte: now } },
+    include: { ratingRun: { select: { id: true, cappedGrade: true, counterparty: { select: { entityId: true } } } } },
+    take: 500,
+  });
+  let expired = 0;
+  for (const o of due) {
+    await db.$transaction(async (tx) => {
+      const claimed = await tx.override.updateMany({ where: { id: o.id, status: "APPROVED" }, data: { status: "EXPIRED" } });
+      if (claimed.count === 0) return;
+      const others = await tx.override.findMany({
+        where: { ratingRunId: o.ratingRunId, status: "APPROVED" },
+        select: { status: true, toGrade: true, expiresAt: true, decidedAt: true },
+      });
+      const eff = effectiveGrade(o.ratingRun, others, now);
+      await tx.ratingRun.update({ where: { id: o.ratingRunId }, data: { finalGrade: eff.grade } });
+      await auditWithin(tx, {
+        actor: "tache-expiration-derogations",
+        action: "OVERRIDE_EXPIRED",
+        resourceType: "Override",
+        resourceId: o.id,
+        entityId: o.ratingRun.counterparty.entityId,
+        detail: { ratingRunId: o.ratingRunId, fromGrade: o.toGrade, toGrade: eff.grade, expiresAt: o.expiresAt },
+      });
+      await enqueueEvent(
+        tx,
+        {
+          type: "rating.override_expired",
+          data: { runId: o.ratingRunId, overrideId: o.id, expiredGrade: o.toGrade, effectiveGrade: eff.grade },
+        },
+        o.ratingRun.counterparty.entityId
+      );
+      expired += 1;
+    });
+  }
+  return expired;
 }

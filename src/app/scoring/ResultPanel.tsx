@@ -64,6 +64,12 @@ export function ResultPanel({
         <Metric
           label="Score brut"
           value={result.rawScore !== null ? result.rawScore.toFixed(2) : "—"}
+          hint={
+            // Instantanés antérieurs au moteur 3.1 : pas de borne haute.
+            result.scoreUpperBound != null && result.rawScore !== null && result.scoreUpperBound - result.rawScore > 0.005
+              ? `jusqu'à ${result.scoreUpperBound.toFixed(2)} si l'information manquante était au meilleur niveau`
+              : undefined
+          }
         />
         <Metric
           label="Segment"
@@ -184,6 +190,10 @@ export function ResultPanel({
           )}
         />
       )}
+      {(result.mandatoryReviewsFr ?? []).length > 0 && (
+        <Block title="Revues risques obligatoires" color="var(--bad)" items={result.mandatoryReviewsFr} />
+      )}
+      {result.routingFr && <Block title="Routage du serveur" color="var(--brand)" items={[result.routingFr]} />}
       {result.inconsistenciesFr.length > 0 && (
         <Block
           title="Incohérences entre signaux déclarés et données observées"

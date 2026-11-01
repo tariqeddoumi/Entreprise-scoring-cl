@@ -80,7 +80,9 @@ describe("Poids total constant (constat C07)", () => {
       .flatMap((d) => d.criteria)
       .find((c) => c.code === "D4.1")!;
     expect(crit.imputed).toBe(true);
-    expect(crit.score).toBe(25);
+    // Borne basse (diagnostic M01) : l'absence ne vaut jamais mieux que le pire.
+    expect(crit.score).toBe(0);
+    expect(r.scoreUpperBound!).toBeGreaterThan(r.rawScore!);
     expect(r.coverage.globalObservedBps).toBeLessThan(10000);
   });
 
@@ -173,35 +175,41 @@ describe("Porte de couverture et classe de confiance (constats C07 et H02)", () 
 });
 
 describe("Ordre canonique du pipeline (constat H14)", () => {
+  const dscrBelow1 = () => {
+    const base = tpeGoldenInput();
+    return { ...base, criteria: { ...base.criteria, "D2.2": { status: "AVAILABLE" as const, value: 0.9 } } };
+  };
+
   it("l'exception non compensatoire s'applique APRÈS le grade moteur", () => {
-    const r = computeRating(
-      CORP_STD_V1,
-      { ...tpeGoldenInput(), structuralFlags: { baseDscrBelow1: true } },
-      AT
-    );
+    const r = computeRating(CORP_STD_V1, dscrBelow1(), AT);
+    // D2.2 à 0 : D2 passe de 50 à 35, soit −1,5 point (poids D2 TPE 10 %).
+    expect(r.rawScore).toBeCloseTo(63, 10);
     // Le grade moteur reste celui du score ; seul le grade autonome est ramené.
-    expect(r.engineGrade).toBe("STD-P5");
+    expect(r.engineGrade).toBe("STD-P6");
     expect(r.standaloneGrade).toBe("STD-P7");
-    expect(r.rawScore).toBeCloseTo(64.5, 10);
     expect(r.appliedRules.map((x) => x.code)).toContain("NC01");
   });
 
+  it("dérive l'exception DSCR du ratio, sans case à cocher (diagnostic M02)", () => {
+    // Ratio sous 1, aucune case : l'exception s'applique quand même.
+    expect(computeRating(CORP_STD_V1, dscrBelow1(), AT).standaloneGrade).toBe("STD-P7");
+    // Case cochée mais ratio de 1,2 : la donnée fait foi, la contradiction est tracée.
+    const r = computeRating(CORP_STD_V1, { ...tpeGoldenInput(), structuralFlags: { baseDscrBelow1: true } }, AT);
+    expect(r.appliedRules.map((x) => x.code)).not.toContain("NC01");
+    expect(r.inconsistenciesFr.join(" ")).toContain("NC01");
+    // Revue risques obligatoire sous 1, sans décision automatique.
+    expect(computeRating(CORP_STD_V1, dscrBelow1(), AT).mandatoryReviewsFr.join(" ")).toContain("D2.2");
+  });
+
   it("l'exception déclare le critère qui porte sa contribution centrale", () => {
-    const r = computeRating(
-      CORP_STD_V1,
-      { ...tpeGoldenInput(), structuralFlags: { baseDscrBelow1: true } },
-      AT
-    );
+    const r = computeRating(CORP_STD_V1, dscrBelow1(), AT);
     expect(r.appliedRules.find((x) => x.code === "NC01")!.centralCriterion).toBe("D2.2");
   });
 
   it("plusieurs exceptions : la plus contraignante l'emporte", () => {
     const r = computeRating(
       CORP_STD_V1,
-      {
-        ...tpeGoldenInput(),
-        structuralFlags: { baseDscrBelow1: true, materialGroupFileIncomplete: true },
-      },
+      { ...dscrBelow1(), structuralFlags: { materialGroupFileIncomplete: true } },
       AT
     );
     expect(r.standaloneGrade).toBe("STD-P7");
@@ -362,7 +370,7 @@ describe("Exposition de la probabilité de défaut (constat C02)", () => {
 });
 
 describe("Routage (constats C04 et C08)", () => {
-  it("un segment fourni qui contredit le calcul est accepté mais tracé dans le résultat", () => {
+  it("un segment fourni qui contredit le calcul est écarté au profit du calcul serveur (diagnostic M04)", () => {
     // 2 M MAD de CA et 0,5 M MAD d'exposition : TPE pour le jeu SEG-2026.1.
     const donnees = { annualTurnover: 2_000_000, globalBankExposure: 500_000 };
     const conforme = computeRating(
@@ -377,9 +385,9 @@ describe("Routage (constats C04 et C08)", () => {
       { ...tpeGoldenInput(), segment: "GE", segmentationData: donnees },
       AT
     );
-    expect(diverge.segment).toBe("GE");
-    expect(diverge.segmentSource).toBe("PROVIDED");
-    expect(diverge.inconsistenciesFr.join(" ")).toMatch(/Segment GE fourni.*calcule TPE/);
+    expect(diverge.segment).toBe("TPE");
+    expect(diverge.segmentSource).toBe("COMPUTED");
+    expect(diverge.inconsistenciesFr.join(" ")).toMatch(/Segment GE demandé, écarté.*calcule TPE/);
   });
 
   it("un modèle non publié pour le segment refuse de noter", () => {
@@ -505,8 +513,30 @@ describe("Support groupe (constat H05)", () => {
 });
 
 describe("Matérialité ESG (constat H09)", () => {
-  it("transfère le poids d'un risque non matériel selon la règle déclarée", () => {
+  it("évalue un risque de matérialité inconnue, sans transférer son poids (diagnostic M03)", () => {
     const r = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
+    const d71 = r.domainResults.find((d) => d.code === "D7")!.criteria.find((c) => c.code === "D7.1")!;
+    expect(d71.effectiveWeightBps).toBe(100);
+    expect(r.warningsFr.join(" ")).toContain("matérialité inconnue");
+  });
+
+  it("une non-matérialité sans justification ne transfère pas le poids", () => {
+    const r = computeRating(CORP_STD_V1, { ...tpeGoldenInput(), materiality: { esgPhysicalMaterial: false } }, AT);
+    const d71 = r.domainResults.find((d) => d.code === "D7")!.criteria.find((c) => c.code === "D7.1")!;
+    expect(d71.effectiveWeightBps).toBe(100);
+    expect(r.inconsistenciesFr.join(" ")).toContain("sans justification");
+  });
+
+  it("transfère le poids d'un risque non matériel justifié selon la règle déclarée", () => {
+    const r = computeRating(
+      CORP_STD_V1,
+      {
+        ...tpeGoldenInput(),
+        materiality: { esgPhysicalMaterial: false, esgTransitionMaterial: false },
+        materialityEvidence: { esgPhysicalMaterial: "Sites hors zones exposées (carte BRGM)", esgTransitionMaterial: "Activité de services" },
+      },
+      AT
+    );
     const d7 = r.domainResults.find((d) => d.code === "D7")!;
     const d71 = d7.criteria.find((c) => c.code === "D7.1")!;
     const d73 = d7.criteria.find((c) => c.code === "D7.3")!;
@@ -605,6 +635,7 @@ describe("Modèle TPE comportemental", () => {
       asOfDate: "2026-06-30",
       confidence: { ...FULL_CONFIDENCE },
       criteria,
+      routing: { reliableFinancialStatements: false, behavioralHistoryMonths: 24 },
     };
   }
   function quantValue(code: string): number {

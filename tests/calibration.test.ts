@@ -116,6 +116,7 @@ describe("calibration du modèle TPE comportemental", () => {
         asOfDate: "2025-12-31",
         criteria,
         structuralFlags: { companyAgeYears: 9 },
+        routing: { reliableFinancialStatements: false, behavioralHistoryMonths: 30 },
         confidence: { completeness: 100, freshness: 100, provenance: 100, reliability: 100 },
       },
       { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true }
@@ -223,11 +224,12 @@ describe("moteur : restitution de la PD", () => {
   });
 
   it("suit le grade et non le score : deux dossiers de même score traités différemment reçoivent des PD différentes", () => {
-    // Même dossier, l'un ramené par l'exception non compensatoire NC01.
+    // Même dossier, l'un ramené par l'exception non compensatoire NC02
+    // (incertitude sur la continuité : un fait d'audit, non dérivable d'un ratio).
     const libre = computeRating(CORP_STD_V1, dossier(), { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true });
     const plafonne = computeRating(
       CORP_STD_V1,
-      dossier({ structuralFlags: { baseDscrBelow1: true } }),
+      dossier({ structuralFlags: { goingConcernMaterialUncertainty: true } }),
       { nowIso: "2025-12-31T12:00:00.000Z", syntheticPdAllowed: true }
     );
     expect(plafonne.rawScore).toBe(libre.rawScore);

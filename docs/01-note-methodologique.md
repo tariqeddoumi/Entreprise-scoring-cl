@@ -424,6 +424,26 @@ Résultat moteur : **G4 — Bon**. Un soutien de groupe ne modifie aucun score �
 
 > **Section générée automatiquement depuis la configuration exécutée par le moteur** (`src/models/`), au moyen de `scripts/generate-model-doc.mts`. Toute modification d'un poids, d'un seuil ou d'un ancrage dans le code se répercute ici à la régénération. Cette section ne peut donc pas diverger du calcul réellement appliqué.
 
+## 16 bis. Corrections du diagnostic du 1er novembre 2026 et grilles challenger
+
+Le diagnostic indépendant du 1er novembre 2026 (documents 01 à 03 et plan d'actions) a reproduit cinq défauts métier et relevé sept écarts de conception. Le moteur 3.1.0 et les grilles 3.1.0 les corrigent :
+
+| Réf. | Constat | Correction |
+|---|---|---|
+| M01 | L'information absente à 25 récompensait le masquage d'un mauvais score | Borne basse 0 pour le grade, borne haute restituée ; tests d'effacement sur tous les critères |
+| M02 | L'exception DSCR dépendait d'une case séparée | Exception dérivée du ratio D2.2 ; contradiction tracée |
+| M03 | Une matérialité omise neutralisait des scores ESG défavorables | Trois états ; non-matérialité justifiée seule à écarter le critère |
+| M04 | Un segment imposé favorable était conservé | Segment calculé par le serveur prioritaire |
+| M05 | Un dossier neuf pré-remplissait les qualitatifs à 50 et la complétude à 100 | Critères non instruits à l'ouverture ; complétude plafonnée par la part observée |
+| M06, M07 | Le modèle était choisi par l'appelant ; minimum comportemental à 12 mois | Routage serveur par famille ; 24 mois minimum, analyse courte entre 12 et 23 mois |
+| M08 | Seules trois données bloquaient le standard | Noyau obligatoire élargi à la liquidité et au DSCR |
+| M10 | Horloge implicite | Horodatage fourni par le service ; à défaut, date d'arrêté |
+| M11 | Le défaut pouvait se perdre dans une sortie de routage | Défaut traité avant tout refus de routage |
+| M12 | L'usage « production » reposait sur deux attributs de configuration | Approbation d'usage explicite exigée (registre indépendant à constituer) |
+| Double bénéfice | D5.4 et B6.1 valorisaient le soutien, puis le module groupe ajoutait des crans | Ancrages réécrits sur le risque propre du groupe ; le soutien relève de la seule méthode dédiée |
+
+**Grilles challenger.** Les grilles resserrées du document 03 — 16 critères standard (CORP_STD_CHALLENGER_V1) et 12 critères TPE comportementaux (CORP_TPE_CHALLENGER_V1) — sont publiées en parallèle des grilles actuelles corrigées, pour une double notation en pilote. Elles regroupent les variables corrélées, retirent le soutien de la note autonome, suivent la qualité documentaire hors score, exigent 80 % du poids observé (60 % par famille) et remplacent les plafonds numérotés par des revues risques obligatoires. Leurs poids et seuils sont des hypothèses expertes, ni calibrées sur BCP ni prescrites par Bank Al-Maghrib ; aucune probabilité de défaut n'y est associée. Leurs grilles complètes figurent ci-dessous.
+
 <!-- GRILLES_GENEREES -->
 
 ---
@@ -458,20 +478,23 @@ Le moteur ne consulte ni horloge, ni générateur aléatoire, ni source externe.
 
 Les poids sont manipulés en entiers ; les montants et scores utilisent un type décimal en base ; l'arrondi n'intervient qu'à l'affichage.
 
-### 18.3 Traitement des situations dégradées
+### 18.3 Traitement des situations dégradées (moteur 3.1)
 
 | Situation | Comportement |
 |---|---|
-| Red flag bloquant | Calcul arrêté avant toute agrégation ; aucun score produit ; motif de blocage explicite |
+| Défaut constaté | Grade défaut forcé, indépendamment du score, de la couverture, du segment et du routage ; score brut conservé s'il existe |
+| Dossier hors de la famille de modèle | Refus de noter (routage serveur) : grille standard avec des comptes exploitables, comportementale pour une TPE sans comptes fiables et avec 24 mois d'historique au moins ; 12 à 23 mois : analyse courte distincte |
+| Segment fourni divergent | Écarté : le segment calculé par le serveur fait foi dès que les montants le permettent ; l'écart est tracé |
 | Segment indéterminable | Scoring bloqué ; aucun segment par défaut |
-| Donnée critique manquante ou invalide | Scoring bloqué, avec le critère nommé dans le motif |
-| Donnée non critique manquante | Critère exclu du dénominateur, avertissement nommant le critère ; impact porté par le niveau de confiance |
-| Critère non applicable | Poids redistribué à l'intérieur du domaine, sans avertissement |
-| Cas spécial documenté | Score nul explicite, avec mention du cas dans l'explication |
-| Confiance insuffisante | Aucun grade final ; score brut conservé pour la surveillance |
-| Défaut avéré | Grade défaut forcé, indépendamment du score ; score brut conservé |
+| Donnée du noyau obligatoire manquante | Scoring bloqué, critère nommé (standard : fonds propres tangibles, dette nette / EBE, liquidité, DSCR, retards ; comportemental : retards, flux confiés, couverture par les flux, liquidité, rapprochement flux / CA) |
+| Donnée non critique manquante | **Borne basse** : score 0 retenu pour le grade, poids conservé, couverture observée réduite ; la **borne haute** du score (information supposée au meilleur niveau) est restituée à côté |
+| Critère non applicable | Seulement si le modèle le prévoit : poids transféré au critère désigné, poids total constant |
+| Matérialité ESG | Trois états : matériel, non matériel justifié, inconnu. Seul le « non matériel » justifié écarte le critère ; l'inconnu est évalué et signalé pour revue |
+| Exception DSCR | Dérivée du ratio saisi ; une case contradictoire est corrigée et tracée |
+| Ratio sous son seuil de revue | Revue risques obligatoire restituée avec la note ; aucune décision automatique |
+| Confiance insuffisante | Aucun grade final ; la complétude retenue ne dépasse jamais la part du poids réellement observée |
 
-**À aucun moment une donnée absente n'est convertie en zéro ou en score neutre.**
+**Une information absente ne vaut jamais mieux qu'une mauvaise valeur observée** : la propriété est vérifiée par des tests sur chaque critère et chaque niveau de chaque modèle. L'ancienne catégorie « information absente » à 25 points ne la garantissait pas (diagnostic du 1er novembre 2026, M01) : effacer un critère noté 0 améliorait le score.
 
 ### 18.4 Explicabilité
 

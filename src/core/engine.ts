@@ -4,7 +4,8 @@ import { computeConfidence, meetsMinimumClass } from "./confidence";
 import { applyCap, gradeFromScore, gradeLabelFr } from "./grades";
 import { applyGroupSupport } from "./group-support";
 import { DEFAULT_GRADE_FALLBACK } from "@/reference/default-policy";
-import { determineSegment, rulesetById } from "@/reference/segmentation";
+import { BEHAVIORAL_MIN_HISTORY_MONTHS, determineSegment, routeModel, rulesetById } from "@/reference/segmentation";
+import { CAP_TRIGGER_TO_FLAG } from "./structural-flags";
 import type {
   AppliedNonCompensatoryRule,
   ComplianceStatus,
@@ -29,14 +30,39 @@ import type {
  * 3.0.1 : un statut conformité déclaré ne peut plus masquer un red flag de
  * conformité observé (D-43). Seuls les dossiers qui portaient les deux à la
  * fois changent de résultat.
+ *
+ * 3.1.0 (diagnostic du 1er novembre 2026) : une information absente prend la
+ * borne basse et une borne haute est restituée (M01) ; l'exception DSCR est
+ * dérivée du ratio (M02) ; la matérialité a trois états (M03) ; le segment
+ * calculé par le serveur prime (M04) ; la confiance ne peut pas déclarer plus
+ * complet que le dossier (M05) ; le routage est décidé par le serveur (M06,
+ * M07) ; le défaut prime sur tout refus de routage (M11) ; l'usage production
+ * exige une approbation explicite (M12) ; l'horloge n'est plus implicite (M10).
  */
-export const ENGINE_VERSION = "3.0.1";
+export const ENGINE_VERSION = "3.1.0";
 
 /** Âge minimal, en années, en deçà duquel la contrepartie est routée hors grilles publiées. */
 const YOUNG_COMPANY_YEARS = 2;
 
+export interface UseApproval {
+  approvalId: string;
+  purpose: "PRODUCTION_RATING";
+  validFrom: string; // AAAA-MM-JJ
+  validTo: string | null;
+}
+
 export interface EngineOptions {
+  /**
+   * Horodatage du calcul, fourni par la frontière (service). Sans lui, le
+   * moteur retient la date d'arrêté : jamais l'horloge du serveur (M10).
+   */
   nowIso?: string;
+  /**
+   * Approbation d'usage en vigueur (registre indépendant de la configuration,
+   * M12). Sans elle, aucun résultat n'est qualifié de notation de production,
+   * même pour un modèle publié et calibré sur défauts observés.
+   */
+  useApproval?: UseApproval;
   /**
    * Autorise l'exposition d'une PD issue d'une calibration non observée.
    *
@@ -78,7 +104,7 @@ export function computeRating(
   options: EngineOptions | string = {}
 ): RatingResult {
   const opts: EngineOptions = typeof options === "string" ? { nowIso: options } : options;
-  const computedAt = opts.nowIso ?? new Date().toISOString();
+  const computedAt = opts.nowIso ?? `${input.asOfDate}T00:00:00.000Z`;
   const warnings: string[] = [];
   const blocking: string[] = [];
   const inconsistencies: string[] = [];
@@ -98,10 +124,16 @@ export function computeRating(
   const complianceStatus = resolveComplianceStatus(input.complianceStatus, triggeredRedFlags);
 
   // --- 05a. Confiance (classe, sans effet sur le grade) --------------------
-  const confidence = computeConfidence(input.confidence, model.confidence);
+  // Recalculée plus bas avec la complétude réellement observée (M05).
+  let confidence = computeConfidence(input.confidence, model.confidence);
 
   // --- 02. Routage : segment puis éligibilité du modèle --------------------
   const ruleset = rulesetById(model.segmentationRulesetId);
+  if (input.asOfDate < ruleset.effectiveFrom || (ruleset.effectiveTo !== null && input.asOfDate >= ruleset.effectiveTo)) {
+    warnings.push(
+      `Jeu de segmentation ${ruleset.rulesetId} hors de sa période d'effet à la date d'arrêté ${input.asOfDate} (${ruleset.effectiveFrom} – ${ruleset.effectiveTo ?? "…"}) : le segment est à confirmer.`
+    );
+  }
   const seg = determineSegment(input, ruleset);
   // Un segment fourni qui contredit le calcul est accepté mais jamais tu
   // (§ 11) : choisir son segment revient à choisir ses pondérations.
@@ -134,6 +166,9 @@ export function computeRating(
     confidence,
     groupSupport: null,
     appliedRules: [] as AppliedNonCompensatoryRule[],
+    scoreUpperBound: null as number | null,
+    mandatoryReviewsFr: [] as string[],
+    routingFr: null as string | null,
   };
 
   const emptyCoverage: CoverageResult = {
@@ -188,9 +223,35 @@ export function computeRating(
   }
   const segment = seg.segment;
 
+  // --- 02b. Routage serveur (M06, M07) : la famille de modèle ne se choisit pas
+  const route = routeFor(model, segment, input);
+  shell.routingFr = route.explanationFr;
+  if (route.refusalFr) {
+    blocking.push(route.refusalFr);
+    if (input.defaultTriggered) {
+      return forcedDefault("dossier routé hors de ce modèle", { domainResults: [], coverage: emptyCoverage });
+    }
+    return finalize(model, opts, {
+      ...shell,
+      ratingStatus: "NO_RATING_ROUTED_OTHER_MODEL",
+      rawScore: null,
+      domainResults: [],
+      coverage: emptyCoverage,
+      engineGrade: null,
+      standaloneGrade: null,
+      finalGrade: null,
+      explanationFr: route.refusalFr,
+    });
+  }
+
   if (!model.segments.includes(segment)) {
     const msg = `Modèle ${model.modelId} non publié pour le segment ${segment} : le dossier doit être routé vers la grille applicable. Le choix du modèle ne peut pas appartenir à l'appelant.`;
     blocking.push(msg);
+    // Le défaut prime sur l'éligibilité du modèle (M11) : il ne se perd pas
+    // dans une sortie de routage.
+    if (input.defaultTriggered) {
+      return forcedDefault("segment hors du périmètre de ce modèle", { domainResults: [], coverage: emptyCoverage });
+    }
     return finalize(model, opts, {
       ...shell,
       ratingStatus: "NO_RATING_ROUTED_OTHER_MODEL",
@@ -208,7 +269,7 @@ export function computeRating(
   // CAP01. Un plafond de grade tenait lieu de modèle de millésime, alors que
   // 98,5 % des créations d'entreprises marocaines sont des micro-entreprises.
   // Le dossier sort des grilles publiées au lieu d'être noté puis plafonné.
-  const flags = input.structuralFlags ?? {};
+  const flags = deriveStructuralFlags(model, input, inconsistencies);
   if (
     flags.companyAgeYears !== undefined &&
     flags.companyAgeYears < YOUNG_COMPANY_YEARS &&
@@ -236,7 +297,7 @@ export function computeRating(
   }
 
   // --- 06. Caractéristiques : poids effectifs puis résolution --------------
-  const effectiveWeights = computeEffectiveWeights(model, segment, input, inconsistencies);
+  const effectiveWeights = computeEffectiveWeights(model, segment, input, inconsistencies, warnings);
   const { domainResults, coverage } = scoreDomains(
     model,
     segment,
@@ -245,6 +306,21 @@ export function computeRating(
     warnings,
     blocking
   );
+  shell.scoreUpperBound = upperBound(domainResults);
+  shell.mandatoryReviewsFr = mandatoryReviews(model, input);
+  for (const r of shell.mandatoryReviewsFr) warnings.push(r);
+
+  // --- 05a bis. Confiance : la complétude déclarée ne peut pas dépasser la
+  // part du poids réellement observée (M05). Un dossier neuf, sans preuve, ne
+  // peut pas se présenter comme complet.
+  const observedPct = coverage.totalWeightBps > 0 ? coverage.globalObservedBps / 100 : 0;
+  if (input.confidence.completeness > observedPct) {
+    confidence = computeConfidence(
+      { ...input.confidence, completeness: Math.round(observedPct * 100) / 100 },
+      model.confidence
+    );
+    shell.confidence = confidence;
+  }
 
   if (blocking.length > 0) {
     // Donnée CRITIQUE absente : aucun score n'est publié, même partiel. Le
@@ -491,7 +567,8 @@ function computeEffectiveWeights(
   model: ModelConfig,
   segment: Segment,
   input: RatingInput,
-  inconsistencies: string[]
+  inconsistencies: string[],
+  warnings: string[]
 ): Map<string, number> {
   const weights = new Map<string, number>();
   for (const c of model.criteria) {
@@ -503,7 +580,20 @@ function computeEffectiveWeights(
     if (nominal === 0) continue;
 
     const declaredNa = input.criteria[criterion.code]?.status === "NOT_APPLICABLE";
-    const gatedOut = isGatedOut(criterion, input.materiality);
+    const gatedOut = isGatedOut(criterion, input.materiality, input.materialityEvidence);
+    if (criterion.materialityGate && !gatedOut) {
+      const flag = criterion.materialityGate.flag;
+      const declared = input.materiality?.[flag];
+      if (declared === false) {
+        inconsistencies.push(
+          `${criterion.code} : non-matérialité déclarée sans justification — critère évalué comme si l'exposition était inconnue.`
+        );
+      } else if (declared === undefined) {
+        warnings.push(
+          `${criterion.code} : matérialité inconnue — critère évalué, revue obligatoire de l'exposition.`
+        );
+      }
+    }
     if (!declaredNa && !gatedOut) continue;
 
     const rule = criterion.notApplicableRule;
@@ -531,10 +621,18 @@ function computeEffectiveWeights(
   return weights;
 }
 
-/** true si un critère conditionné à la matérialité n'est pas matériel ici. */
-function isGatedOut(criterion: CriterionConfig, materiality?: MaterialityFlags): boolean {
+/**
+ * true si un critère conditionné à la matérialité est écarté : seulement sur une
+ * non-matérialité déclarée ET justifiée (M03). L'inconnu n'écarte rien.
+ */
+function isGatedOut(
+  criterion: CriterionConfig,
+  materiality?: MaterialityFlags,
+  evidence?: RatingInput["materialityEvidence"]
+): boolean {
   if (!criterion.materialityGate) return false;
-  return materiality?.[criterion.materialityGate.flag] !== true;
+  const flag = criterion.materialityGate.flag;
+  return materiality?.[flag] === false && !!evidence?.[flag]?.trim();
 }
 
 function scoreDomains(
@@ -562,7 +660,7 @@ function scoreDomains(
       const effective = effectiveWeights.get(criterion.code) ?? 0;
       if (nominal === 0 && effective === 0) continue;
 
-      const gatedOut = isGatedOut(criterion, input.materiality);
+      const gatedOut = isGatedOut(criterion, input.materiality, input.materialityEvidence);
       const res = resolveCriterion(
         criterion,
         segment,
@@ -779,9 +877,12 @@ function handleUnavailable(
     };
   }
 
-  const score = criterion.unavailableScore ?? 25;
+  // Borne basse (M01) : une information absente ne peut jamais valoir mieux
+  // que la pire valeur observable. Un score fixe de 25 récompensait le
+  // masquage d'un critère réellement à 0. La borne haute est restituée à part.
+  const score = criterion.unavailableScore ?? 0;
   warnings.push(
-    `${criterion.code} — ${criterion.labelFr} : donnée ${statusFr}, catégorie prudente appliquée (score ${score}). Le poids reste compté ; la couverture observée diminue.`
+    `${criterion.code} — ${criterion.labelFr} : donnée ${statusFr}, borne basse appliquée (score ${score}). Le poids reste compté ; la couverture observée diminue.`
   );
   return {
     ...baseRes,
@@ -789,7 +890,7 @@ function handleUnavailable(
     imputed: true,
     score,
     reasonCode: `${criterion.domainCode}.${key(criterion.code)}.IMP.DATA_${status}`,
-    explanationFr: `Donnée ${statusFr} : score prudent ${score} imposé par la catégorie « information absente » de la grille. À recalibrer sur données observées.`,
+    explanationFr: `Donnée ${statusFr} : borne basse ${score} retenue pour le grade ; la borne haute du score suppose cette information au meilleur niveau.`,
   };
 }
 
@@ -805,6 +906,99 @@ function aggregate(domains: DomainResult[]): number | null {
 
 function totalDomainWeight(domains: DomainResult[]): number {
   return domains.reduce((acc, d) => (d.score !== null ? acc + d.weightBps : acc), 0);
+}
+
+/** Valeur numérique observée d'un critère quantitatif, ou null. */
+function observedValue(input: RatingInput, code: string): number | null {
+  const ci = input.criteria[code];
+  if (!ci || ci.specialCase) return null;
+  if (ci.status !== "AVAILABLE" && ci.status !== "ESTIMATED") return null;
+  return typeof ci.value === "number" && Number.isFinite(ci.value) ? ci.value : null;
+}
+
+/**
+ * Faits structurants dérivés des données (M02). Une exception déclarée qui
+ * contredit le ratio observé est corrigée et tracée : la case ne peut ni créer
+ * ni effacer ce que la donnée établit.
+ */
+function deriveStructuralFlags(
+  model: ModelConfig,
+  input: RatingInput,
+  inconsistencies: string[]
+): StructuralFlagsInput {
+  const flags: StructuralFlagsInput = { ...(input.structuralFlags ?? {}) };
+  for (const rule of model.nonCompensatoryRules) {
+    if (!rule.derivation) continue;
+    const field = CAP_TRIGGER_TO_FLAG[rule.trigger];
+    const value = observedValue(input, rule.derivation.criterion);
+    if (!field || value === null) continue;
+    const derived = value < rule.derivation.threshold;
+    const declared = flags[field];
+    if (declared !== undefined && declared !== derived) {
+      inconsistencies.push(
+        `${rule.code} : « ${rule.labelFr} » déclaré ${declared ? "vrai" : "faux"} alors que ${rule.derivation.criterion} = ${value} : la valeur observée fait foi.`
+      );
+    }
+    (flags as Record<string, unknown>)[field] = derived;
+  }
+  return flags;
+}
+
+/** Revues risques obligatoires déclenchées par la valeur observée d'un critère. */
+function mandatoryReviews(model: ModelConfig, input: RatingInput): string[] {
+  return (model.mandatoryReviews ?? []).flatMap((r) => {
+    const v = observedValue(input, r.criterion);
+    return v !== null && v < r.threshold
+      ? [`Revue risques obligatoire : ${r.labelFr} (${r.criterion} = ${v}). Aucune décision automatique.`]
+      : [];
+  });
+}
+
+/** Score si chaque information absente était au meilleur niveau. */
+function upperBound(domains: DomainResult[]): number | null {
+  let weighted = 0;
+  let total = 0;
+  for (const d of domains) {
+    let ds = 0;
+    let dw = 0;
+    for (const c of d.criteria) {
+      if (c.score === null || c.effectiveWeightBps === 0) continue;
+      ds += (c.imputed ? 100 : c.score) * c.effectiveWeightBps;
+      dw += c.effectiveWeightBps;
+    }
+    if (dw > 0 && d.score !== null) {
+      weighted += (ds / dw) * d.weightBps;
+      total += d.weightBps;
+    }
+  }
+  return total > 0 ? weighted / total : null;
+}
+
+/**
+ * Famille de modèle décidée par le serveur (M06, M07). Sans éléments de
+ * routage, un modèle comportemental refuse le dossier : il ne peut pas servir
+ * d'échappatoire à une TPE dont les comptes sont exploitables.
+ */
+function routeFor(
+  model: ModelConfig,
+  segment: Segment,
+  input: RatingInput
+): { explanationFr: string | null; refusalFr: string | null } {
+  if (!input.routing) {
+    if (model.routeFamily === "BEHAVIORAL") {
+      return {
+        explanationFr: null,
+        refusalFr: `Modèle comportemental : les éléments de routage (absence de comptes exploitables, ${BEHAVIORAL_MIN_HISTORY_MONTHS} mois d'historique de compte au moins) sont requis.`,
+      };
+    }
+    return { explanationFr: null, refusalFr: null };
+  }
+  const decision = routeModel({ segment, ...input.routing });
+  if (decision.family === model.routeFamily) return { explanationFr: decision.explanationFr, refusalFr: null };
+  return {
+    explanationFr: decision.explanationFr,
+    refusalFr: `Routage serveur : ${decision.explanationFr} Le modèle ${model.modelId} (famille ${model.routeFamily === "STANDARD" ? "standard" : "comportementale"}) ne s'applique pas à ce dossier.`,
+  };
 }
 
 /** Évalue le déclencheur d'une exception non compensatoire. */
@@ -845,7 +1039,15 @@ function finalize(
 
   let purpose: ResultPurpose;
   let pdDisclosed: boolean;
-  if (observedCalibration && published) {
+  const approval = opts.useApproval;
+  const approved =
+    !!approval &&
+    approval.purpose === "PRODUCTION_RATING" &&
+    partial.asOfDate >= approval.validFrom &&
+    (approval.validTo === null || partial.asOfDate <= approval.validTo);
+  // Les attributs de configuration ne suffisent plus (M12) : il faut une
+  // approbation d'usage en vigueur, issue d'un registre indépendant.
+  if (observedCalibration && published && approved) {
     purpose = "PRODUCTION_RATING";
     pdDisclosed = true;
   } else if (opts.syntheticPdAllowed === true) {
