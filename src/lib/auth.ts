@@ -11,8 +11,9 @@ import type { NextRequest } from "next/server";
  * Rôles : ANALYST (lecture + scoring), RISK_MANAGER (+ overrides),
  *         ADMIN (+ webhooks, administration), READONLY (lecture seule).
  * Code entité : restreint la clé à une banque ou une filiale et à sa
- * descendance (cloisonnement, src/lib/scope.ts). Sans code, la clé couvre le
- * groupe entier : réservé aux systèmes centraux du groupe.
+ * descendance (cloisonnement, src/lib/scope.ts). Le code « * » donne la
+ * portée du groupe entier, réservée aux systèmes centraux approuvés. Sans
+ * code, la clé n'ouvre aucun accès (refus par défaut, diagnostic S02).
  *
  * Aucun secret par défaut : si API_KEYS est absent, toutes les requêtes
  * authentifiées sont refusées (deny-by-default), le démarrage est refusé en

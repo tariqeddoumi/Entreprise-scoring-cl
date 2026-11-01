@@ -7,19 +7,17 @@ import { checkOutboundUrl } from "@/lib/url-safety";
 
 export const dynamic = "force-dynamic";
 
-/** Liste des souscriptions. Le secret n'est jamais renvoyé. */
+/** Liste des souscriptions du périmètre. Le secret n'est jamais renvoyé. */
 export async function GET(req: NextRequest) {
   const g = await guard(req, "ADMIN");
   if (!g.ok) return g.response;
-  // Une souscription reçoit les événements de tout le groupe : sa gestion est
-  // réservée aux clés sans restriction d'entité.
-  if (!g.ctx.perimeter.all) return problem(403, "Réservé aux systèmes centraux du groupe.");
 
   const items = await g.ctx.db.webhookSubscription.findMany({
     select: {
       id: true,
       url: true,
       events: true,
+      entityId: true,
       isActive: true,
       createdBy: true,
       createdAt: true,
@@ -31,13 +29,17 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** Création d'une souscription. Le secret HMAC est fourni par l'intégrateur. */
+/**
+ * Création d'une souscription. Le secret HMAC est fourni par l'intégrateur.
+ * Elle porte le périmètre de la clé (diagnostic S01) : une clé de filiale ne
+ * reçoit que les événements de sa filiale et de sa descendance ; seule une
+ * clé de portée groupe crée une souscription groupe.
+ */
 export async function POST(req: NextRequest) {
   const g = await guard(req, "ADMIN");
   if (!g.ok) return g.response;
-  // Une souscription reçoit les événements de tout le groupe : sa gestion est
-  // réservée aux clés sans restriction d'entité.
-  if (!g.ctx.perimeter.all) return problem(403, "Réservé aux systèmes centraux du groupe.");
+  const entityId = g.ctx.perimeter.all ? null : g.ctx.perimeter.entityId;
+  if (!g.ctx.perimeter.all && !entityId) return problem(403, "Clé sans entité : souscription impossible.");
 
   const body = await readJsonBody(req, webhookSubscriptionSchema);
   if (!body.ok) return body.response;
@@ -55,6 +57,7 @@ export async function POST(req: NextRequest) {
       url: urlCheck.url.toString(),
       secret: body.value.secret,
       events: JSON.stringify(body.value.events),
+      entityId,
       createdBy: g.ctx.identity.name,
     },
   });
@@ -65,7 +68,8 @@ export async function POST(req: NextRequest) {
     // Le secret n'est jamais journalisé.
     resourceType: "WebhookSubscription",
     resourceId: created.id,
-    detail: { url: created.url, events: body.value.events },
+    entityId,
+    detail: { url: created.url, events: body.value.events, entityId },
     correlationId: g.ctx.correlationId,
   });
   return ok(
@@ -73,6 +77,7 @@ export async function POST(req: NextRequest) {
       id: created.id,
       url: created.url,
       events: body.value.events,
+      entityId,
       isActive: created.isActive,
     },
     201

@@ -6,6 +6,7 @@ import type { ModelConfig, RatingResult } from "@/core/types";
 import { applyField, type CaseDraft, type FieldKind } from "@/lib/case-input";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
 import { ScoringForm } from "@/app/scoring/ScoringForm";
+import { FinancialsSection } from "@/app/scoring/FinancialsSection";
 import { DATA_STATUS_LABELS } from "@/app/ui-helpers";
 import {
   decideProposalAction,
@@ -120,7 +121,8 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
     return (
       <details className="card" style={{ padding: 16 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Saisie du dossier (lecture seule)</summary>
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 14, display: "grid", gap: 18 }}>
+          <FinancialsSection model={model} draft={draft} readOnly currency={currency} />
           <ScoringForm model={model} draft={draft} onChange={() => undefined} readOnly currency={currency} aiFields={aiFields} />
         </div>
       </details>
@@ -130,6 +132,15 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
   return (
     <div className="workspace">
       <div style={{ display: "grid", gap: 18, paddingBottom: 72, minWidth: 0 }}>
+        <FinancialsSection
+          model={model}
+          draft={draft}
+          onChange={change}
+          currency={currency}
+          caseId={caseId}
+          documents={documents}
+          aiUsable={ai.enabled && !ai.missing}
+        />
         <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} />
         <div className="card no-print action-bar">
           <button type="button" className="btn-ghost" onClick={() => run("save")} disabled={busy !== null}>
@@ -296,11 +307,11 @@ function AiPanel({
         )}
         <form action={upload} style={{ display: "grid", gap: 6 }}>
           <input type="hidden" name="caseId" value={caseId} />
-          <input type="file" name="file" multiple aria-label="Pièces à ajouter au dossier" accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,application/pdf,image/png,image/jpeg,text/plain,text/csv" />
+          <input type="file" name="file" multiple aria-label="Pièces à ajouter au dossier" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.txt,.csv,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv" />
           <button type="submit" className="btn-ghost" disabled={uploading}>
             {uploading ? "Envoi…" : "Ajouter"}
           </button>
-          <span className="muted" style={{ fontSize: 11 }}>PDF, PNG, JPEG, texte ou CSV · {maxMb} Mo au plus par pièce.</span>
+          <span className="muted" style={{ fontSize: 11 }}>PDF, PNG, JPEG, Excel, texte ou CSV · {maxMb} Mo au plus par pièce.</span>
           {uploadState.errorFr && <span style={{ color: "var(--bad)", fontSize: 12 }}>{uploadState.errorFr}</span>}
         </form>
       </section>

@@ -71,10 +71,10 @@ describe("Comparaison de deux notations", () => {
   it("signale une exception non compensatoire apparue", () => {
     const before = run();
     const after = run((i) => {
-      i.structuralFlags = { baseDscrBelow1: true };
+      i.structuralFlags = { goingConcernMaterialUncertainty: true };
     });
     const c = compareRuns(before, after);
-    expect(c.capChangesFr.join(" ")).toContain("NC01");
+    expect(c.capChangesFr.join(" ")).toContain("NC02");
     expect(c.gradeChanged).toBe(true);
   });
 

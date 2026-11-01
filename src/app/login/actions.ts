@@ -4,6 +4,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { login, logout, SESSION_TTL_MS } from "@/lib/accounts";
 import { SESSION_COOKIE } from "@/lib/session";
+import { databaseConfigProblem } from "@/lib/env";
 
 export async function loginAction(
   _prev: { errorFr?: string } | undefined,
@@ -30,8 +31,13 @@ export async function loginAction(
     // mais l'exploitation doit pouvoir lire la cause (base injoignable,
     // schéma mal désigné, table absente…). Jamais le mot de passe.
     console.error("[connexion] échec technique :", e instanceof Error ? e.message : e);
+    // Une erreur de configuration se nomme (sans la valeur, qui contient le mot
+    // de passe) : « la base ne répond pas » orientait vers une panne inexistante.
+    const config = databaseConfigProblem();
     return {
-      errorFr: "Service d'authentification indisponible : la base de données ne répond pas.",
+      errorFr: config
+        ? `Configuration de la base invalide — ${config}`
+        : "Service d'authentification indisponible : la base de données ne répond pas.",
     };
   }
   if (!result.ok) return { errorFr: result.errorFr };

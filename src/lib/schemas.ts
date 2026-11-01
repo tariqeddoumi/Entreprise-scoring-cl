@@ -49,10 +49,11 @@ export const structuralFlagsSchema = z
   .strict();
 
 /**
- * Matérialité des risques conditionnels (constat H09).
+ * Matérialité des risques conditionnels (constat H09, diagnostic M03).
  *
- * Renseignée depuis le référentiel sectoriel et la localisation des sites : un
- * critère ESG n'est évalué que si l'exposition existe.
+ * Trois états : true matériel, false non matériel (à justifier dans
+ * materialityEvidence), absent inconnu. Seul un « non matériel » justifié écarte
+ * le critère.
  */
 export const materialitySchema = z
   .object({
@@ -72,6 +73,62 @@ export const groupSupportSchema = z
     legallyBinding: z.boolean().optional(),
     fundsTransferable: z.boolean().optional(),
     requestedNotches: z.number().int().min(0).max(5).optional(),
+  })
+  .strict();
+
+/**
+ * Base financière jointe à une notation (bilan, ratios, contrôles). Bornée :
+ * elle voyage dans l'instantané d'entrée, sans effet sur le calcul.
+ */
+const finiteOrNull = z.number().finite().nullable();
+export const financialBasisSchema = z
+  .object({
+    chartVersion: z.string().max(40),
+    statementModel: z.enum(["NORMAL", "SIMPLIFIE"]),
+    certified: z.boolean(),
+    source: z.enum(["SAISIE", "EXCEL", "IA"]),
+    currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+    document: z.object({ id: z.string().max(40), name: z.string().max(200), sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict().optional(),
+    years: z
+      .array(
+        z
+          .object({
+            fiscalYear: z.string().max(20),
+            closingDate: z.string().max(10),
+            postes: z.record(z.string().max(40), z.number().finite()).refine((r) => Object.keys(r).length <= 120, "Trop de postes."),
+          })
+          .strict()
+      )
+      .max(3),
+    indicators: z.array(z.object({ key: z.string().max(40), values: z.array(finiteOrNull).max(3) }).strict()).max(80),
+    gridRatios: z
+      .array(
+        z
+          .object({
+            criterion: z.string().max(32),
+            indicator: z.string().max(40),
+            computed: finiteOrNull,
+            specialCase: z.string().max(60).optional(),
+            retained: finiteOrNull,
+            overridden: z.boolean(),
+            reason: z.string().max(500).optional(),
+            noteFr: z.string().max(1000).optional(),
+          })
+          .strict()
+      )
+      .max(30),
+    controls: z
+      .array(
+        z
+          .object({
+            key: z.string().max(80),
+            labelFr: z.string().max(200),
+            status: z.enum(["OK", "ALERTE", "KO"]),
+            detailFr: z.string().max(500),
+          })
+          .strict()
+      )
+      .max(200),
   })
   .strict();
 
@@ -98,6 +155,23 @@ export const ratingRequestSchema = z
     confidence: confidenceSchema,
     structuralFlags: structuralFlagsSchema.optional(),
     materiality: materialitySchema.optional(),
+    materialityEvidence: z
+      .object({
+        esgPhysicalMaterial: z.string().max(500).optional(),
+        esgTransitionMaterial: z.string().max(500).optional(),
+        esgComplianceMaterial: z.string().max(500).optional(),
+        covenantsMaterial: z.string().max(500).optional(),
+      })
+      .strict()
+      .optional(),
+    /** Éléments de routage : le serveur en déduit la famille de modèle (diagnostic M06). */
+    routing: z
+      .object({
+        reliableFinancialStatements: z.boolean(),
+        behavioralHistoryMonths: z.number().int().min(0).max(600),
+      })
+      .strict()
+      .optional(),
     groupSupport: groupSupportSchema.optional(),
     redFlags: z
       .array(z.string().regex(/^RF\d{2}$/, "Code de red flag attendu au format RFnn"))
@@ -107,6 +181,8 @@ export const ratingRequestSchema = z
     complianceStatus: z.enum(["NOT_EVALUATED", "CLEAR", "REFER", "BLOCKED"]).optional(),
     /** Exposition déjà au bilan : conservée dans l'instantané, sans effet sur le calcul. */
     existingExposure: z.boolean().optional(),
+    /** Bilan et ratios qui fondent la notation : restitués sur la fiche, sans effet sur le calcul. */
+    financialBasis: financialBasisSchema.optional(),
     defaultTriggered: z.boolean().optional(),
     defaultGrade: z.enum(["DEF1", "DEF2", "DEF3"]).optional(),
     asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date d'arrêté au format YYYY-MM-DD"),
@@ -151,6 +227,7 @@ export const webhookSubscriptionSchema = z
           "rating.completed",
           "rating.blocked",
           "rating.overridden",
+          "rating.override_expired",
           "counterparty.updated",
           "*",
         ])

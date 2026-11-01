@@ -37,7 +37,7 @@ const criteria: CriterionConfig[] = [
       "CAGR < −15 %, effondrement récent > 25 %, perte majeure de clientèle ou CA non fiable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
     evidenceRequiredFr: ["États financiers N, N−1, N−2", "Comparaison sectorielle datée"],
   },
   {
@@ -57,7 +57,7 @@ const criteria: CriterionConfig[] = [
       "Marge négative au dernier exercice, < P10, pertes opérationnelles récurrentes ou EBITDA non fiable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
     evidenceRequiredFr: ["EBITDA ajusté et trace des retraitements", "Référentiel sectoriel daté"],
   },
   {
@@ -76,7 +76,7 @@ const criteria: CriterionConfig[] = [
       "Négatif au dernier exercice et tendance non corrigée, ou < P10 sur deux exercices"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D1.4",
@@ -156,8 +156,7 @@ const criteria: CriterionConfig[] = [
         score: 0,
       },
     ],
-    unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailablePolicy: "BLOCK",
   },
   {
     code: "D1.7",
@@ -175,7 +174,7 @@ const criteria: CriterionConfig[] = [
       "> P90 avec détérioration > 45 jours, actifs non recouvrables, fournisseurs durablement impayés ou BFR non finançable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D1.8",
@@ -197,7 +196,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // =========================================================================
@@ -219,7 +218,7 @@ const criteria: CriterionConfig[] = [
       GE: bins5("HIGHER_IS_BETTER", [6.0, 4.0, 2.5, 1.5]),
     },
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D2.2",
@@ -237,8 +236,7 @@ const criteria: CriterionConfig[] = [
       PME: bins5("HIGHER_IS_BETTER", [1.6, 1.35, 1.2, 1.0]),
       GE: bins5("HIGHER_IS_BETTER", [1.75, 1.4, 1.2, 1.0]),
     },
-    unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailablePolicy: "BLOCK",
     evidenceRequiredFr: ["Échéancier complet de la dette", "CFADS et retraitements"],
   },
   {
@@ -260,7 +258,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D2.4",
@@ -278,7 +276,7 @@ const criteria: CriterionConfig[] = [
       "Couverture < 3 mois, gap avéré, refinancement non sécurisé ou rupture prévisible"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D2.5",
@@ -299,7 +297,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D2.6",
@@ -315,7 +313,7 @@ const criteria: CriterionConfig[] = [
       "Covenant rompu non régularisé, information dissimulée ou accélération possible de dette"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // =========================================================================
@@ -362,7 +360,7 @@ const criteria: CriterionConfig[] = [
       "> 30 jours, dépassement permanent, compte bloqué ou absence d'autorisation"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D3.3",
@@ -380,7 +378,7 @@ const criteria: CriterionConfig[] = [
       "> 100 % non autorisé, ligne saturée sans capacité de réduction ou besoin structurel non financé"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D3.4",
@@ -407,7 +405,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D3.5",
@@ -424,7 +422,7 @@ const criteria: CriterionConfig[] = [
       "Incident grave/non régularisé, interdiction ou signal bloquant selon dispositif applicable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D3.6",
@@ -440,7 +438,7 @@ const criteria: CriterionConfig[] = [
       "Échec de restructuration, seconde concession, impayé post-restructuration ou défaut"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D3.7",
@@ -457,7 +455,7 @@ const criteria: CriterionConfig[] = [
       "Cross-default, contagion applicable, dette cachée, incident majeur groupe ou soutien inversé non soutenable"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // =========================================================================
@@ -479,7 +477,7 @@ const criteria: CriterionConfig[] = [
       "S5 — secteur très vulnérable/crise structurelle"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
     evidenceRequiredFr: ["Référentiel sectoriel interne daté et version"],
   },
   {
@@ -496,7 +494,7 @@ const criteria: CriterionConfig[] = [
       "Position marginale/non viable ; produit obsolète ; rupture de licence ; perte du marché essentiel"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D4.3",
@@ -522,7 +520,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
     evidenceRequiredFr: ["Balance clients", "Élimination des ventes intragroupe"],
   },
   {
@@ -545,7 +543,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
     evidenceRequiredFr: ["Balance fournisseurs", "Cartographie des alternatives"],
   },
   {
@@ -564,7 +562,7 @@ const criteria: CriterionConfig[] = [
       "< 3 mois, annulations matérielles, carnet artificiel ou arrêt d'activité prévisible"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D4.6",
@@ -582,7 +580,7 @@ const criteria: CriterionConfig[] = [
       "Exposition > 100 % de l'EBITDA, aucune couverture, continuité menacée ou pays bloqué"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D4.7",
@@ -598,7 +596,7 @@ const criteria: CriterionConfig[] = [
       "Arrêt majeur non résolu, technologie obsolète, perte de licence/certification ou capex vital non financé"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D4.8",
@@ -614,7 +612,7 @@ const criteria: CriterionConfig[] = [
       "Croissance artificielle/circulaire, acquisitions non intégrées, destruction de cash ou plan irréaliste"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // =========================================================================
@@ -634,7 +632,7 @@ const criteria: CriterionConfig[] = [
       "Incompétence manifeste, départs critiques, information trompeuse ou incapacité à exploiter"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D5.2",
@@ -650,7 +648,7 @@ const criteria: CriterionConfig[] = [
       "Indisponibilité de l'homme-clé compromettant immédiatement l'activité, sans solution"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D5.3",
@@ -666,25 +664,25 @@ const criteria: CriterionConfig[] = [
       "Absence de contrôle, fraude/irrégularité de gouvernance, décisions non autorisées"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D5.4",
     domainCode: "D5",
     labelFr: "Actionnariat, groupe et soutien",
     descriptionFr:
-      "Note standalone conservée. Le support groupe n'améliore le grade que via la méthode dédiée (capacité + volonté + cadre juridique), jamais dans ce critère.",
+      "Risque propre lié à l'actionnariat et au groupe (contagion, ponctions, opacité). Le soutien n'apporte aucun point ici (diagnostic M11) : il relève exclusivement de la méthode de support groupe, hors note autonome.",
     type: "QUALITATIVE",
     weightsBps: { TPE: 200, PME: 150, GE: 250 },
     anchors: anchors(
-      "Actionnariat stable et transparent ; parent très solide ; support juridiquement engageant ou historique incontestable",
-      "Actionnaires solides et impliqués ; soutien documenté mais non totalement contraignant",
-      "Actionnariat stable, capacité de soutien moyenne ou entité autonome sans besoin de support",
-      "Conflits, dilution probable, actionnaires endettés ou soutien incertain",
+      "Actionnariat stable, transparent et sans ponction ; aucune dépendance de trésorerie envers le groupe",
+      "Actionnariat stable ; flux avec le groupe limités, documentés et à des conditions normales",
+      "Actionnariat stable mais flux de groupe matériels, ou dépendance commerciale envers le groupe",
+      "Conflits, dilution probable, actionnaires endettés ou remontées de trésorerie excessives",
       "Groupe en difficulté, ponctions de cash, litige actionnarial majeur ou opacité"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D5.5",
@@ -700,7 +698,7 @@ const criteria: CriterionConfig[] = [
       "Absence de stratégie, budgets manipulés ou décisions menaçant la continuité"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D5.6",
@@ -716,7 +714,7 @@ const criteria: CriterionConfig[] = [
       "Détournement de ressources, créances irrécouvrables, garanties cachées ou transactions non autorisées"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D5.7",
@@ -732,7 +730,7 @@ const criteria: CriterionConfig[] = [
       "Aucun pilotage fiable, refus de transparence ou dissimulation de difficultés"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // =========================================================================
@@ -752,7 +750,7 @@ const criteria: CriterionConfig[] = [
       "Comptes non fiables/refusés, soupçon de falsification ou continuité non reflétée"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D6.2",
@@ -776,7 +774,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D6.3",
@@ -797,7 +795,7 @@ const criteria: CriterionConfig[] = [
       },
     ],
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D6.4",
@@ -813,7 +811,7 @@ const criteria: CriterionConfig[] = [
       "Mesure d'exécution majeure, dette non soutenable, procédure menaçant l'activité ou document falsifié"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D6.5",
@@ -829,7 +827,7 @@ const criteria: CriterionConfig[] = [
       "UBO/pouvoirs impossibles à établir, faux document ou blocage KYC"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 
   // =========================================================================
@@ -863,7 +861,7 @@ const criteria: CriterionConfig[] = [
       transferWeightTo: "D7.3",
     },
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D7.2",
@@ -889,7 +887,7 @@ const criteria: CriterionConfig[] = [
       transferWeightTo: "D7.4",
     },
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D7.3",
@@ -905,7 +903,7 @@ const criteria: CriterionConfig[] = [
       "Autorisation retirée, fermeture/sanction grave, dommage majeur ou violation bloquante"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
   {
     code: "D7.4",
@@ -921,7 +919,7 @@ const criteria: CriterionConfig[] = [
       "Déni d'un risque matériel, aucune gouvernance, information trompeuse ou greenwashing démontré"
     ),
     unavailablePolicy: "CONSERVATIVE_SCORE",
-    unavailableScore: 25,
+    unavailableScore: 0,
   },
 ];
 
@@ -937,10 +935,15 @@ const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
 
 export const CORP_STD_V1: ModelConfig = {
   modelId: "CORP_STD_V1",
-  version: "3.0.0",
+  version: "3.1.0",
   labelFr:
     "Modèle expert de notation interne — Entreprises non financières Maroc (TPE/PME/GE)",
   status: "DRAFT_EXPERT_SEED",
+  routeFamily: "STANDARD",
+  mandatoryReviews: [
+    { criterion: "D2.2", operator: "LT", threshold: 1, labelFr: "service de la dette non couvert en scénario de base" },
+    { criterion: "D1.6", operator: "LT", threshold: 1, labelFr: "liquidité court terme inférieure aux exigibilités" },
+  ],
   effectiveFrom: "2026-09-17",
   conventionFr: "Score 100 = risque le plus faible ; score 0 = risque le plus élevé.",
   segments: ["TPE", "PME", "GE"],
@@ -1023,6 +1026,7 @@ export const CORP_STD_V1: ModelConfig = {
       maxGrade: "STD-P7",
       source: "CREDIT_POLICY",
       trigger: "BASE_DSCR_BELOW_1",
+      derivation: { criterion: "D2.2", operator: "LT", threshold: 1 },
       centralCriterion: "D2.2",
       incrementalRationaleFr:
         "Une incapacité à couvrir le service de la dette en scénario de base n'est compensable ni par la gouvernance ni par un secteur porteur : le défaut survient par manque de trésorerie à l'échéance, quelles que soient les autres qualités du dossier. L'effet incrémental par rapport au score de D2.2 reste à mesurer sur défauts observés.",

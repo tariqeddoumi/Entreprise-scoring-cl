@@ -6,6 +6,7 @@ import { getModel, listModels } from "@/models";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { applyField, normalizeProposal, parseDraft, proposableFields, type CaseDraft, type ProposableField } from "./case-input";
+import { gridLinks, hasFinancials } from "@/financials/compute";
 import { buildInput, CaseError, OFFICIAL_RUN_WHERE } from "./cases";
 import { prisma as basePrisma } from "./prisma";
 import { executeRatingRun, RatingServiceError } from "./rating-service";
@@ -198,7 +199,9 @@ export interface RefreshParse {
  */
 export function refreshFieldsFor(model: ModelConfig): ProposableField[] {
   return [
-    ...proposableFields(model),
+    // Un fichier de rafraîchissement peut porter un ratio du bilan : il est
+    // appliqué comme correction motivée (le lot en est le motif).
+    ...proposableFields(model, { includeBalanceSheetRatios: true }),
     { key: "amounts.globalBankExposure", kind: "number", labelFr: "Engagement global banque/groupe", guideFr: "Devise de la contrepartie." },
   ];
 }
@@ -557,9 +560,24 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
     } else {
       draft = { ...parseDraft(official.ratingCase.draftInput, model, batch.asOfDate), asOfDate: batch.asOfDate };
       const allowed = new Set(refreshFieldsFor(model).map((f) => f.key));
+      const links = gridLinks(model.modelId);
       for (const [k, v] of Object.entries(updates)) {
-        if (allowed.has(k)) draft = applyField(draft, k, v);
-        else ignored.push(k);
+        if (!allowed.has(k)) {
+          ignored.push(k);
+          continue;
+        }
+        const code = k.startsWith("criteria.") && k.endsWith(".value") ? k.slice("criteria.".length, -".value".length) : null;
+        if (code && links[code] && hasFinancials(draft.financials)) {
+          // Ratio calculé depuis le bilan : la valeur reçue le remplace par une
+          // correction tracée, jamais silencieusement.
+          draft = {
+            ...draft,
+            financials: {
+              ...draft.financials,
+              overrides: { ...draft.financials.overrides, [code]: { value: v, reason: `Valeur rafraîchie par le lot « ${batch.name} » au ${batch.asOfDate}` } },
+            },
+          };
+        } else draft = applyField(draft, k, v);
       }
       input = (await buildInput(db, { modelId: model.modelId, counterparty }, draft)).input;
     }

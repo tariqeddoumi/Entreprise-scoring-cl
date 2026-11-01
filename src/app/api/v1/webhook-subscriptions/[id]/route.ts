@@ -12,9 +12,8 @@ export async function DELETE(
 ) {
   const g = await guard(req, "ADMIN");
   if (!g.ok) return g.response;
-  // Une souscription reçoit les événements de tout le groupe : sa gestion est
-  // réservée aux clés sans restriction d'entité.
-  if (!g.ctx.perimeter.all) return problem(403, "Réservé aux systèmes centraux du groupe.");
+  // Client cloisonné : une clé de filiale ne désactive que les souscriptions
+  // de son périmètre ; celles du groupe lui sont introuvables.
 
   const { id } = await params;
   const disabled = await g.ctx.db.webhookSubscription.updateMany({

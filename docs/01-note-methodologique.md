@@ -324,6 +324,18 @@ Le niveau de confiance ne modifie jamais le score brut : il plafonne le grade fi
 
 Ce mécanisme évite l'écueil le plus fréquent des dispositifs de notation : produire une note d'apparence normale sur un dossier dont l'information est insuffisante.
 
+## 12 bis. Bilan, ratios et base financière de la notation
+
+**Principe.** Toute notation sur grille standard repose sur un bilan identifié : exercice, date de clôture, modèle comptable, certification, pièce source. Le chargé d'affaires charge le bilan et le CPC des exercices N et N−1 (N−2 facultatif) de trois façons : lecture par l'IA d'un PDF, d'une photo ou d'un classeur Excel ; gabarit Excel de la banque ; saisie à l'écran. Le modèle simplifié du CGNC (entités dont le chiffre d'affaires ne dépasse pas 10 MDH, loi 44-03) est pris en charge : mêmes rubriques, sans tableau de financement.
+
+**Lecture et calcul séparés.** Quelle que soit la source, les montants sont ramenés à un gabarit unique de postes CGNC (version BILAN-CGNC-2026.1). L'IA lit les postes, avec la page source et un niveau de confiance par valeur ; elle ne calcule aucun ratio. Les ratios sont calculés par formule, selon les définitions du dictionnaire comptable : fonds propres tangibles, dette financière économique, EBE retraité du crédit-bail, flux de trésorerie d'exploitation, service de la dette à douze mois. Deux analystes qui lisent le même bilan obtiennent les mêmes ratios.
+
+**Contrôles avant soumission.** Équilibre actif-passif de chaque exercice, totaux et résultat lus sur le document retrouvés par le calcul, résultat du bilan égal à celui du CPC, ordre des exercices, présence de N et N−1. Un contrôle bloquant empêche la soumission. Des comptes clos depuis plus de dix-huit mois rendent les ratios du bilan « périmés » pour le moteur. Un modèle simplifié au-delà de 10 MDH, ou un CA du cadrage différent de celui du bilan, sont signalés.
+
+**Ratios de la grille et correction motivée.** Les critères D1.4, D1.5, D1.6, D1.8, D2.1, D2.2 et D2.3 de la grille standard (F1, F2, F3 et F6 de la grille challenger) prennent la valeur calculée. Un EBE retraité nul ou négatif déclenche le cas particulier du critère, jamais un ratio favorable par changement de signe. L'analyste peut corriger un ratio de la grille, et lui seul, avec un motif obligatoire ; la valeur calculée et la valeur retenue sont conservées toutes les deux et la correction est visible du valideur. Une valeur rafraîchie par une renotation par lot est appliquée de la même façon, le lot en étant le motif. Les grilles comportementales TPE ne lisent pas le bilan ; un bilan simplifié peut néanmoins être joint et restitué.
+
+**Restitution.** À la soumission, la « base financière de la notation » est figée dans l'instantané d'entrée, sans effet sur le calcul : référence du bilan et empreinte SHA-256 de la pièce, postes clés et bilan complet par exercice, tous les indicateurs (y compris hors grille : autonomie financière, marges, rentabilités, délais clients et fournisseurs, BFR, fonds de roulement, CAF), ratios calculés et retenus avec leur motif, résultat des contrôles. La fiche de notation l'affiche : la note se vérifie contre le bilan remis par le client, au renouvellement d'une ligne de court terme comme pour un crédit d'investissement.
+
 ## 13. Caps, red flags et dérogations
 
 ### 13.1 Caps structurels
@@ -424,6 +436,26 @@ Résultat moteur : **G4 — Bon**. Un soutien de groupe ne modifie aucun score �
 
 > **Section générée automatiquement depuis la configuration exécutée par le moteur** (`src/models/`), au moyen de `scripts/generate-model-doc.mts`. Toute modification d'un poids, d'un seuil ou d'un ancrage dans le code se répercute ici à la régénération. Cette section ne peut donc pas diverger du calcul réellement appliqué.
 
+## 16 bis. Corrections du diagnostic du 1er novembre 2026 et grilles challenger
+
+Le diagnostic indépendant du 1er novembre 2026 (documents 01 à 03 et plan d'actions) a reproduit cinq défauts métier et relevé sept écarts de conception. Le moteur 3.1.0 et les grilles 3.1.0 les corrigent :
+
+| Réf. | Constat | Correction |
+|---|---|---|
+| M01 | L'information absente à 25 récompensait le masquage d'un mauvais score | Borne basse 0 pour le grade, borne haute restituée ; tests d'effacement sur tous les critères |
+| M02 | L'exception DSCR dépendait d'une case séparée | Exception dérivée du ratio D2.2 ; contradiction tracée |
+| M03 | Une matérialité omise neutralisait des scores ESG défavorables | Trois états ; non-matérialité justifiée seule à écarter le critère |
+| M04 | Un segment imposé favorable était conservé | Segment calculé par le serveur prioritaire |
+| M05 | Un dossier neuf pré-remplissait les qualitatifs à 50 et la complétude à 100 | Critères non instruits à l'ouverture ; complétude plafonnée par la part observée |
+| M06, M07 | Le modèle était choisi par l'appelant ; minimum comportemental à 12 mois | Routage serveur par famille ; 24 mois minimum, analyse courte entre 12 et 23 mois |
+| M08 | Seules trois données bloquaient le standard | Noyau obligatoire élargi à la liquidité et au DSCR |
+| M10 | Horloge implicite | Horodatage fourni par le service ; à défaut, date d'arrêté |
+| M11 | Le défaut pouvait se perdre dans une sortie de routage | Défaut traité avant tout refus de routage |
+| M12 | L'usage « production » reposait sur deux attributs de configuration | Approbation d'usage explicite exigée (registre indépendant à constituer) |
+| Double bénéfice | D5.4 et B6.1 valorisaient le soutien, puis le module groupe ajoutait des crans | Ancrages réécrits sur le risque propre du groupe ; le soutien relève de la seule méthode dédiée |
+
+**Grilles challenger.** Les grilles resserrées du document 03 — 16 critères standard (CORP_STD_CHALLENGER_V1) et 12 critères TPE comportementaux (CORP_TPE_CHALLENGER_V1) — sont publiées en parallèle des grilles actuelles corrigées, pour une double notation en pilote. Elles regroupent les variables corrélées, retirent le soutien de la note autonome, suivent la qualité documentaire hors score, exigent 80 % du poids observé (60 % par famille) et remplacent les plafonds numérotés par des revues risques obligatoires. Leurs poids et seuils sont des hypothèses expertes, ni calibrées sur BCP ni prescrites par Bank Al-Maghrib ; aucune probabilité de défaut n'y est associée. Leurs grilles complètes figurent ci-dessous.
+
 <!-- GRILLES_GENEREES -->
 
 ---
@@ -458,20 +490,23 @@ Le moteur ne consulte ni horloge, ni générateur aléatoire, ni source externe.
 
 Les poids sont manipulés en entiers ; les montants et scores utilisent un type décimal en base ; l'arrondi n'intervient qu'à l'affichage.
 
-### 18.3 Traitement des situations dégradées
+### 18.3 Traitement des situations dégradées (moteur 3.1)
 
 | Situation | Comportement |
 |---|---|
-| Red flag bloquant | Calcul arrêté avant toute agrégation ; aucun score produit ; motif de blocage explicite |
+| Défaut constaté | Grade défaut forcé, indépendamment du score, de la couverture, du segment et du routage ; score brut conservé s'il existe |
+| Dossier hors de la famille de modèle | Refus de noter (routage serveur) : grille standard avec des comptes exploitables, comportementale pour une TPE sans comptes fiables et avec 24 mois d'historique au moins ; 12 à 23 mois : analyse courte distincte |
+| Segment fourni divergent | Écarté : le segment calculé par le serveur fait foi dès que les montants le permettent ; l'écart est tracé |
 | Segment indéterminable | Scoring bloqué ; aucun segment par défaut |
-| Donnée critique manquante ou invalide | Scoring bloqué, avec le critère nommé dans le motif |
-| Donnée non critique manquante | Critère exclu du dénominateur, avertissement nommant le critère ; impact porté par le niveau de confiance |
-| Critère non applicable | Poids redistribué à l'intérieur du domaine, sans avertissement |
-| Cas spécial documenté | Score nul explicite, avec mention du cas dans l'explication |
-| Confiance insuffisante | Aucun grade final ; score brut conservé pour la surveillance |
-| Défaut avéré | Grade défaut forcé, indépendamment du score ; score brut conservé |
+| Donnée du noyau obligatoire manquante | Scoring bloqué, critère nommé (standard : fonds propres tangibles, dette nette / EBE, liquidité, DSCR, retards ; comportemental : retards, flux confiés, couverture par les flux, liquidité, rapprochement flux / CA) |
+| Donnée non critique manquante | **Borne basse** : score 0 retenu pour le grade, poids conservé, couverture observée réduite ; la **borne haute** du score (information supposée au meilleur niveau) est restituée à côté |
+| Critère non applicable | Seulement si le modèle le prévoit : poids transféré au critère désigné, poids total constant |
+| Matérialité ESG | Trois états : matériel, non matériel justifié, inconnu. Seul le « non matériel » justifié écarte le critère ; l'inconnu est évalué et signalé pour revue |
+| Exception DSCR | Dérivée du ratio saisi ; une case contradictoire est corrigée et tracée |
+| Ratio sous son seuil de revue | Revue risques obligatoire restituée avec la note ; aucune décision automatique |
+| Confiance insuffisante | Aucun grade final ; la complétude retenue ne dépasse jamais la part du poids réellement observée |
 
-**À aucun moment une donnée absente n'est convertie en zéro ou en score neutre.**
+**Une information absente ne vaut jamais mieux qu'une mauvaise valeur observée** : la propriété est vérifiée par des tests sur chaque critère et chaque niveau de chaque modèle. L'ancienne catégorie « information absente » à 25 points ne la garantissait pas (diagnostic du 1er novembre 2026, M01) : effacer un critère noté 0 améliorait le score.
 
 ### 18.4 Explicabilité
 

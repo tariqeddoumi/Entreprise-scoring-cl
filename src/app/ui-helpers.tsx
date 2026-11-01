@@ -19,7 +19,7 @@ import type { CSSProperties } from "react";
  *
  * Reste purement cosmétique : aucun calcul métier n'en dépend.
  */
-const SCALE_LENGTHS: Record<string, number> = { "STD-P": 8, "TPE-B": 6 };
+const SCALE_LENGTHS: Record<string, number> = { "STD-P": 8, "TPE-B": 6, "STD-S": 8, "TPE-T": 6 };
 
 export function gradeAccent(grade: string | null | undefined): string {
   if (!grade) return "var(--muted)";

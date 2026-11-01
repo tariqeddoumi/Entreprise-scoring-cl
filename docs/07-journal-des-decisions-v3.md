@@ -571,6 +571,40 @@ Diagnostic des représentations du système deux à deux : base de production et
 - si un grade inchangé en surveillance peut, au-delà de la durée de validité, prolonger la note sans nouvelle validation (aujourd'hui : non) ;
 - la fréquence de rafraîchissement des données comportementales (D3) fournies par la DSI et le format du fichier d'échange.
 
+## D-51 — Corrections du diagnostic de novembre 2026 (moteur 3.1, grilles challenger) — **À CONFIRMER**
+
+*Contexte :* diagnostic modèle (BCP / BAM / CAC), diagnostic technique (PostgreSQL / Oracle) et proposition de modèle cible, reçus le 1er novembre 2026.
+
+*Décision :*
+- **Information absente.** Un critère non instruit vaut la borne basse (0) ; le score haut possible (`scoreUpperBound`) est restitué à côté du score retenu. Un nouveau dossier part de « non instruit », plus d'un score de 50 par défaut (M01, M05). Le point 5 de la section 3 est ainsi tranché à titre conservateur, en attendant la calibration.
+- **Noyau obligatoire élargi** : D1.4, D1.5, D1.6, D2.2, D3.1 (grille standard), B1.1, B1.3, B2.1, B2.3, B5.2 (TPE) bloquent la note s'ils manquent (M08). Un refus de soumission nomme le critère à compléter.
+- **Exceptions dérivées.** NC01 se déduit du ratio D2.2 < 1 ; une case cochée ne peut plus la contredire (M02).
+- **Matérialité** à trois états : inconnue (revue obligatoire), matérielle, non matérielle — cette dernière exige une justification (M03).
+- **Segment et routage décidés par le serveur** : le segment calculé prime sur le segment demandé ; la grille comportementale exige une TPE sans comptes exploitables et 24 mois d'historique (12 à 23 mois : analyse courte, pas de note) ; le défaut prime sur tout refus de routage (M04, M06, M07, M11).
+- **Double avantage du soutien** supprimé : D5.4 et B6.1 ne rapportent plus de points au titre du soutien du groupe, qui ne s'exprime qu'en crans encadrés.
+- **Usage de production** subordonné à une approbation d'usage explicite et en vigueur à la date d'arrêté (M12) ; horodatage fourni par l'appelant (M10).
+- **Grilles challenger** CORP_STD_CHALLENGER_V1 (16 critères, échelle STD-S1..S8) et CORP_TPE_CHALLENGER_V1 (12 critères, TPE-T1..T6), publiées en double notation de pilote, sans effet sur les décisions.
+- **Sécurité** : abonnements webhook rattachés à une entité et événements écrits dans la même transaction que la notation (outbox) ; clé d'API sans code d'entité refusée ; liste fermée des tables cloisonnées ; une seule dérogation en attente par notation (index unique) ; dérogation échue sans effet, même avant la tâche d'expiration ; idempotence propre à chaque appelant (S01 à S03).
+
+*Reste ouvert (non traité dans cette version) :* séparation des rôles de base et RLS à l'exécution (S04, S05), SSO et MFA (S06), registre des approbations d'usage, adaptateur Oracle, arithmétique décimale.
+
+*À confirmer par la banque :* la liste du noyau obligatoire, le seuil de 24 mois et le traitement « analyse courte », le calendrier de comparaison des grilles challenger.
+
+## D-52 — Bilan chargé, ratios calculés par l'outil, base financière restituée sur la fiche — **À CONFIRMER**
+
+*Décision :*
+- **Chargement.** Lecture par l'IA (PDF, photo, Excel), gabarit Excel de la banque relu par code de poste, ou saisie. La pièce est conservée au dossier avec son empreinte SHA-256. Modèles normal et simplifié du CGNC.
+- **Lecture et calcul séparés.** L'IA lit les postes du gabarit (source et confiance par valeur, valeurs peu sûres signalées) ; les ratios sont calculés par formule, jamais par l'IA. L'IA ne propose plus les ratios calculables depuis le bilan.
+- **Exercices.** N et N−1 exigés, N−2 facultatif (pondération 50/30/20 de la conversion en trésorerie répartie sur les exercices calculables).
+- **Contrôles bloquants à la soumission** (grilles standard, paramètre « Bilan exigé pour soumettre », activé par défaut) : N et N−1 présents et datés, bilan équilibré, totaux et résultat du document retrouvés, ordre des exercices. Comptes de plus de 18 mois : ratios transmis « périmés ».
+- **Correction.** Seuls les ratios de la grille se corrigent, avec un motif obligatoire ; valeur calculée et valeur retenue conservées, correction visible du valideur. Le valideur voit l'écart ; il n'approuve pas ligne par ligne (il valide le dossier entier).
+- **Restitution.** Base financière figée dans l'instantané d'entrée (sans effet sur le calcul) et affichée sur la fiche de notation et sur le dossier soumis.
+
+*À confirmer par la banque :*
+- les conventions du gabarit : trésorerie passif entière dans la dette, créances TTC rapportées au CA HT pour le délai clients, estimation des investissements à défaut de tableau de financement ;
+- l'approbation ligne par ligne des corrections de ratios par le valideur (aujourd'hui : non) ;
+- le format d'import de la liasse fiscale EDI (SIMPL-IS), à obtenir auprès de la DGI.
+
 ---
 
 # 3. Ce qui reste à décider par la banque
@@ -579,7 +613,7 @@ Diagnostic des représentations du système deux à deux : base de production et
 2. **Politique de défaut, guérison et rechute** — les durées probatoires proposées (trois mois, douze mois) sont des seeds.
 3. **Seuils de couverture** — à recaler sur la distribution réelle de complétude, dès les premiers dossiers du pilote.
 4. **Traitement des jeunes entreprises** — grille dédiée ou traitement expert tracé.
-5. **Score de la catégorie « information absente »** — à estimer comme une catégorie de risque à part entière lors de la calibration. **Urgent** : à 25, une information absente améliore le score de tout critère réellement mauvais, contrairement à ce qu'affirme la note méthodologique (D-32).
+5. **Score de la catégorie « information absente »** — à estimer comme une catégorie de risque à part entière lors de la calibration. Provisoirement fixé à 0, borne basse (D-51) : une information absente ne peut plus améliorer un score.
 6. **Granularité définitive des échelles** — résultat de la calibration, pas choix de présentation.
 7. **Maintien ou suppression des quatre exceptions conservées** — sur tests d'ablation.
 8. **Correspondance entre les deux échelles** — condition de toute master scale commune.

@@ -3,11 +3,11 @@ import type { RatingInput, RatingResult } from "@/core/types";
 import { getModel } from "@/models";
 import { hasRole, type Identity, type Role } from "./auth";
 import { auditWithin } from "./audit";
-import { draftAmounts, draftToRequest, parseDraft, type CaseDraft } from "./case-input";
+import { draftAmounts, draftFinancials, draftToRequest, parseDraft, type CaseDraft } from "./case-input";
 import { BASE_CURRENCY, convertToBase, FxError, type FxConversion } from "./fx";
 import { executeRatingRun, RatingServiceError, simulateRating } from "./rating-service";
 import { ratingRequestSchema } from "./schemas";
-import { settingInt, settingText } from "./settings";
+import { settingBool, settingInt, settingText } from "./settings";
 
 /**
  * Workflow des dossiers de notation.
@@ -203,7 +203,7 @@ export async function buildInput(db: PrismaClient, c: { modelId: string; counter
   const model = getModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const { base, fx } = await convertAmounts(db, draft, c.counterparty.currency);
-  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base));
+  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency }));
   if (!parsed.success) {
     throw new CaseError(
       400,
@@ -232,11 +232,30 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   // Un dossier se soumet pour faire valider une NOTE : un calcul sans grade
   // (donnée critique manquante, couverture insuffisante) se complète, il ne se
   // valide pas — sinon une « absence de note » deviendrait la note officielle.
+  // Bilan : exigé pour une grille standard (paramétrable) ; dès qu'il est
+  // présent, ses contrôles bloquants s'appliquent, quelle que soit la grille.
+  const model = getModel(c.modelId);
+  if (model) {
+    const fin = draftFinancials(draft, model);
+    const required = model.routeFamily === "STANDARD" && (await settingBool("WORKFLOW_BALANCE_SHEET_REQUIRED"));
+    if (required || fin.present[0]) {
+      const blocking = fin.controls.filter((k) => k.status === "KO" && !k.key.startsWith("MOTIF_") && k.key !== "FRAICHEUR");
+      if (blocking.length > 0) {
+        throw new CaseError(
+          409,
+          `Bilan à compléter avant soumission : ${blocking.slice(0, 5).map((k) => `${k.labelFr} — ${k.detailFr}`).join(" ; ")}`
+        );
+      }
+    }
+  }
   const check = simulateRating(input);
   if (check.finalGrade === null) {
     throw new CaseError(
       409,
-      `Le calcul ne produit pas de grade : complétez le dossier avant de le soumettre. ${check.explanationFr}`
+      `Le calcul ne produit pas de grade : complétez le dossier avant de le soumettre. ${check.explanationFr}` +
+        // Le motif exact (critère du noyau obligatoire non instruit, routage…)
+        // est nommé : « donnée critique manquante » seul laissait chercher.
+        (check.blockingReasonsFr.length > 0 ? ` À compléter : ${check.blockingReasonsFr.slice(0, 6).join(" ; ")}` : "")
     );
   }
   try {

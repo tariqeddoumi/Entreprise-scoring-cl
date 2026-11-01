@@ -266,6 +266,12 @@ export interface GradeScaleConfig {
  * effet non linéaire supplémentaire est justifié.
  */
 export interface NonCompensatoryRuleConfig {
+  /**
+   * Dérivation depuis la valeur observée d'un critère (diagnostic M02). Quand la
+   * valeur est disponible, elle fait foi : la case déclarée ne peut ni créer ni
+   * effacer l'exception, et une contradiction est tracée.
+   */
+  derivation?: { criterion: string; operator: "LT"; threshold: number };
   code: string;
   labelFr: string;
   /** Grade plafond. "NO_GRADE" = aucun grade final. */
@@ -390,6 +396,23 @@ export interface ModelConfig {
   segmentationRulesetId: string;
   pdStatus: PdStatus;
   disclaimerFr: string;
+  /**
+   * Famille de routage (diagnostic M06) : le serveur décide de la famille
+   * applicable (standard ou comportementale) ; un modèle d'une autre famille
+   * refuse le dossier, quel que soit le choix de l'appelant.
+   */
+  routeFamily: "STANDARD" | "BEHAVIORAL";
+  /**
+   * Plafond de poids d'un critère isolé, en bps. Par défaut 600 (800 pour le
+   * comportemental) ; une grille resserrée le relève explicitement.
+   */
+  concentrationCapBps?: number;
+  /**
+   * Revues risques obligatoires (sans plafond de grade) : déclenchées quand la
+   * valeur observée d'un critère passe sous un seuil. Elles interdisent toute
+   * décision automatique et sont restituées avec la note.
+   */
+  mandatoryReviews?: Array<{ criterion: string; operator: "LT"; threshold: number; labelFr: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,9 +458,10 @@ export interface StructuralFlagsInput {
 /**
  * Matérialité des risques conditionnels (H09).
  *
- * Renseignée depuis le référentiel sectoriel et la localisation des sites ; tant
- * que ce référentiel n'est pas alimenté, déclarée par l'analyste et justifiée au
- * dossier (D-44).
+ * Trois états (diagnostic M03) : true = matériel ; false = non matériel, à
+ * justifier dans `materialityEvidence` ; absent = inconnu. Seul un « non
+ * matériel » justifié écarte le critère : l'inconnu est évalué comme les autres
+ * critères et signalé pour revue.
  */
 export interface MaterialityFlags {
   esgPhysicalMaterial?: boolean;
@@ -457,6 +481,45 @@ export interface GroupSupportInput {
   requestedNotches?: number;
 }
 
+/** Ratio de la grille calculé depuis le bilan, et valeur retenue après correction éventuelle. */
+export interface FinancialGridRatio {
+  criterion: string;
+  indicator: string;
+  /** Valeur calculée par l'outil (null : non calculable, cf. note). */
+  computed: number | null;
+  /** Cas spécial appliqué à la place d'une valeur (ex. EBITDA nul ou négatif). */
+  specialCase?: string;
+  /** Valeur transmise au moteur. */
+  retained: number | null;
+  overridden: boolean;
+  /** Motif de la correction, obligatoire quand la valeur est corrigée. */
+  reason?: string;
+  noteFr?: string;
+}
+
+export interface FinancialControl {
+  key: string;
+  labelFr: string;
+  status: "OK" | "ALERTE" | "KO";
+  detailFr: string;
+}
+
+/** Instantané figé du bilan qui fonde une notation. */
+export interface FinancialBasis {
+  chartVersion: string;
+  statementModel: "NORMAL" | "SIMPLIFIE";
+  certified: boolean;
+  source: "SAISIE" | "EXCEL" | "IA";
+  currency?: string;
+  document?: { id: string; name: string; sha256: string };
+  /** N, N−1, N−2 : postes lus et totaux recalculés (montants non vides seulement). */
+  years: Array<{ fiscalYear: string; closingDate: string; postes: Record<string, number> }>;
+  /** Tous les indicateurs calculés, même hors grille, par exercice (même ordre que `years`). */
+  indicators: Array<{ key: string; values: Array<number | null> }>;
+  gridRatios: FinancialGridRatio[];
+  controls: FinancialControl[];
+}
+
 export interface RatingInput {
   modelId: string;
   /** Segment fourni ou calculé par le référentiel de segmentation. */
@@ -470,6 +533,13 @@ export interface RatingInput {
   confidence: ConfidenceInput;
   structuralFlags?: StructuralFlagsInput;
   materiality?: MaterialityFlags;
+  /** Justification d'une non-matérialité déclarée (référence de pièce, analyse). */
+  materialityEvidence?: Partial<Record<keyof MaterialityFlags, string>>;
+  /**
+   * Éléments de routage (diagnostic M06) : comptes exploitables et profondeur de
+   * l'historique de compte. Le serveur en déduit la famille de modèle applicable.
+   */
+  routing?: { reliableFinancialStatements: boolean; behavioralHistoryMonths: number };
   groupSupport?: GroupSupportInput;
   /** Codes de red flags observés (issus des contrôles amont / conformité). */
   redFlags?: string[];
@@ -481,6 +551,12 @@ export interface RatingInput {
    * statut conformité, qui porte seul l'interdiction d'entrée en relation.
    */
   existingExposure?: boolean;
+  /**
+   * Base financière de la notation : bilan et CPC retenus, ratios calculés et
+   * retenus, contrôles. Conservée dans l'instantané d'entrée pour la fiche de
+   * notation, SANS effet sur le calcul : le moteur ne lit que `criteria`.
+   */
+  financialBasis?: FinancialBasis;
   /** Défaut avéré selon la définition applicable : force un grade défaut. */
   defaultTriggered?: boolean;
   /** Grade de défaut constaté (DEF1/DEF2/DEF3) ; DEF1 par défaut. */
@@ -581,6 +657,16 @@ export interface RatingResult {
   asOfDate: string;
 
   rawScore: number | null; // score brut 0-100, conservé même sans grade
+  /**
+   * Borne haute du score : celui qu'on obtiendrait si chaque information
+   * absente était au meilleur niveau. Le grade repose sur la borne basse
+   * (rawScore) ; l'écart mesure ce que l'information manquante laisse ouvert.
+   */
+  scoreUpperBound: number | null;
+  /** Revues risques obligatoires déclenchées (aucune décision automatique). */
+  mandatoryReviewsFr: string[];
+  /** Décision de routage du serveur. */
+  routingFr: string | null;
   domainResults: DomainResult[];
   coverage: CoverageResult;
   confidence: ConfidenceResultView;

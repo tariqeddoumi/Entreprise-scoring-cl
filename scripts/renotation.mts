@@ -15,6 +15,7 @@
  * contrepartie.
  */
 import { parseArgs } from "node:util";
+import { runMaintenance } from "../src/lib/maintenance";
 import { runScheduler } from "../src/lib/renotation";
 import { prisma } from "../src/lib/prisma";
 
@@ -23,6 +24,8 @@ const budgetS = values.budget ? Number(values.budget) : Infinity;
 const started = Date.now();
 
 async function main() {
+  const m = await runMaintenance();
+  console.log(`[maintenance] dérogations expirées : ${m.expiredOverrides} ; événements livrés : ${m.outbox.dispatched}, en échec : ${m.outbox.failed}`);
   let pass = 0;
   for (;;) {
     pass += 1;

@@ -8,7 +8,7 @@ import { auditWithin } from "./audit";
 import { config } from "./env";
 import type { Prisma, PrismaClient } from "@/generated/prisma";
 import { stableStringify } from "./api-utils";
-import { publishEvent } from "./webhooks";
+import { dispatchOutbox, enqueueEvent } from "./webhooks";
 
 /**
  * Options du moteur dérivées de l'environnement.
@@ -18,7 +18,11 @@ import { publishEvent } from "./webhooks";
  * et transmise explicitement (constat C02).
  */
 export function engineOptions(): EngineOptions {
-  return { syntheticPdAllowed: config().allowSyntheticPd };
+  // Horodatage fourni ICI, à la frontière (diagnostic M10) : le moteur n'a pas
+  // d'horloge implicite. Aucune approbation d'usage n'est transmise tant que le
+  // registre indépendant des usages n'existe pas (M12) : les résultats restent
+  // des notations de pilote.
+  return { syntheticPdAllowed: config().allowSyntheticPd, nowIso: new Date().toISOString() };
 }
 
 export class RatingServiceError extends Error {
@@ -95,6 +99,10 @@ export async function executeRatingRun(
     .update(stableStringify({ counterpartyId, input }))
     .digest("hex");
 
+  // Portée de la clé : l'appelant (diagnostic, idempotence). Deux systèmes ou
+  // deux filiales qui choisissent la même clé ne se répondent jamais l'un à
+  // l'autre.
+  if (idempotencyKey) idempotencyKey = `${identity.name}::${idempotencyKey}`;
   if (idempotencyKey) {
     const replay = await findReplay(db, idempotencyKey, payloadHash);
     if (replay) return replay;
@@ -161,6 +169,35 @@ export async function executeRatingRun(
       });
 
       if (link) await link(tx, created.id);
+      // Événement inscrit dans la même transaction (outbox) : il existe si et
+      // seulement si le run existe.
+      await enqueueEvent(tx, {
+        type:
+          result.ratingStatus === "RATED" || result.ratingStatus === "DEFAULTED"
+            ? "rating.completed"
+            : "rating.blocked",
+        data: {
+          runId: created.id,
+          // Une notation de lot est une surveillance : le consommateur aval doit
+          // pouvoir l'écarter sans deviner.
+          origin,
+          counterpartyId,
+          modelId: result.modelId,
+          modelVersion: result.modelVersion,
+          outcome: result.ratingStatus,
+          segment: result.segment,
+          rawScore: result.rawScore,
+          gradeScaleId: result.gradeScaleId,
+          finalGrade: result.finalGrade,
+          asOfDate: result.asOfDate,
+          pdStatus: result.pdStatus,
+          // Les droits d'usage voyagent avec l'événement : un consommateur aval
+          // n'a pas à deviner ce qu'il a le droit de faire du grade (constat M01).
+          purpose: result.usageRights.purpose,
+          permittedUses: result.usageRights.permittedUsesFr,
+          restrictions: result.usageRights.restrictionsFr,
+        },
+      }, counterparty.entityId);
       return created;
     });
 
@@ -179,36 +216,9 @@ export async function executeRatingRun(
     throw e;
   }
 
-  // Publication après validation de la transaction. Au mieux : un échec de
-  // livraison est journalisé dans webhook_deliveries et rejouable, il ne
-  // remet jamais en cause le résultat métier déjà persisté et audité.
-  void publishEvent({
-    type:
-      result.ratingStatus === "RATED" || result.ratingStatus === "DEFAULTED"
-        ? "rating.completed"
-        : "rating.blocked",
-    data: {
-      runId: run.id,
-      // Une notation de lot est une surveillance : le consommateur aval doit
-      // pouvoir l'écarter sans deviner.
-      origin,
-      counterpartyId,
-      modelId: result.modelId,
-      modelVersion: result.modelVersion,
-      outcome: result.ratingStatus,
-      segment: result.segment,
-      rawScore: result.rawScore,
-      gradeScaleId: result.gradeScaleId,
-      finalGrade: result.finalGrade,
-      asOfDate: result.asOfDate,
-      pdStatus: result.pdStatus,
-      // Les droits d'usage voyagent avec l'événement : un consommateur aval
-      // n'a pas à deviner ce qu'il a le droit de faire du grade (constat M01).
-      purpose: result.usageRights.purpose,
-      permittedUses: result.usageRights.permittedUsesFr,
-      restrictions: result.usageRights.restrictionsFr,
-    },
-  }).catch(() => undefined);
+  // L'événement a été inscrit dans l'outbox avec le run : sa livraison est
+  // tentée maintenant, et reprise par le répartiteur en cas d'échec.
+  void dispatchOutbox().catch(() => undefined);
 
   return { runId: run.id, result, replayed: false };
 }

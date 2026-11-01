@@ -41,12 +41,15 @@ export type GuardResult =
   | { ok: false; response: NextResponse };
 
 /**
- * Périmètre d'une clé API : sans code d'entité, le groupe entier (systèmes
- * centraux) ; avec un code, l'entité et sa descendance. Un code inconnu ne
- * donne accès à rien : une clé mal configurée est refusée, jamais élargie.
+ * Périmètre d'une clé API, refus par défaut (diagnostic S02) : le groupe entier
+ * seulement sur une portée déclarée explicitement (code « * », systèmes
+ * centraux approuvés) ; avec un code, l'entité et sa descendance ; sans code,
+ * ou avec un code inconnu, aucun accès. Une clé mal configurée est refusée,
+ * jamais élargie.
  */
-async function apiKeyPerimeter(identity: Identity): Promise<Perimeter> {
-  if (!identity.entityCode) return PERIMETER_ALL;
+export async function apiKeyPerimeter(identity: Identity): Promise<Perimeter> {
+  if (identity.entityCode === "*") return PERIMETER_ALL;
+  if (!identity.entityCode) return PERIMETER_NONE;
   const entity = (await loadTree()).find((e) => e.code === identity.entityCode);
   if (!entity) return PERIMETER_NONE;
   identity.entityId = entity.id;
@@ -76,7 +79,11 @@ export async function guard(req: NextRequest, minRole: Role): Promise<GuardResul
   if (!perimeter.all && perimeter.read.length === 0) {
     return {
       ok: false,
-      response: problem(403, "Clé API sans périmètre", "Le code d'entité de la clé est inconnu ou désactivé."),
+      response: problem(
+        403,
+        "Clé API sans périmètre",
+        "La clé ne déclare aucun code d'entité, ou un code inconnu ou désactivé. Portée groupe : code « * » explicite."
+      ),
     };
   }
 

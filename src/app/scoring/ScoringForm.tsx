@@ -8,6 +8,7 @@ import {
   carriesValue,
   DATA_STATUSES,
   displaySegment,
+  draftFinancials,
   isGatedOut,
   type CaseDraft,
   type CriterionDraft,
@@ -74,21 +75,22 @@ function unavailableExplanation(criterion: CriterionConfig, status: DataStatus):
   if (criterion.unavailablePolicy === "BLOCK") {
     return `Donnée critique ${etat} : aucune notation ne sera produite.`;
   }
-  return `Donnée ${etat} : score prudent ${criterion.unavailableScore ?? 25} appliqué par la grille, poids conservé. La couverture observée diminue d'autant.`;
+  return `Donnée ${etat} : borne basse ${criterion.unavailableScore ?? 0} retenue pour le grade (une absence ne vaut jamais mieux qu'une mauvaise valeur), poids conservé. La couverture observée diminue d'autant.`;
 }
 
 /**
- * Un critère compte comme renseigné s'il porte la donnée qui sera réellement
- * soumise au moteur : une valeur (ou un cas particulier) pour un critère
- * quantitatif, toujours vrai pour un qualitatif puisque son sélecteur porte
- * une valeur par défaut valide (voir `submit`). Un statut explicitement
- * différent de AVAILABLE compte aussi comme une décision prise par l'analyste.
+ * Un critère est instruit s'il porte la donnée réellement soumise au moteur :
+ * une valeur ou un cas particulier (quantitatif), un ancrage choisi
+ * (qualitatif), ou un statut explicite d'indisponibilité. « Manquant » est
+ * l'état initial d'un critère non instruit (diagnostic M05) : rien n'est
+ * pré-rempli.
  */
 function isAnswered(criterion: CriterionConfig, state: CriterionDraft): boolean {
+  if (state.status === "MISSING") return false;
   if (!carriesValue(state.status)) return true;
   if (state.specialCase) return true;
   if (criterion.type === "QUANTITATIVE") return state.value.trim() !== "";
-  return true;
+  return state.score.trim() !== "";
 }
 
 
@@ -131,7 +133,9 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
       model.nonCompensatoryRules
         .map((rule) => {
           const key = CAP_TRIGGER_TO_FLAG[rule.trigger];
-          return key ? { key: key as string, code: rule.code, label: rule.labelFr, maxGrade: rule.maxGrade } : null;
+          return key
+            ? { key: key as string, code: rule.code, label: rule.labelFr, maxGrade: rule.maxGrade, derivedFrom: rule.derivation?.criterion }
+            : null;
         })
         .filter((x): x is NonNullable<typeof x> => x !== null),
     [model]
@@ -143,7 +147,26 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
     [model, segment]
   );
 
-  const answered = (c: CriterionConfig) => isGatedOut(c, draft.materiality) || isAnswered(c, draft.criteria[c.code]);
+  // Ratios calculés depuis le bilan : affichés à la place de la saisie, corrigés
+  // dans la section « Bilan » avec un motif.
+  const fin = useMemo(() => draftFinancials(draft, model), [draft, model]);
+  const linked = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of fin.gridRatios) {
+      const c = model.criteria.find((x) => x.code === g.criterion);
+      if (!c || draft.criteria[c.code]?.status === "NOT_APPLICABLE") continue;
+      const unit = c.unit ? c.unit.trim() : "";
+      const num = (n: number | null) => (n === null ? "non calculable" : `${n.toLocaleString("fr-FR")}${unit ? ` ${unit}` : ""}`);
+      if (fin.stale) m.set(c.code, "Comptes de l'exercice N de plus de 18 mois : critère transmis « périmé ».");
+      else if (g.overridden) m.set(c.code, `Valeur retenue ${num(g.retained)}, corrigée par l'analyste (calculée : ${num(g.computed)}). Motif : ${g.reason}`);
+      else if (g.specialCase) m.set(c.code, `Cas particulier appliqué depuis le bilan : ${c.specialCases?.find((x) => x.code === g.specialCase)?.labelFr ?? g.specialCase}.`);
+      else if (g.computed !== null) m.set(c.code, `Calculé depuis le bilan : ${num(g.computed)}.${g.noteFr ? ` ${g.noteFr}` : ""}`);
+    }
+    return m;
+  }, [fin, model, draft.criteria]);
+
+  const answered = (c: CriterionConfig) =>
+    isGatedOut(c, draft.materiality, draft.materialityEvidence) || linked.has(c.code) || isAnswered(c, draft.criteria[c.code]);
   const answeredCount = applicable.filter(answered).length;
   const unansweredCritical = applicable.filter((c) => c.unavailablePolicy === "BLOCK" && !answered(c));
 
@@ -201,7 +224,11 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
               Segment
             </div>
-            <select value={draft.segment} onChange={(e) => set({ segment: e.target.value as Segment | "" })}>
+            <select
+              value={draft.segment}
+              title="Le segment calculé par le serveur à partir des montants prime ; le segment choisi ne sert que si les montants manquent."
+              onChange={(e) => set({ segment: e.target.value as Segment | "" })}
+            >
               <option value="">Déterminé par les montants</option>
               {model.segments.map((s) => (
                 <option key={s} value={s}>
@@ -236,7 +263,35 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
           Montants saisis dans la devise de la contrepartie. Ils sont convertis en MAD au
           cours publié à la date d&apos;arrêté pour la segmentation et la délégation ; la
           conversion est consignée dans le dossier.
-          {!draft.segment && " Sans segment imposé, le chiffre d'affaires est obligatoire."}
+          {!draft.segment && " Sans segment imposé, le chiffre d'affaires est obligatoire."} Quand les montants
+          permettent de calculer le segment, le calcul prime sur le segment choisi.
+        </p>
+        <div className="grid-fields" style={{ marginTop: 12 }}>
+          <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="checkbox"
+              style={{ width: 16 }}
+              checked={draft.routing.reliableFinancialStatements}
+              onChange={(e) => set({ routing: { ...draft.routing, reliableFinancialStatements: e.target.checked } })}
+            />
+            <span style={{ fontSize: 13 }}>Comptes annuels exploitables (deux exercices au moins)</span>
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Historique de compte exploitable (mois)
+            </div>
+            <input
+              type="number"
+              min={0}
+              placeholder="ex. 24"
+              value={draft.routing.behavioralHistoryMonths}
+              onChange={(e) => set({ routing: { ...draft.routing, behavioralHistoryMonths: e.target.value } })}
+            />
+          </label>
+        </div>
+        <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+          Le serveur en déduit le modèle applicable : grille standard avec des comptes exploitables, grille
+          comportementale pour une TPE sans comptes fiables et avec 24 mois d&apos;historique au moins.
         </p>
         <div className="age-row">
           <label>
@@ -320,8 +375,9 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
                     criterion={c}
                     segment={segment}
                     state={draft.criteria[c.code]}
-                    gatedOut={isGatedOut(c, draft.materiality)}
+                    gatedOut={isGatedOut(c, draft.materiality, draft.materialityEvidence)}
                     aiFilled={ai(`criteria.${c.code}.value`) || ai(`criteria.${c.code}.score`) || ai(`criteria.${c.code}.status`)}
+                    linked={linked.get(c.code)}
                     onChange={(patch) => update(c.code, patch)}
                   />
                 ))}
@@ -335,30 +391,57 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
         <section className="card no-print" style={{ padding: 16 }}>
           <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Matérialité des risques ESG</h2>
           <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Ces critères ne sont évalués que si le risque est matériel pour la
-            contrepartie. Case non cochée : le critère est écarté et son poids transféré
-            au critère désigné par le modèle, quelle que soit la saisie. La matérialité
-            s&apos;établit depuis le référentiel sectoriel et la localisation des sites ;
-            elle doit être justifiée au dossier.
+            Trois états. « Matériel » ou « inconnu » : le critère est évalué ; une exposition
+            inconnue est signalée pour revue et ne reçoit aucun traitement favorable.
+            « Non matériel » écarte le critère et transfère son poids au critère désigné par
+            le modèle, à condition d&apos;être justifié (localisation des sites, activité,
+            pièce) — sans justification, il vaut « inconnu ».
           </p>
-          <div style={{ display: "grid", gap: 10 }}>
-            {materialityGates.map((g) => (
-              <label key={g.flag} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <input
-                  type="checkbox"
-                  style={{ width: 16, marginTop: 3 }}
-                  checked={draft.materiality[g.flag] ?? false}
-                  onChange={(e) => set({ materiality: { ...draft.materiality, [g.flag]: e.target.checked } })}
-                />
-                <span style={{ fontSize: 13 }}>
-                  {MATERIALITY_LABELS[g.flag]} <AiMark show={ai(`materiality.${g.flag}`)} />{" "}
-                  <span className="muted">({g.criteria.join(" ; ")})</span>
-                  <span className="muted" style={{ display: "block", fontSize: 11 }}>
-                    {g.rationaleFr}
-                  </span>
-                </span>
-              </label>
-            ))}
+          <div style={{ display: "grid", gap: 12 }}>
+            {materialityGates.map((g) => {
+              const v = draft.materiality[g.flag];
+              const state = v === true ? "true" : v === false ? "false" : "";
+              return (
+                <div key={g.flag} style={{ display: "grid", gap: 6 }}>
+                  <div style={{ fontSize: 13 }}>
+                    {MATERIALITY_LABELS[g.flag]} <AiMark show={ai(`materiality.${g.flag}`)} />{" "}
+                    <span className="muted">({g.criteria.join(" ; ")})</span>
+                    <span className="muted" style={{ display: "block", fontSize: 11 }}>
+                      {g.rationaleFr}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-start" }}>
+                    <select
+                      aria-label={`Matérialité — ${MATERIALITY_LABELS[g.flag]}`}
+                      value={state}
+                      style={{ maxWidth: 220 }}
+                      onChange={(e) => {
+                        const next = { ...draft.materiality };
+                        if (e.target.value === "") delete next[g.flag];
+                        else next[g.flag] = e.target.value === "true";
+                        set({ materiality: next });
+                      }}
+                    >
+                      <option value="">Inconnue (revue obligatoire)</option>
+                      <option value="true">Matériel</option>
+                      <option value="false">Non matériel (justifié)</option>
+                    </select>
+                    {state === "false" && (
+                      <input
+                        aria-label={`Justification de la non-matérialité — ${MATERIALITY_LABELS[g.flag]}`}
+                        placeholder="Justification obligatoire : sites, activité, pièce"
+                        maxLength={500}
+                        style={{ flex: "1 1 260px" }}
+                        value={draft.materialityEvidence[g.flag] ?? ""}
+                        onChange={(e) =>
+                          set({ materialityEvidence: { ...draft.materialityEvidence, [g.flag]: e.target.value } })
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -422,7 +505,8 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
           {model.confidence.weights.freshness} % fraîcheur +{" "}
           {model.confidence.weights.reliability} % fiabilité +{" "}
           {model.confidence.weights.provenance} % provenance. Un niveau insuffisant
-          empêche la production d&apos;un grade final.
+          empêche la production d&apos;un grade final. La complétude retenue ne peut pas
+          dépasser la part du poids réellement observée dans la grille.
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
           {(
@@ -476,6 +560,11 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
                 <span style={{ fontSize: 13 }}>
                   <strong>{f.code}</strong> — {f.label} <span className="muted">(plafond {f.maxGrade})</span>{" "}
                   <AiMark show={ai(`structuralFlags.${f.key}`)} />
+                  {f.derivedFrom && (
+                    <span className="muted" style={{ display: "block", fontSize: 11 }}>
+                      Dérivée de {f.derivedFrom} dès que le ratio est saisi : la case ne sert qu&apos;à défaut de ratio.
+                    </span>
+                  )}
                 </span>
               </label>
             ))}
@@ -590,6 +679,7 @@ function CriterionRow({
   state,
   gatedOut,
   aiFilled,
+  linked,
   onChange,
 }: {
   criterion: CriterionConfig;
@@ -597,11 +687,16 @@ function CriterionRow({
   state: CriterionDraft;
   gatedOut: boolean;
   aiFilled: boolean;
+  /** Texte du ratio calculé depuis le bilan (remplace la saisie). */
+  linked?: string;
   onChange: (patch: Partial<CriterionDraft>) => void;
 }) {
   const weight = (criterion.weightsBps[segment] ?? 0) / 100;
   const bins = criterion.binsBySegment?.[segment] ?? criterion.binsBySegment?.ALL;
-  const editable = carriesValue(state.status);
+  // Un critère « manquant » reste saisissable : saisir une valeur ou choisir un
+  // ancrage le rend « disponible ».
+  const editable = carriesValue(state.status) || state.status === "MISSING";
+  const missing = state.status === "MISSING";
   const name = `${criterion.code} — ${criterion.labelFr}`;
 
   return (
@@ -648,7 +743,14 @@ function CriterionRow({
             ))}
           </select>
 
-          {editable ? (
+          {linked ? (
+            <div className="balance-linked" style={{ fontSize: 12, paddingTop: 4 }}>
+              <span style={{ fontWeight: 600 }}>Bilan</span> · {linked}{" "}
+              <a href="#bilan" style={{ color: "var(--brand)" }}>
+                Voir ou corriger dans la section Bilan
+              </a>
+            </div>
+          ) : editable ? (
             criterion.type === "QUANTITATIVE" ? (
               <div>
                 <input
@@ -657,7 +759,9 @@ function CriterionRow({
                   aria-label={`Valeur — ${name}`}
                   placeholder={`Valeur${criterion.unit ? ` (${criterion.unit.trim()})` : ""}`}
                   value={state.value}
-                  onChange={(e) => onChange({ value: e.target.value })}
+                  onChange={(e) =>
+                    onChange(missing && e.target.value.trim() !== "" ? { value: e.target.value, status: "AVAILABLE" } : { value: e.target.value })
+                  }
                 />
                 {bins && (
                   <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
@@ -696,8 +800,11 @@ function CriterionRow({
               <select
                 aria-label={`Ancrage retenu — ${name}`}
                 value={state.score}
-                onChange={(e) => onChange({ score: e.target.value })}
+                onChange={(e) =>
+                  onChange(missing && e.target.value !== "" ? { score: e.target.value, status: "AVAILABLE" } : { score: e.target.value })
+                }
               >
+                <option value="">— non instruit —</option>
                 {criterion.anchors?.map((a) => (
                   <option key={a.score} value={a.score}>
                     {a.score} — {a.labelFr}
@@ -717,6 +824,14 @@ function CriterionRow({
               {unavailableExplanation(criterion, state.status)}
             </div>
           )}
+        </div>
+      )}
+      {!gatedOut && missing && !linked && (
+        <div
+          className="muted"
+          style={{ fontSize: 11, marginTop: 4, color: criterion.unavailablePolicy === "BLOCK" ? "var(--bad)" : undefined }}
+        >
+          Non instruit. {unavailableExplanation(criterion, "MISSING")}
         </div>
       )}
     </div>

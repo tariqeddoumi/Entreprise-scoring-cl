@@ -231,13 +231,38 @@ model WebhookSubscription {
   url       String
   secret    String // secret HMAC — jamais renvoyé en clair après création
   events    String   @db.Text // JSON array : ["rating.completed", ...]
+  // Périmètre de la souscription : l'entité et sa descendance. Nul : groupe
+  // entier, réservé aux systèmes centraux. Une filiale ne reçoit jamais
+  // l'événement d'une autre (diagnostic S01).
+  entityId  String?
   isActive  Boolean  @default(true)
   createdBy String
   createdAt DateTime @default(now())
 
   deliveries WebhookDelivery[]
 
+  @@index([entityId])
   @@map("webhook_subscriptions")
+}
+
+// Événements sortants écrits DANS la transaction métier (outbox), puis livrés
+// par un répartiteur avec reprises : un arrêt du serveur après la validation
+// ne perd plus l'événement (diagnostic T, événements sortants).
+model OutboxEvent {
+  id            String    @id @default(cuid())
+  eventId       String    @unique // stable entre les tentatives
+  type          String
+  payload       String    @db.Text // données de l'événement (JSON)
+  entityId      String? // entité de la contrepartie concernée
+  status        String    @default("PENDING") // PENDING | DISPATCHING | DISPATCHED | FAILED
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now())
+  lastError     String?   @db.Text
+  createdAt     DateTime  @default(now())
+  dispatchedAt  DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@map("outbox_events")
 }
 
 model WebhookDelivery {

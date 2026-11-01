@@ -8,7 +8,7 @@
 > la banque. Elle ne doit alimenter ni un calcul de provision IFRS 9, ni une
 > exigence en fonds propres, ni une décision d'octroi.
 
-Calibration `CORP_TPE_BEHAV_V1-SYNTH-20260824` · modèle CORP_TPE_BEHAV_V1 v3.0.0 · graine 20260824 · horizon 12 mois.
+Calibration `CORP_TPE_BEHAV_V1-SYNTH-20260824` · modèle CORP_TPE_BEHAV_V1 v3.1.0 · graine 20260824 · horizon 12 mois.
 
 ---
 
@@ -63,16 +63,16 @@ pouvoir discriminant irréaliste.
 
 | Cohorte | Facteur systématique | Taux de défaut | Usage |
 |---:|---:|---:|---|
-| 0 | -0.252 | 4.12 % | développement / hors-échantillon |
-| 1 | -0.942 | 6.41 % | développement / hors-échantillon |
-| 2 | 0.203 | 3.78 % | développement / hors-échantillon |
-| 3 | -1.242 | 6.98 % | développement / hors-échantillon |
-| 4 | -0.078 | 3.86 % | développement / hors-échantillon |
-| 5 | -1.025 | 6.64 % | hors-période |
-| 6 | 1.111 | 2.08 % | hors-période |
-| 7 | -0.939 | 6.68 % | hors-période |
+| 0 | -0.252 | 4.09 % | développement / hors-échantillon |
+| 1 | -0.942 | 6.39 % | développement / hors-échantillon |
+| 2 | 0.203 | 3.75 % | développement / hors-échantillon |
+| 3 | -1.242 | 7.10 % | développement / hors-échantillon |
+| 4 | -0.078 | 3.74 % | développement / hors-échantillon |
+| 5 | -1.025 | 6.78 % | hors-période |
+| 6 | 1.111 | 2.12 % | hors-période |
+| 7 | -0.939 | 6.69 % | hors-période |
 
-La PD vraie moyenne du portefeuille — invariante, connue du simulateur seul — vaut **4.26 %**.
+La PD vraie moyenne du portefeuille — invariante, connue du simulateur seul — vaut **4.29 %**.
 Les taux réalisés s'en écartent d'une année sur l'autre sous l'effet du facteur
 systématique : c'est cette dispersion qui rend la distinction entre une PD
 « travers-le-cycle » et un taux ponctuel observable.
@@ -82,8 +82,8 @@ systématique : c'est cette dispersion qui rend la distinction entre une PD
 | Motif | Effectif | Part |
 |---|---:|---:|
 | Déjà en défaut à l'observation | 1 287 | 2.68 % |
-| Scoring bloqué (donnée critique) | 2 705 | 5.64 % |
-| Aucun grade final (confiance insuffisante) | 22 062 | 45.96 % |
+| Scoring bloqué (donnée critique) | 4 941 | 10.29 % |
+| Aucun grade final (confiance insuffisante) | 19 469 | 40.56 % |
 
 Une contrepartie déjà en défaut est écartée par construction : une PD est une
 probabilité de PASSER en défaut. La conserver gonflerait mécaniquement le pouvoir
@@ -106,14 +106,14 @@ Sur ce portefeuille, le score moyen reste néanmoins ordonné sur toute l'échel
 
 | Grade | Effectif | Part | Score moyen | Déplacé par un cap | dont cap de confiance |
 |---|---:|---:|---:|---:|---:|
-| TPE-B1 | 3 713 | 16.9 % | 89.9 | 0 % | 0 % |
-| TPE-B2 | 4 809 | 21.9 % | 80.2 | 0 % | 0 % |
-| TPE-B3 | 4 651 | 21.2 % | 71.9 | 0 % | 0 % |
-| TPE-B4 | 3 679 | 16.8 % | 64.1 | 0 % | 0 % |
-| TPE-B5 | 3 000 | 13.7 % | 55.4 | 0 % | 0 % |
-| TPE-B6 | 2 094 | 9.5 % | 41.0 | 0 % | 0 % |
+| TPE-B1 | 3 471 | 15.6 % | 89.9 | 0 % | 0 % |
+| TPE-B2 | 4 771 | 21.4 % | 80.2 | 0 % | 0 % |
+| TPE-B3 | 4 735 | 21.2 % | 71.9 | 0 % | 0 % |
+| TPE-B4 | 3 855 | 17.3 % | 64.1 | 0 % | 0 % |
+| TPE-B5 | 3 196 | 14.3 % | 55.3 | 0 % | 0 % |
+| TPE-B6 | 2 275 | 10.2 % | 40.9 | 0 % | 0 % |
 
-Concentration de l'échelle (Herfindahl) : **0.1778**.
+Concentration de l'échelle (Herfindahl) : **0.1757**.
 
 Marge de prudence appliquée : **+10 % en relatif**. Plancher : 0.03 %.
 
@@ -121,12 +121,12 @@ Marge de prudence appliquée : **+10 % en relatif**. Plancher : 0.03 %.
 
 | Grade | Effectif (dév.) | PD affectée | Taux observé (dév.) | PD vraie | Rapport PD affectée / PD vraie |
 |---|---:|---:|---:|---:|---:|
-| TPE-B1 | 1 645 | 0.479 % | 0.304 % | 0.283 % | × 1.69 |
-| TPE-B2 | 2 112 | 1.263 % | 1.184 % | 1.070 % | × 1.18 |
-| TPE-B3 | 2 046 | 2.888 % | 2.688 % | 2.336 % | × 1.24 |
-| TPE-B4 | 1 602 | 5.474 % | 4.931 % | 4.293 % | × 1.28 |
-| TPE-B5 | 1 304 | 9.726 % | 8.589 % | 7.714 % | × 1.26 |
-| TPE-B6 | 910 | 24.698 % | 22.527 % | 17.922 % | × 1.38 |
+| TPE-B1 | 1 533 | 0.539 % | 0.130 % | 0.316 % | × 1.70 |
+| TPE-B2 | 2 138 | 1.378 % | 1.263 % | 1.037 % | × 1.33 |
+| TPE-B3 | 2 049 | 2.971 % | 2.733 % | 2.127 % | × 1.40 |
+| TPE-B4 | 1 656 | 5.960 % | 5.435 % | 3.986 % | × 1.50 |
+| TPE-B5 | 1 388 | 9.805 % | 8.718 % | 7.424 % | × 1.32 |
+| TPE-B6 | 1 029 | 22.625 % | 20.603 % | 17.482 % | × 1.29 |
 | DEF1 (défaut constaté) | — | 100,00 % | — | — | par définition |
 
 
@@ -139,73 +139,73 @@ seulement son adéquation apparente.
 
 #### Échantillon développement
 
-Effectif 9 619 · 481 défauts · taux observé 5.00 % · PD moyenne affectée 5.54 %.
+Effectif 9 793 · 508 défauts · taux observé 5.19 % · PD moyenne affectée 5.78 %.
 
 | Indicateur | Valeur | Lecture |
 |---|---:|---|
-| Gini | 0.6229 | pouvoir de séparation des défauts |
-| AUC | 0.8114 | aire sous la courbe ROC |
-| Kolmogorov-Smirnov | 0.4729 | écart maximal entre sains et défauts |
-| Brier | 0.04368 | erreur quadratique de la PD |
-| Adéquation par grade | p = 0.1588 | valeur-p faible = désaccord PD / défauts |
-| Adéquation avant marge | p = 0.9350 | isole l'effet de la marge de prudence |
+| Gini | 0.6047 | pouvoir de séparation des défauts |
+| AUC | 0.8024 | aire sous la courbe ROC |
+| Kolmogorov-Smirnov | 0.4498 | écart maximal entre sains et défauts |
+| Brier | 0.04571 | erreur quadratique de la PD |
+| Adéquation par grade | p = 0.0334 | valeur-p faible = désaccord PD / défauts |
+| Adéquation avant marge | p = 0.3876 | isole l'effet de la marge de prudence |
 
 | Grade | Effectif | PD affectée | Taux observé | Défauts | p (sous-estimation) |
 |---|---:|---:|---:|---:|---:|
-| TPE-B1 | 1 645 | 0.479 % | 0.304 % | 5 | 0.8940 |
-| TPE-B2 | 2 112 | 1.263 % | 1.184 % | 25 | 0.6550 |
-| TPE-B3 | 2 046 | 2.888 % | 2.688 % | 55 | 0.7233 |
-| TPE-B4 | 1 602 | 5.474 % | 4.931 % | 79 | 0.8440 |
-| TPE-B5 | 1 304 | 9.726 % | 8.589 % | 112 | 0.9260 |
-| TPE-B6 | 910 | 24.698 % | 22.527 % | 205 | 0.9414 |
+| TPE-B1 | 1 533 | 0.539 % | 0.130 % | 2 | 0.9976 |
+| TPE-B2 | 2 138 | 1.378 % | 1.263 % | 27 | 0.7013 |
+| TPE-B3 | 2 049 | 2.971 % | 2.733 % | 56 | 0.7544 |
+| TPE-B4 | 1 656 | 5.960 % | 5.435 % | 90 | 0.8300 |
+| TPE-B5 | 1 388 | 9.805 % | 8.718 % | 121 | 0.9222 |
+| TPE-B6 | 1 029 | 22.625 % | 20.603 % | 212 | 0.9451 |
 
 Taux de défaut observés strictement croissants sur toute l'échelle.
 
 #### Échantillon hors-échantillon
 
-Effectif 4 090 · 208 défauts · taux observé 5.09 % · PD moyenne affectée 5.58 %.
+Effectif 4 142 · 191 défauts · taux observé 4.61 % · PD moyenne affectée 5.62 %.
 
 | Indicateur | Valeur | Lecture |
 |---|---:|---|
-| Gini | 0.5844 | pouvoir de séparation des défauts |
-| AUC | 0.7922 | aire sous la courbe ROC |
-| Kolmogorov-Smirnov | 0.4399 | écart maximal entre sains et défauts |
-| Brier | 0.04513 | erreur quadratique de la PD |
-| Adéquation par grade | p = 0.2712 | valeur-p faible = désaccord PD / défauts |
-| Adéquation avant marge | p = 0.5800 | isole l'effet de la marge de prudence |
+| Gini | 0.6029 | pouvoir de séparation des défauts |
+| AUC | 0.8014 | aire sous la courbe ROC |
+| Kolmogorov-Smirnov | 0.4660 | écart maximal entre sains et défauts |
+| Brier | 0.04070 | erreur quadratique de la PD |
+| Adéquation par grade | p = 0.0061 | valeur-p faible = désaccord PD / défauts |
+| Adéquation avant marge | p = 0.0587 | isole l'effet de la marge de prudence |
 
 | Grade | Effectif | PD affectée | Taux observé | Défauts | p (sous-estimation) |
 |---|---:|---:|---:|---:|---:|
-| TPE-B1 | 696 | 0.479 % | 0.287 % | 2 | 0.8463 |
-| TPE-B2 | 914 | 1.263 % | 1.422 % | 13 | 0.3721 |
-| TPE-B3 | 864 | 2.888 % | 3.009 % | 26 | 0.4433 |
-| TPE-B4 | 653 | 5.474 % | 5.666 % | 37 | 0.4386 |
-| TPE-B5 | 568 | 9.726 % | 8.451 % | 48 | 0.8646 |
-| TPE-B6 | 395 | 24.698 % | 20.759 % | 82 | 0.9713 |
+| TPE-B1 | 649 | 0.539 % | 0.770 % | 5 | 0.2736 |
+| TPE-B2 | 860 | 1.378 % | 1.163 % | 10 | 0.7461 |
+| TPE-B3 | 919 | 2.971 % | 2.394 % | 22 | 0.8724 |
+| TPE-B4 | 725 | 5.960 % | 3.448 % | 25 | 0.9992 |
+| TPE-B5 | 599 | 9.805 % | 7.346 % | 44 | 0.9848 |
+| TPE-B6 | 390 | 22.625 % | 21.795 % | 85 | 0.6713 |
 
 Taux de défaut observés strictement croissants sur toute l'échelle.
 
 #### Échantillon hors-période
 
-Effectif 8 237 · 423 défauts · taux observé 5.14 % · PD moyenne affectée 5.61 %.
+Effectif 8 368 · 435 défauts · taux observé 5.20 % · PD moyenne affectée 5.78 %.
 
 | Indicateur | Valeur | Lecture |
 |---|---:|---|
-| Gini | 0.5917 | pouvoir de séparation des défauts |
-| AUC | 0.7959 | aire sous la courbe ROC |
-| Kolmogorov-Smirnov | 0.4599 | écart maximal entre sains et défauts |
-| Brier | 0.04568 | erreur quadratique de la PD |
-| Adéquation par grade | p = 0.0082 | valeur-p faible = désaccord PD / défauts |
-| Adéquation avant marge | p = 0.0442 | isole l'effet de la marge de prudence |
+| Gini | 0.5938 | pouvoir de séparation des défauts |
+| AUC | 0.7969 | aire sous la courbe ROC |
+| Kolmogorov-Smirnov | 0.4570 | écart maximal entre sains et défauts |
+| Brier | 0.04600 | erreur quadratique de la PD |
+| Adéquation par grade | p = 0.0885 | valeur-p faible = désaccord PD / défauts |
+| Adéquation avant marge | p = 0.6194 | isole l'effet de la marge de prudence |
 
 | Grade | Effectif | PD affectée | Taux observé | Défauts | p (sous-estimation) |
 |---|---:|---:|---:|---:|---:|
-| TPE-B1 | 1 372 | 0.479 % | 0.583 % | 8 | 0.3381 |
-| TPE-B2 | 1 783 | 1.263 % | 1.178 % | 21 | 0.6558 |
-| TPE-B3 | 1 741 | 2.888 % | 2.412 % | 42 | 0.8983 |
-| TPE-B4 | 1 424 | 5.474 % | 6.461 % | 92 | 0.0600 |
-| TPE-B5 | 1 128 | 9.726 % | 8.865 % | 100 | 0.8478 |
-| TPE-B6 | 789 | 24.698 % | 20.279 % | 160 | 0.9985 |
+| TPE-B1 | 1 289 | 0.539 % | 0.621 % | 8 | 0.3930 |
+| TPE-B2 | 1 773 | 1.378 % | 1.072 % | 19 | 0.8902 |
+| TPE-B3 | 1 767 | 2.971 % | 2.320 % | 41 | 0.9578 |
+| TPE-B4 | 1 474 | 5.960 % | 5.902 % | 87 | 0.5530 |
+| TPE-B5 | 1 209 | 9.805 % | 8.850 % | 107 | 0.8789 |
+| TPE-B6 | 856 | 22.625 % | 20.210 % | 173 | 0.9595 |
 
 Taux de défaut observés strictement croissants sur toute l'échelle.
 
@@ -213,14 +213,14 @@ Taux de défaut observés strictement croissants sur toute l'échelle.
 
 | Indicateur | Valeur | Lecture |
 |---|---:|---|
-| Gini développement | 0.6229 | intervalle bootstrap à 95 % : [0.5889 ; 0.6596] |
-| Stabilité hors-échantillon | 0.0005 | < 0,10 stable |
-| Stabilité hors-période | 0.0004 | < 0,10 stable |
-| Concentration des grades | 0.1778 | Herfindahl sur la répartition |
+| Gini développement | 0.6047 | intervalle bootstrap à 95 % : [0.5676 ; 0.6365] |
+| Stabilité hors-échantillon | 0.0027 | < 0,10 stable |
+| Stabilité hors-période | 0.0007 | < 0,10 stable |
+| Concentration des grades | 0.1757 | Herfindahl sur la répartition |
 
 | Segment | Effectif | Gini |
 |---|---:|---:|
-| TPE | 9 619 | 0.6229 |
+| TPE | 9 793 | 0.6047 |
 
 ## 7. Reproductibilité
 

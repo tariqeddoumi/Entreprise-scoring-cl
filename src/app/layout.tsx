@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCurrentSession } from "@/lib/session";
+import { databaseConfigProblem } from "@/lib/env";
 import { inheritedBranding, loadTree } from "@/lib/scope";
 import { listModels } from "@/models";
 import { logoutAction } from "./login/actions";
@@ -47,6 +48,9 @@ export default async function RootLayout({
     }
   }
   const models = listModels();
+  // Configuration de la base contrôlée à chaque écran : « Base non connectée »
+  // seul ne disait pas que la variable DATABASE_URL était mal saisie.
+  const dbProblem = databaseConfigProblem();
 
   return (
     <html lang="fr">
@@ -116,6 +120,11 @@ export default async function RootLayout({
         </header>
         <main className="site-main">
           <TableFocus />
+          {dbProblem && (
+            <div className="card no-print" role="alert" style={{ padding: 12, marginBottom: 16, borderLeft: "4px solid var(--bad)", fontSize: 13 }}>
+              <strong>Configuration de la base invalide.</strong> {dbProblem}
+            </div>
+          )}
           {children}
         </main>
         <footer className="no-print site-footer">

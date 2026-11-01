@@ -467,7 +467,7 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
   const emitters = sources("src")
     .filter((f) => !f.endsWith("webhooks.ts") && !f.endsWith("schemas.ts"))
     .map((f) => readFileSync(f, "utf8"))
-    .filter((src) => src.includes("publishEvent("))
+    .filter((src) => src.includes("publishEvent(") || src.includes("enqueueEvent("))
     .join("\n");
   const neverEmitted = eventsCode.filter((e) => !emitters.includes(`"${e}"`));
   if (neverEmitted.length) fail(`événements souscriptibles jamais publiés : ${neverEmitted.join(", ")}`);

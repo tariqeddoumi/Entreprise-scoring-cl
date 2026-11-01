@@ -100,10 +100,11 @@ export interface SegmentationResult {
 /**
  * Détermine le segment modèle.
  *
- * Le segment fourni par l'appelant reste accepté — il provient du référentiel
- * amont de la banque — mais il est confronté au calcul lorsque les données le
- * permettent : une divergence est signalée plutôt que silencieusement acceptée.
- * Sans cela, le choix du segment revient à choisir ses pondérations.
+ * Le segment calculé par le serveur fait foi dès que les données le
+ * permettent (diagnostic M04) : un segment fourni divergent est écarté et
+ * tracé — signaler sans neutraliser laissait l'appelant choisir ses
+ * pondérations. Le segment fourni n'est retenu que si le calcul est
+ * impossible faute de données.
  */
 export function determineSegment(
   input: RatingInput,
@@ -111,17 +112,16 @@ export function determineSegment(
 ): SegmentationResult {
   const computed = computeSegment(input, ruleset);
 
-  if (input.segment) {
-    const divergence =
-      computed.segment !== null && computed.segment !== input.segment
-        ? `Segment ${input.segment} fourni, mais le jeu ${ruleset.rulesetId} calcule ${computed.segment} sur les données de segmentation transmises : à instruire. Le référentiel amont fait foi ; l'écart est tracé parce que le segment détermine les pondérations et les barèmes.`
-        : undefined;
+  if (input.segment && computed.segment !== null && computed.segment !== input.segment) {
+    const divergence = `Segment ${input.segment} demandé, écarté : le jeu ${ruleset.rulesetId} calcule ${computed.segment} sur les données transmises, et le calcul serveur fait foi. Une dérogation de segment demande un motif, une approbation et une durée.`;
+    return { ...computed, explanationFr: `${computed.explanationFr} ${divergence}`, divergenceFr: divergence };
+  }
+  if (input.segment && computed.segment === null) {
     return {
       segment: input.segment,
       source: "PROVIDED",
       rulesetId: ruleset.rulesetId,
-      explanationFr: `Segment ${input.segment} fourni par le référentiel amont (jeu ${ruleset.rulesetId}).${divergence ? ` ${divergence}` : ""}`,
-      ...(divergence ? { divergenceFr: divergence } : {}),
+      explanationFr: `Segment ${input.segment} fourni par le référentiel amont (jeu ${ruleset.rulesetId}) : données de segmentation insuffisantes pour le recalculer.`,
     };
   }
   return computed;
@@ -210,21 +210,31 @@ export interface RoutingInput {
 
 export interface RoutingDecision {
   modelId: string | null;
+  /** Famille de modèles applicable : les grilles challenger d'une famille y sont aussi admises. */
+  family: "STANDARD" | "BEHAVIORAL" | null;
   explanationFr: string;
 }
 
-export const BEHAVIORAL_MIN_HISTORY_MONTHS = 12;
+/**
+ * Historique minimal opposable pour le modèle comportemental (diagnostic M07) :
+ * 24 mois, conformément à la philosophie de notation. Entre 12 et 23 mois, une
+ * analyse courte distincte, sans équivalence affichée avec le modèle.
+ */
+export const BEHAVIORAL_MIN_HISTORY_MONTHS = 24;
+export const BEHAVIORAL_SHORT_HISTORY_MONTHS = 12;
 
 export function routeModel(input: RoutingInput): RoutingDecision {
   if (input.segment !== "TPE") {
     return {
       modelId: "CORP_STD_V1",
+      family: "STANDARD",
       explanationFr: `Segment ${input.segment} : modèle standard obligatoire. Le modèle comportemental n'est publié que pour la TPE.`,
     };
   }
   if (input.reliableFinancialStatements) {
     return {
       modelId: "CORP_STD_V1",
+      family: "STANDARD",
       explanationFr:
         "TPE disposant d'états financiers exploitables : modèle standard. Le modèle comportemental est réservé aux TPE dont les comptes ne sont pas suffisamment fiables.",
     };
@@ -232,11 +242,20 @@ export function routeModel(input: RoutingInput): RoutingDecision {
   if (input.behavioralHistoryMonths >= BEHAVIORAL_MIN_HISTORY_MONTHS) {
     return {
       modelId: "CORP_TPE_BEHAV_V1",
+      family: "BEHAVIORAL",
       explanationFr: `TPE sans comptes exploitables mais ${input.behavioralHistoryMonths} mois d'historique de compte : modèle comportemental.`,
+    };
+  }
+  if (input.behavioralHistoryMonths >= BEHAVIORAL_SHORT_HISTORY_MONTHS) {
+    return {
+      modelId: null,
+      family: null,
+      explanationFr: `TPE sans comptes exploitables et ${input.behavioralHistoryMonths} mois d'historique seulement (minimum ${BEHAVIORAL_MIN_HISTORY_MONTHS}) : analyse courte distincte et contrôlée, sans note de modèle.`,
     };
   }
   return {
     modelId: null,
+    family: null,
     explanationFr: `Aucun modèle publié applicable : ni comptes exploitables, ni ${BEHAVIORAL_MIN_HISTORY_MONTHS} mois d'historique comportemental. Dossier à router vers le traitement jeune entreprise / analyse à dire d'expert.`,
   };
 }

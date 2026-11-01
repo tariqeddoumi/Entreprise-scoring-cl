@@ -8,6 +8,15 @@ import type {
   Segment,
 } from "@/core/types";
 import { CAP_TRIGGER_TO_FLAG, RETIRED_CAP_OBSERVATIONS } from "@/core/structural-flags";
+import {
+  buildFinancialBasis,
+  computeFinancials,
+  emptyFinancials,
+  gridLinks,
+  parseFinancials,
+  type FinancialComputation,
+  type FinancialsDraft,
+} from "@/financials/compute";
 
 /**
  * Saisie d'un dossier de notation — module PUR, partagé par l'écran (aperçu et
@@ -41,16 +50,28 @@ export interface CaseDraft {
   redFlags: string[];
   defaultTriggered: boolean;
   defaultGrade: "DEF1" | "DEF2" | "DEF3";
+  /** Trois états : true matériel, false non matériel (justifié), absent inconnu. */
   materiality: Partial<Record<MaterialityFlag, boolean>>;
+  /** Justification d'une non-matérialité (pièce, analyse). Sans elle, « non matériel » vaut inconnu. */
+  materialityEvidence: Partial<Record<MaterialityFlag, string>>;
+  /** Éléments de routage : le serveur décide de la famille de modèle (standard ou comportementale). */
+  routing: { reliableFinancialStatements: boolean; behavioralHistoryMonths: string };
   groupSupport: GroupSupportInput;
   /** Montants dans la devise de la contrepartie (convertis à la soumission). */
   amounts: { annualTurnover: string; groupAnnualTurnover: string; globalBankExposure: string };
+  /** Bilan et CPC (N, N−1, N−2) : base des ratios de la grille et de la fiche de notation. */
+  financials: FinancialsDraft;
 }
 
 export const DATA_STATUSES: DataStatus[] = ["AVAILABLE", "MISSING", "NOT_APPLICABLE", "INVALID", "STALE", "ESTIMATED"];
 export const DEFAULT_CONFIDENCE = { completeness: 100, freshness: 100, reliability: 75, provenance: 75 };
 export const ANCHOR_SCORES = [0, 25, 50, 75, 100] as const;
 
+/**
+ * Brouillon neuf : aucun critère n'est pré-rempli (diagnostic M05, T01). Un
+ * qualitatif non instruit est MANQUANT, jamais « disponible à 50 » : une
+ * appréciation non faite ne peut pas compter comme une observation.
+ */
 export function emptyDraft(model: ModelConfig, asOfDate: string): CaseDraft {
   return {
     version: 1,
@@ -60,7 +81,7 @@ export function emptyDraft(model: ModelConfig, asOfDate: string): CaseDraft {
     segment: model.segments.includes("PME" as Segment) ? ("PME" as Segment) : model.segments[0],
     asOfDate,
     criteria: Object.fromEntries(
-      model.criteria.map((c) => [c.code, { status: "AVAILABLE" as DataStatus, value: "", score: "50", specialCase: "" }])
+      model.criteria.map((c) => [c.code, { status: "MISSING" as DataStatus, value: "", score: "", specialCase: "" }])
     ),
     confidence: { ...DEFAULT_CONFIDENCE },
     flags: {},
@@ -70,8 +91,11 @@ export function emptyDraft(model: ModelConfig, asOfDate: string): CaseDraft {
     defaultTriggered: false,
     defaultGrade: "DEF1",
     materiality: {},
+    materialityEvidence: {},
+    routing: { reliableFinancialStatements: model.routeFamily === "STANDARD", behavioralHistoryMonths: "" },
     groupSupport: { claimed: false },
     amounts: { annualTurnover: "", groupAnnualTurnover: "", globalBankExposure: "" },
+    financials: emptyFinancials(),
   };
 }
 
@@ -89,8 +113,11 @@ export function parseDraft(raw: string | null | undefined, model: ModelConfig, a
       amounts: { ...base.amounts, ...(d.amounts ?? {}) },
       groupSupport: d.groupSupport ?? base.groupSupport,
       materiality: d.materiality ?? {},
+      materialityEvidence: d.materialityEvidence ?? {},
+      routing: { ...base.routing, ...(d.routing ?? {}) },
       flags: d.flags ?? {},
       redFlags: d.redFlags ?? [],
+      financials: parseFinancials(d.financials),
       version: 1,
     };
   } catch {
@@ -103,9 +130,18 @@ export function carriesValue(status: DataStatus): boolean {
   return status === "AVAILABLE" || status === "ESTIMATED";
 }
 
-/** Critère écarté faute de matérialité déclarée. */
-export function isGatedOut(criterion: CriterionConfig, materiality: CaseDraft["materiality"]): boolean {
-  return !!criterion.materialityGate && materiality[criterion.materialityGate.flag] !== true;
+/**
+ * Critère écarté : seulement sur une non-matérialité déclarée ET justifiée
+ * (diagnostic M03) — même règle que le moteur. L'inconnu est évalué.
+ */
+export function isGatedOut(
+  criterion: CriterionConfig,
+  materiality: CaseDraft["materiality"],
+  evidence: CaseDraft["materialityEvidence"] = {}
+): boolean {
+  if (!criterion.materialityGate) return false;
+  const flag = criterion.materialityGate.flag;
+  return materiality[flag] === false && !!evidence[flag]?.trim();
 }
 
 /** Segment effectif pour l'affichage des poids : imposé, sinon le premier du modèle. */
@@ -119,9 +155,32 @@ const toNumber = (s: string): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+/**
+ * Calcul financier du brouillon : indicateurs, ratios de la grille, contrôles.
+ * Même calcul à l'écran et à la soumission.
+ */
+export function draftFinancials(draft: CaseDraft, model: ModelConfig): FinancialComputation {
+  return computeFinancials(draft.financials ?? emptyFinancials(), model.modelId, {
+    asOfDate: draft.asOfDate,
+    declaredTurnover: toNumber(draft.amounts.annualTurnover),
+  });
+}
+
+/** Chiffre d'affaires de l'exercice N lu au bilan, s'il existe. */
+function balanceSheetTurnover(draft: CaseDraft): number | undefined {
+  const f = draft.financials;
+  if (!f) return undefined;
+  const y = f.years[0]?.values ?? {};
+  const a = toNumber(y.VENTES_MARCHANDISES ?? "");
+  const b = toNumber(y.VENTES_BIENS_SERVICES ?? "");
+  return a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
+}
+
 export function draftAmounts(draft: CaseDraft): Record<string, number | undefined> {
   return {
-    annualTurnover: toNumber(draft.amounts.annualTurnover),
+    // CA du cadrage, à défaut celui du bilan : le segment se calcule sur le
+    // bilan chargé sans double saisie.
+    annualTurnover: toNumber(draft.amounts.annualTurnover) ?? balanceSheetTurnover(draft),
     groupAnnualTurnover: toNumber(draft.amounts.groupAnnualTurnover),
     globalBankExposure: toNumber(draft.amounts.globalBankExposure),
   };
@@ -135,17 +194,42 @@ export function draftAmounts(draft: CaseDraft): Record<string, number | undefine
 export function draftToRequest(
   draft: CaseDraft,
   model: ModelConfig,
-  baseAmounts?: Record<string, number>
+  baseAmounts?: Record<string, number>,
+  opts: { currency?: string } = {}
 ): Record<string, unknown> {
   const segment = displaySegment(draft, model);
   const criteria: Record<string, CriterionInput> = {};
+  // Ratios calculés depuis le bilan : ils priment sur une saisie manuelle du
+  // critère ; seule une correction motivée les remplace.
+  const fin = draftFinancials(draft, model);
+  const links = gridLinks(model.modelId);
+  const fromBalanceSheet = new Map(fin.gridRatios.map((g) => [g.criterion, g]));
   for (const c of model.criteria) {
     if ((c.weightsBps[segment] ?? 0) === 0 && draft.segment) continue;
     // Critère écarté : rien n'est transmis, pour que l'instantané d'entrée ne
     // porte pas une valeur que le moteur n'a pas lue.
-    if (isGatedOut(c, draft.materiality)) continue;
+    if (isGatedOut(c, draft.materiality, draft.materialityEvidence)) continue;
     const state = draft.criteria[c.code];
     if (!state) continue;
+    const g = links[c.code] ? fromBalanceSheet.get(c.code) : undefined;
+    if (g && state.status !== "NOT_APPLICABLE") {
+      if (fin.stale) {
+        criteria[c.code] = { status: "STALE" };
+        continue;
+      }
+      if (g.overridden && g.retained !== null) {
+        criteria[c.code] = { status: "AVAILABLE", value: g.retained, evidence: `Ratio corrigé (calculé : ${g.computed ?? "non calculable"}) — ${g.reason}`.slice(0, 500) };
+        continue;
+      }
+      if (g.specialCase) {
+        criteria[c.code] = { status: "AVAILABLE", specialCase: g.specialCase, evidence: "Calculé depuis le bilan." };
+        continue;
+      }
+      if (g.computed !== null) {
+        criteria[c.code] = { status: "AVAILABLE", value: g.computed, evidence: "Calculé depuis le bilan." };
+        continue;
+      }
+    }
     const entry: CriterionInput = { status: state.status };
     if (carriesValue(state.status)) {
       if (state.specialCase) {
@@ -154,6 +238,9 @@ export function draftToRequest(
         const n = toNumber(state.value);
         if (n === undefined) entry.status = "MISSING";
         else entry.value = n;
+      } else if (state.score.trim() === "") {
+        // Statut « disponible » sans ancrage choisi : rien d'observé.
+        entry.status = "MISSING";
       } else {
         entry.score = Number(state.score) as CriterionInput["score"];
       }
@@ -162,6 +249,10 @@ export function draftToRequest(
   }
 
   const age = toNumber(draft.companyAgeYears);
+  const months = toNumber(draft.routing.behavioralHistoryMonths);
+  const evidence = Object.fromEntries(
+    Object.entries(draft.materialityEvidence).filter(([k, v]) => draft.materiality[k as MaterialityFlag] === false && v?.trim())
+  );
   const segmentationData =
     baseAmounts && Object.keys(baseAmounts).length > 0 ? { segmentationData: baseAmounts } : {};
   return {
@@ -179,8 +270,18 @@ export function draftToRequest(
     redFlags: draft.redFlags,
     defaultTriggered: draft.defaultTriggered,
     ...(draft.defaultTriggered ? { defaultGrade: draft.defaultGrade } : {}),
-    materiality: Object.fromEntries(Object.entries(draft.materiality).filter(([, v]) => v)),
+    // Trois états : true et false sont transmis, l'inconnu est omis.
+    materiality: Object.fromEntries(Object.entries(draft.materiality).filter(([, v]) => typeof v === "boolean")),
+    ...(Object.keys(evidence).length ? { materialityEvidence: evidence } : {}),
+    routing: {
+      reliableFinancialStatements: draft.routing.reliableFinancialStatements,
+      behavioralHistoryMonths: months !== undefined ? Math.max(0, Math.round(months)) : 0,
+    },
     ...(draft.groupSupport.claimed ? { groupSupport: draft.groupSupport } : {}),
+    ...(() => {
+      const basis = buildFinancialBasis(draft.financials ?? emptyFinancials(), fin, opts.currency);
+      return basis ? { financialBasis: basis } : {};
+    })(),
   };
 }
 
@@ -213,10 +314,17 @@ const MATERIALITY_LABELS: Record<string, string> = {
   esgTransitionMaterial: "Risque de transition matériel",
 };
 
-export function proposableFields(model: ModelConfig): ProposableField[] {
+export function proposableFields(
+  model: ModelConfig,
+  opts: { includeBalanceSheetRatios?: boolean } = {}
+): ProposableField[] {
   const out: ProposableField[] = [];
+  const links = opts.includeBalanceSheetRatios ? {} : gridLinks(model.modelId);
   for (const c of model.criteria) {
     const head = `${c.code} — ${c.labelFr}`;
+    // Ratio calculé depuis le bilan : l'IA lit les postes du bilan (lecture
+    // dédiée), elle ne propose pas le ratio lui-même.
+    if (links[c.code]) continue;
     if (c.type === "QUANTITATIVE") {
       const bins = c.binsBySegment?.ALL ?? Object.values(c.binsBySegment ?? {})[0];
       out.push({

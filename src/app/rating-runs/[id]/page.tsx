@@ -10,14 +10,17 @@ const OVERRIDE_STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente de décision",
   APPROVED: "Approuvée",
   REJECTED: "Rejetée",
+  EXPIRED: "Expirée — la note revient au grade du moteur",
 };
 import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { LegacyResultPanel } from "./LegacyResultPanel";
 import { OverrideDecision, OverrideRequestForm } from "./OverridePanels";
 import { hasRole } from "@/lib/auth";
 import { isOfficialRun } from "@/lib/cases";
+import { effectiveGrade } from "@/lib/overrides";
 import { settingInt } from "@/lib/settings";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
+import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +69,7 @@ export default async function RatingRunPage({
   // pas garantie, il est donc reconnu avant d'être passé aux composants V3.
   const snapshot = readResultSnapshot(run.resultSnapshot);
   const official = isOfficialRun(run);
+  const financialBasis = readFinancialBasis(run.inputSnapshot);
   const maxNotches = await settingInt("OVERRIDE_MAX_NOTCHES");
   const canRequestOverride =
     official &&
@@ -193,14 +197,35 @@ export default async function RatingRunPage({
               ))}
             </tbody>
           </table>
-          {run.finalGrade !== run.cappedGrade && (
-            <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-              Le grade final ({run.finalGrade}) diffère du grade produit par le moteur
-              ({run.cappedGrade}) : une dérogation approuvée s&apos;applique. Le résultat
-              moteur ci-dessous reste celui d&apos;origine, jamais réécrit.
-            </p>
-          )}
+          {(() => {
+            // Note effective à date : une dérogation échue ne s'applique plus,
+            // même avant le passage de la tâche d'expiration.
+            const eff = effectiveGrade(run, run.overrides);
+            if (!eff.overridden) {
+              return run.finalGrade !== run.cappedGrade ? (
+                <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+                  La dérogation est arrivée à échéance : la note effective revient au grade du moteur ({run.cappedGrade}).
+                </p>
+              ) : null;
+            }
+            return (
+              <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+                Note effective {eff.grade}, différente du grade produit par le moteur ({run.cappedGrade}) : une
+                dérogation approuvée s&apos;applique. Le résultat moteur ci-dessous reste celui d&apos;origine, jamais
+                réécrit.
+              </p>
+            );
+          })()}
         </section>
+      )}
+
+      {financialBasis ? (
+        <FinancialBasisPanel basis={financialBasis} model={model} />
+      ) : (
+        <div className="card muted" style={{ padding: 12, fontSize: 13 }}>
+          Aucun bilan n&apos;est joint à cette notation (notation reçue par l&apos;API, antérieure à la restitution du bilan, ou grille
+          comportementale sans comptes exploitables).
+        </div>
       )}
 
       {snapshot.kind === "UNREADABLE" ? (

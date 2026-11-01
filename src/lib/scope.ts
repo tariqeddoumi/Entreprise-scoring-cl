@@ -226,7 +226,32 @@ export const SCOPED_MODELS: Record<string, Filter> = {
   RenotationSchedule: (ids) => ({ entityId: { in: ids } }),
   RenotationBatch: (ids) => ({ entityId: { in: ids } }),
   RenotationItem: byCounterparty,
+  // Souscriptions et événements : une filiale ne voit ni ne reçoit ceux d'une
+  // autre (diagnostic S01) ; ceux du groupe entier (entité nulle) ne sont
+  // visibles que du périmètre groupe.
+  WebhookSubscription: (ids) => ({ entityId: { in: ids } }),
+  WebhookDelivery: (ids) => ({ subscription: { entityId: { in: ids } } }),
+  OutboxEvent: (ids) => ({ entityId: { in: ids } }),
 };
+
+/**
+ * Modèles sans périmètre propre, lus tels quels : organisation, cours de
+ * change, paramétrage, sessions (chacune liée à son utilisateur). La liste est
+ * FERMÉE (diagnostic S03) : un modèle ajouté au schéma sans être classé ici ou
+ * dans SCOPED_MODELS est refusé par le client cloisonné, au lieu de passer
+ * sans filtre.
+ */
+export const GLOBAL_MODELS = new Set(["Entity", "ExchangeRate", "AppSetting", "UserSession"]);
+
+/** Champs dont la modification rattache une ligne à un autre parent cloisonné. */
+const RELINK_FIELDS = ["entityId", "counterpartyId", "caseId", "ratingRunId", "economicGroupId", "batchId", "subscriptionId"];
+
+function relinks(data: Record<string, unknown> | undefined): boolean {
+  if (!data) return false;
+  return Object.entries(data).some(
+    ([k, v]) => RELINK_FIELDS.includes(k) || (v !== null && typeof v === "object" && ("connect" in v || "connectOrCreate" in v))
+  );
+}
 
 const READS = new Set([
   "findMany", "findFirst", "findFirstOrThrow", "findUnique", "findUniqueOrThrow", "count", "aggregate", "groupBy",
@@ -269,6 +294,11 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
     case "Counterparty": {
       const target = ref(data, "entityId", "entity") ?? p.entityId;
       if (!target || !canWrite(p, target)) throw new OutOfScopeError("Entité hors de votre périmètre d'écriture.");
+      const groupId = ref(data, "economicGroupId", "economicGroup");
+      if (groupId) {
+        const g = await basePrisma.economicGroup.findUnique({ where: { id: groupId }, select: { entityId: true } });
+        if (!g || !canRead(p, g.entityId)) throw new OutOfScopeError("Groupe d'affaires hors de votre périmètre.");
+      }
       if (!data.entityId && !data.entity) data.entityId = target;
       return;
     }
@@ -287,13 +317,21 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
       return writableCase(ref(data, "caseId", "ratingCase"));
     case "EconomicGroup":
     case "RenotationSchedule":
-    case "RenotationBatch": {
+    case "RenotationBatch":
+    case "WebhookSubscription":
+    case "OutboxEvent": {
       const target = ref(data, "entityId", "entity");
       if (!target || !canWrite(p, target)) throw new OutOfScopeError("Entité hors de votre périmètre d'écriture.");
       return;
     }
     case "RenotationItem":
       return writableCounterparty(ref(data, "counterpartyId", "counterparty"));
+    case "WebhookDelivery": {
+      const subId = ref(data, "subscriptionId", "subscription");
+      const sub = subId ? await basePrisma.webhookSubscription.findUnique({ where: { id: subId }, select: { entityId: true } }) : null;
+      if (!sub || !canWrite(p, sub.entityId)) throw new OutOfScopeError();
+      return;
+    }
     case "User": {
       const target = ref(data, "entityId", "entity");
       if (!target || !canWrite(p, target)) throw new OutOfScopeError("Entité hors de votre périmètre.");
@@ -302,6 +340,38 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
     case "AuditEvent":
       // Le journal est écrit par l'application elle-même, jamais saisi.
       return;
+  }
+}
+
+/**
+ * Contrôle d'un rattachement lors d'une mise à jour : chaque nouveau parent
+ * désigné (champ direct ou connect) doit relever du périmètre d'écriture —
+ * sinon une ligne pourrait être déplacée vers une autre banque.
+ */
+async function checkRelink(data: Record<string, unknown>, p: Perimeter): Promise<void> {
+  const entityOf: Record<string, (id: string) => Promise<string | null | undefined>> = {
+    entity: async (id) => id,
+    counterparty: async (id) => (await basePrisma.counterparty.findUnique({ where: { id }, select: { entityId: true } }))?.entityId,
+    ratingCase: async (id) =>
+      (await basePrisma.ratingCase.findUnique({ where: { id }, select: { counterparty: { select: { entityId: true } } } }))?.counterparty.entityId,
+    ratingRun: async (id) =>
+      (await basePrisma.ratingRun.findUnique({ where: { id }, select: { counterparty: { select: { entityId: true } } } }))?.counterparty.entityId,
+    batch: async (id) => (await basePrisma.renotationBatch.findUnique({ where: { id }, select: { entityId: true } }))?.entityId,
+    subscription: async (id) => (await basePrisma.webhookSubscription.findUnique({ where: { id }, select: { entityId: true } }))?.entityId,
+  };
+  const fields: Record<string, string> = {
+    entityId: "entity", counterpartyId: "counterparty", caseId: "ratingCase", ratingRunId: "ratingRun", batchId: "batch", subscriptionId: "subscription",
+  };
+  for (const [field, relation] of Object.entries(fields)) {
+    const id = ref(data, field, relation);
+    if (!id) continue;
+    const target = await entityOf[relation](id);
+    if (target === undefined || !canWrite(p, target)) throw new OutOfScopeError();
+  }
+  const groupId = ref(data, "economicGroupId", "economicGroup");
+  if (groupId) {
+    const g = await basePrisma.economicGroup.findUnique({ where: { id: groupId }, select: { entityId: true } });
+    if (!g || !canRead(p, g.entityId)) throw new OutOfScopeError("Groupe d'affaires hors de votre périmètre.");
   }
 }
 
@@ -317,7 +387,10 @@ export function scopedPrisma(p: Perimeter): PrismaClient {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           const filter = model ? SCOPED_MODELS[model] : undefined;
-          if (!filter) return query(args);
+          if (!filter) {
+            if (!model || GLOBAL_MODELS.has(model)) return query(args);
+            throw new OutOfScopeError(`Modèle ${model} non classé dans le cloisonnement : accès refusé.`);
+          }
           const a = { ...((args ?? {}) as Record<string, unknown>) };
           if (READS.has(operation)) {
             a.where = restrict(a.where, filter(p.read));
@@ -326,6 +399,9 @@ export function scopedPrisma(p: Perimeter): PrismaClient {
             const data = (operation === "upsert" ? a.update : a.data) as Record<string, unknown> | undefined;
             const target = data?.entityId;
             if (typeof target === "string" && !canWrite(p, target)) throw new OutOfScopeError();
+            // Rattachement à un autre parent (écriture imbriquée, connect) :
+            // la nouvelle cible doit relever du périmètre d'écriture.
+            if (operation !== "upsert" && relinks(data)) await checkRelink(data!, p);
             if (operation === "upsert" && a.create) await checkCreate(model!, a.create as Record<string, unknown>, p);
           } else if (CREATES.has(operation)) {
             const rows = Array.isArray(a.data) ? a.data : [a.data];

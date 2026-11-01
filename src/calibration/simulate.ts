@@ -476,6 +476,11 @@ function buildInput(
     structuralFlags: flags,
     redFlags: redFlags.size > 0 ? [...redFlags].sort() : undefined,
     defaultTriggered: alreadyInDefault ? true : undefined,
+    // Routage conforme à la famille du modèle simulé (le serveur refuse sinon).
+    routing: {
+      reliableFinancialStatements: model.routeFamily === "STANDARD",
+      behavioralHistoryMonths: 36,
+    },
     confidence: {
       completeness,
       freshness: tirageQualite(),

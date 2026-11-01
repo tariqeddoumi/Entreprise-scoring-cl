@@ -1,3 +1,4 @@
+import { emptyFinancials, type FinancialsDraft } from "@/financials/compute";
 import type { CriterionInput, RatingInput } from "@/core/types";
 
 /** Confiance parfaite : aucune contrainte liée à la donnée. */
@@ -89,3 +90,47 @@ export function tpeGoldenInput(): RatingInput {
     },
   };
 }
+
+// --- Bilan d'une PME fictive (module bilan) ---
+
+const M = 1_000_000;
+const s = (n: number) => String(n * M);
+
+/** PME fictive, bilan équilibré sur deux exercices (montants en millions). */
+export function pmeFinancials(): FinancialsDraft {
+  return {
+    ...emptyFinancials(),
+    statementModel: "NORMAL",
+    certified: true,
+    source: "SAISIE",
+    years: [
+      {
+        fiscalYear: "2025",
+        closingDate: "2025-12-31",
+        values: {
+          IMMO_INCORPORELLES: s(2), IMMO_CORPORELLES: s(40), IMMO_FINANCIERES: s(1),
+          STOCKS: s(15), CREANCES_CLIENTS: s(20), AUTRES_CREANCES: s(5), TRESORERIE_ACTIF: s(7),
+          CAPITAL: s(20), PRIMES_RESERVES: s(10), REPORT_A_NOUVEAU: s(2), RESULTAT_EXERCICE_BILAN: s(5),
+          DETTES_FINANCEMENT: s(25), FOURNISSEURS: s(14), AUTRES_DETTES_CIRCULANTES: s(8), TRESORERIE_PASSIF: s(6),
+          VENTES_BIENS_SERVICES: s(100), ACHATS_CONSOMMES: s(55), AUTRES_CHARGES_EXTERNES: s(12), IMPOTS_TAXES: s(1),
+          CHARGES_PERSONNEL: s(18), DOTATIONS_EXPLOITATION: s(5), CHARGES_INTERETS: s(2), IMPOTS_RESULTATS: s(2),
+          TOTAL_ACTIF_DECLARE: s(90), RESULTAT_NET_DECLARE: s(5),
+          SERVICE_DETTE_PRINCIPAL_12M: s(5),
+        },
+      },
+      {
+        fiscalYear: "2024",
+        closingDate: "2024-12-31",
+        values: {
+          IMMO_INCORPORELLES: s(2), IMMO_CORPORELLES: s(38), IMMO_FINANCIERES: s(1),
+          STOCKS: s(14), CREANCES_CLIENTS: s(18), AUTRES_CREANCES: s(4), TRESORERIE_ACTIF: s(5),
+          CAPITAL: s(20), PRIMES_RESERVES: s(8), REPORT_A_NOUVEAU: s(1), RESULTAT_EXERCICE_BILAN: s(4),
+          DETTES_FINANCEMENT: s(27), FOURNISSEURS: s(13), AUTRES_DETTES_CIRCULANTES: s(6), TRESORERIE_PASSIF: s(3),
+          VENTES_BIENS_SERVICES: s(92), ACHATS_CONSOMMES: s(51), AUTRES_CHARGES_EXTERNES: s(11), IMPOTS_TAXES: s(1),
+          CHARGES_PERSONNEL: s(17), DOTATIONS_EXPLOITATION: "4500000", CHARGES_INTERETS: "2100000", IMPOTS_RESULTATS: "1400000",
+        },
+      },
+    ],
+  };
+}
+
