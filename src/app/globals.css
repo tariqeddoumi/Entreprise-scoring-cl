@@ -13,6 +13,8 @@
   --good: #146c4c;
   --warn: #8a5508;
   --bad: #b3261e;
+  --surface-2: #f1f4f8;
+  --warn-bg: #fff3d6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -27,6 +29,8 @@
     --good: #4ac795;
     --warn: #e0a955;
     --bad: #f0796f;
+    --surface-2: #1d2430;
+    --warn-bg: #3a2e14;
   }
 }
 
@@ -429,3 +433,8 @@ pre[data-scroll-focus]:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
+
+/* Bilan : tableau de saisie compact, montants alignés à droite. */
+.balance-table td { padding-top: 3px; padding-bottom: 3px; }
+.balance-table input { min-width: 110px; }
+.balance-linked { background: var(--brand-soft); border-radius: 6px; padding: 6px 8px; }

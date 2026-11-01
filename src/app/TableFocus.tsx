@@ -11,7 +11,7 @@ import { useEffect } from "react";
 export function TableFocus() {
   useEffect(() => {
     const apply = () => {
-      for (const t of document.querySelectorAll<HTMLElement>("table.data, pre")) {
+      for (const t of document.querySelectorAll<HTMLElement>("table.data, pre, .table-scroll")) {
         const scrolls = t.scrollWidth > t.clientWidth + 1;
         if (scrolls && !t.hasAttribute("tabindex")) {
           t.tabIndex = 0;

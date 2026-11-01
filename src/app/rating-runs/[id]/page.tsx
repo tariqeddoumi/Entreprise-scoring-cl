@@ -20,6 +20,7 @@ import { isOfficialRun } from "@/lib/cases";
 import { effectiveGrade } from "@/lib/overrides";
 import { settingInt } from "@/lib/settings";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
+import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export default async function RatingRunPage({
   // pas garantie, il est donc reconnu avant d'être passé aux composants V3.
   const snapshot = readResultSnapshot(run.resultSnapshot);
   const official = isOfficialRun(run);
+  const financialBasis = readFinancialBasis(run.inputSnapshot);
   const maxNotches = await settingInt("OVERRIDE_MAX_NOTCHES");
   const canRequestOverride =
     official &&
@@ -215,6 +217,15 @@ export default async function RatingRunPage({
             );
           })()}
         </section>
+      )}
+
+      {financialBasis ? (
+        <FinancialBasisPanel basis={financialBasis} model={model} />
+      ) : (
+        <div className="card muted" style={{ padding: 12, fontSize: 13 }}>
+          Aucun bilan n&apos;est joint à cette notation (notation reçue par l&apos;API, antérieure à la restitution du bilan, ou grille
+          comportementale sans comptes exploitables).
+        </div>
       )}
 
       {snapshot.kind === "UNREADABLE" ? (

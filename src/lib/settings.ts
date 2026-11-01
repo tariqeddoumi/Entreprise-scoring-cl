@@ -34,6 +34,15 @@ export const AI_PROVIDERS = ["anthropic", "openai", "azure_openai", "compatible_
 
 export const SETTINGS: readonly SettingDef[] = [
   {
+    key: "WORKFLOW_BALANCE_SHEET_REQUIRED",
+    group: "Workflow",
+    labelFr: "Bilan exigé pour soumettre (grilles standard)",
+    helpFr:
+      "Un dossier noté sur une grille standard ne se soumet qu'avec le bilan et le CPC des exercices N et N−1, équilibrés et cohérents. Les grilles comportementales (TPE sans comptes exploitables) n'y sont pas soumises ; un bilan simplifié peut y être joint.",
+    kind: "boolean",
+    default: "true",
+  },
+  {
     key: "WORKFLOW_VALIDATOR_ROLE",
     group: "Workflow",
     labelFr: "Rôle minimal du valideur",

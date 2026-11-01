@@ -15,6 +15,7 @@ import { GradeBadge } from "@/app/ui-helpers";
 import { CaseStatusBadge } from "../CaseStatusBadge";
 import { CaseActions, DecisionPanel } from "./CaseActions";
 import { CaseWorkspace } from "./CaseWorkspace";
+import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       where: { id },
       include: {
         counterparty: { select: { id: true, name: true, currency: true, ice: true, entityId: true } },
-        run: { select: { id: true, resultSnapshot: true, finalGrade: true, cappedGrade: true, outcome: true } },
+        run: { select: { id: true, resultSnapshot: true, inputSnapshot: true, finalGrade: true, cappedGrade: true, outcome: true } },
         documents: {
           orderBy: { createdAt: "asc" },
           select: { id: true, fileName: true, mimeType: true, sizeBytes: true, uploadedBy: true, createdAt: true },
@@ -231,7 +232,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       )}
 
       {c.run && snapshot && (
-        <section style={{ display: "grid", gap: 8 }}>
+        <section style={{ display: "grid", gap: 8, minWidth: 0 }}>
           <p className="muted" style={{ fontSize: 13 }}>
             Notation calculée à la soumission :{" "}
             <Link href={`/rating-runs/${c.run.id}`} style={{ color: "var(--brand)" }}>
@@ -240,6 +241,11 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
             · grade <GradeBadge grade={c.run.finalGrade} />{" "}
             {c.status === "VALIDATED" ? "— note officielle de la contrepartie" : c.status === "SUBMITTED" ? "— proposée, non validée" : "— rejetée"}
           </p>
+          {(() => {
+            // Le valideur voit le bilan sur lequel la note a été calculée.
+            const basis = readFinancialBasis(c.run.inputSnapshot);
+            return basis ? <FinancialBasisPanel basis={basis} model={model} /> : null;
+          })()}
           {snapshot.kind === "V3" && <ResultPanel result={snapshot.result} model={model} />}
         </section>
       )}

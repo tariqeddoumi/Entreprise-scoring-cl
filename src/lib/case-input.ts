@@ -8,6 +8,15 @@ import type {
   Segment,
 } from "@/core/types";
 import { CAP_TRIGGER_TO_FLAG, RETIRED_CAP_OBSERVATIONS } from "@/core/structural-flags";
+import {
+  buildFinancialBasis,
+  computeFinancials,
+  emptyFinancials,
+  gridLinks,
+  parseFinancials,
+  type FinancialComputation,
+  type FinancialsDraft,
+} from "@/financials/compute";
 
 /**
  * Saisie d'un dossier de notation — module PUR, partagé par l'écran (aperçu et
@@ -50,6 +59,8 @@ export interface CaseDraft {
   groupSupport: GroupSupportInput;
   /** Montants dans la devise de la contrepartie (convertis à la soumission). */
   amounts: { annualTurnover: string; groupAnnualTurnover: string; globalBankExposure: string };
+  /** Bilan et CPC (N, N−1, N−2) : base des ratios de la grille et de la fiche de notation. */
+  financials: FinancialsDraft;
 }
 
 export const DATA_STATUSES: DataStatus[] = ["AVAILABLE", "MISSING", "NOT_APPLICABLE", "INVALID", "STALE", "ESTIMATED"];
@@ -84,6 +95,7 @@ export function emptyDraft(model: ModelConfig, asOfDate: string): CaseDraft {
     routing: { reliableFinancialStatements: model.routeFamily === "STANDARD", behavioralHistoryMonths: "" },
     groupSupport: { claimed: false },
     amounts: { annualTurnover: "", groupAnnualTurnover: "", globalBankExposure: "" },
+    financials: emptyFinancials(),
   };
 }
 
@@ -105,6 +117,7 @@ export function parseDraft(raw: string | null | undefined, model: ModelConfig, a
       routing: { ...base.routing, ...(d.routing ?? {}) },
       flags: d.flags ?? {},
       redFlags: d.redFlags ?? [],
+      financials: parseFinancials(d.financials),
       version: 1,
     };
   } catch {
@@ -142,9 +155,32 @@ const toNumber = (s: string): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+/**
+ * Calcul financier du brouillon : indicateurs, ratios de la grille, contrôles.
+ * Même calcul à l'écran et à la soumission.
+ */
+export function draftFinancials(draft: CaseDraft, model: ModelConfig): FinancialComputation {
+  return computeFinancials(draft.financials ?? emptyFinancials(), model.modelId, {
+    asOfDate: draft.asOfDate,
+    declaredTurnover: toNumber(draft.amounts.annualTurnover),
+  });
+}
+
+/** Chiffre d'affaires de l'exercice N lu au bilan, s'il existe. */
+function balanceSheetTurnover(draft: CaseDraft): number | undefined {
+  const f = draft.financials;
+  if (!f) return undefined;
+  const y = f.years[0]?.values ?? {};
+  const a = toNumber(y.VENTES_MARCHANDISES ?? "");
+  const b = toNumber(y.VENTES_BIENS_SERVICES ?? "");
+  return a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
+}
+
 export function draftAmounts(draft: CaseDraft): Record<string, number | undefined> {
   return {
-    annualTurnover: toNumber(draft.amounts.annualTurnover),
+    // CA du cadrage, à défaut celui du bilan : le segment se calcule sur le
+    // bilan chargé sans double saisie.
+    annualTurnover: toNumber(draft.amounts.annualTurnover) ?? balanceSheetTurnover(draft),
     groupAnnualTurnover: toNumber(draft.amounts.groupAnnualTurnover),
     globalBankExposure: toNumber(draft.amounts.globalBankExposure),
   };
@@ -158,10 +194,16 @@ export function draftAmounts(draft: CaseDraft): Record<string, number | undefine
 export function draftToRequest(
   draft: CaseDraft,
   model: ModelConfig,
-  baseAmounts?: Record<string, number>
+  baseAmounts?: Record<string, number>,
+  opts: { currency?: string } = {}
 ): Record<string, unknown> {
   const segment = displaySegment(draft, model);
   const criteria: Record<string, CriterionInput> = {};
+  // Ratios calculés depuis le bilan : ils priment sur une saisie manuelle du
+  // critère ; seule une correction motivée les remplace.
+  const fin = draftFinancials(draft, model);
+  const links = gridLinks(model.modelId);
+  const fromBalanceSheet = new Map(fin.gridRatios.map((g) => [g.criterion, g]));
   for (const c of model.criteria) {
     if ((c.weightsBps[segment] ?? 0) === 0 && draft.segment) continue;
     // Critère écarté : rien n'est transmis, pour que l'instantané d'entrée ne
@@ -169,6 +211,25 @@ export function draftToRequest(
     if (isGatedOut(c, draft.materiality, draft.materialityEvidence)) continue;
     const state = draft.criteria[c.code];
     if (!state) continue;
+    const g = links[c.code] ? fromBalanceSheet.get(c.code) : undefined;
+    if (g && state.status !== "NOT_APPLICABLE") {
+      if (fin.stale) {
+        criteria[c.code] = { status: "STALE" };
+        continue;
+      }
+      if (g.overridden && g.retained !== null) {
+        criteria[c.code] = { status: "AVAILABLE", value: g.retained, evidence: `Ratio corrigé (calculé : ${g.computed ?? "non calculable"}) — ${g.reason}`.slice(0, 500) };
+        continue;
+      }
+      if (g.specialCase) {
+        criteria[c.code] = { status: "AVAILABLE", specialCase: g.specialCase, evidence: "Calculé depuis le bilan." };
+        continue;
+      }
+      if (g.computed !== null) {
+        criteria[c.code] = { status: "AVAILABLE", value: g.computed, evidence: "Calculé depuis le bilan." };
+        continue;
+      }
+    }
     const entry: CriterionInput = { status: state.status };
     if (carriesValue(state.status)) {
       if (state.specialCase) {
@@ -217,6 +278,10 @@ export function draftToRequest(
       behavioralHistoryMonths: months !== undefined ? Math.max(0, Math.round(months)) : 0,
     },
     ...(draft.groupSupport.claimed ? { groupSupport: draft.groupSupport } : {}),
+    ...(() => {
+      const basis = buildFinancialBasis(draft.financials ?? emptyFinancials(), fin, opts.currency);
+      return basis ? { financialBasis: basis } : {};
+    })(),
   };
 }
 
@@ -249,10 +314,17 @@ const MATERIALITY_LABELS: Record<string, string> = {
   esgTransitionMaterial: "Risque de transition matériel",
 };
 
-export function proposableFields(model: ModelConfig): ProposableField[] {
+export function proposableFields(
+  model: ModelConfig,
+  opts: { includeBalanceSheetRatios?: boolean } = {}
+): ProposableField[] {
   const out: ProposableField[] = [];
+  const links = opts.includeBalanceSheetRatios ? {} : gridLinks(model.modelId);
   for (const c of model.criteria) {
     const head = `${c.code} — ${c.labelFr}`;
+    // Ratio calculé depuis le bilan : l'IA lit les postes du bilan (lecture
+    // dédiée), elle ne propose pas le ratio lui-même.
+    if (links[c.code]) continue;
     if (c.type === "QUANTITATIVE") {
       const bins = c.binsBySegment?.ALL ?? Object.values(c.binsBySegment ?? {})[0];
       out.push({

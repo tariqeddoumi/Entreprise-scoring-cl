@@ -590,6 +590,21 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer par la banque :* la liste du noyau obligatoire, le seuil de 24 mois et le traitement « analyse courte », le calendrier de comparaison des grilles challenger.
 
+## D-52 — Bilan chargé, ratios calculés par l'outil, base financière restituée sur la fiche — **À CONFIRMER**
+
+*Décision :*
+- **Chargement.** Lecture par l'IA (PDF, photo, Excel), gabarit Excel de la banque relu par code de poste, ou saisie. La pièce est conservée au dossier avec son empreinte SHA-256. Modèles normal et simplifié du CGNC.
+- **Lecture et calcul séparés.** L'IA lit les postes du gabarit (source et confiance par valeur, valeurs peu sûres signalées) ; les ratios sont calculés par formule, jamais par l'IA. L'IA ne propose plus les ratios calculables depuis le bilan.
+- **Exercices.** N et N−1 exigés, N−2 facultatif (pondération 50/30/20 de la conversion en trésorerie répartie sur les exercices calculables).
+- **Contrôles bloquants à la soumission** (grilles standard, paramètre « Bilan exigé pour soumettre », activé par défaut) : N et N−1 présents et datés, bilan équilibré, totaux et résultat du document retrouvés, ordre des exercices. Comptes de plus de 18 mois : ratios transmis « périmés ».
+- **Correction.** Seuls les ratios de la grille se corrigent, avec un motif obligatoire ; valeur calculée et valeur retenue conservées, correction visible du valideur. Le valideur voit l'écart ; il n'approuve pas ligne par ligne (il valide le dossier entier).
+- **Restitution.** Base financière figée dans l'instantané d'entrée (sans effet sur le calcul) et affichée sur la fiche de notation et sur le dossier soumis.
+
+*À confirmer par la banque :*
+- les conventions du gabarit : trésorerie passif entière dans la dette, créances TTC rapportées au CA HT pour le délai clients, estimation des investissements à défaut de tableau de financement ;
+- l'approbation ligne par ligne des corrections de ratios par le valideur (aujourd'hui : non) ;
+- le format d'import de la liasse fiscale EDI (SIMPL-IS), à obtenir auprès de la DGI.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

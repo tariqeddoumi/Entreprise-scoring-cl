@@ -197,7 +197,7 @@ describe("Saisie d'un dossier", () => {
 
   it("revérifie chaque valeur proposée par l'IA contre la nature du champ", () => {
     const fields = new Map(proposableFields(model).map((f) => [f.key, f]));
-    expect(normalizeProposal(fields.get("criteria.D1.5.value")!, "3,5")).toBe("3.5");
+    expect(normalizeProposal(fields.get("criteria.D3.1.value")!, "3,5")).toBe("3.5");
     expect(normalizeProposal(fields.get("criteria.D1.1.score")!, "75")).toBe("75");
     expect(normalizeProposal(fields.get("criteria.D1.1.score")!, "60")).toBeNull();
     expect(normalizeProposal(fields.get("criteria.D1.1.status")!, "PEUT-ÊTRE")).toBeNull();

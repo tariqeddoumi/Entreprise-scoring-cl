@@ -8,6 +8,7 @@ import {
   carriesValue,
   DATA_STATUSES,
   displaySegment,
+  draftFinancials,
   isGatedOut,
   type CaseDraft,
   type CriterionDraft,
@@ -146,8 +147,26 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
     [model, segment]
   );
 
+  // Ratios calculés depuis le bilan : affichés à la place de la saisie, corrigés
+  // dans la section « Bilan » avec un motif.
+  const fin = useMemo(() => draftFinancials(draft, model), [draft, model]);
+  const linked = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const g of fin.gridRatios) {
+      const c = model.criteria.find((x) => x.code === g.criterion);
+      if (!c || draft.criteria[c.code]?.status === "NOT_APPLICABLE") continue;
+      const unit = c.unit ? c.unit.trim() : "";
+      const num = (n: number | null) => (n === null ? "non calculable" : `${n.toLocaleString("fr-FR")}${unit ? ` ${unit}` : ""}`);
+      if (fin.stale) m.set(c.code, "Comptes de l'exercice N de plus de 18 mois : critère transmis « périmé ».");
+      else if (g.overridden) m.set(c.code, `Valeur retenue ${num(g.retained)}, corrigée par l'analyste (calculée : ${num(g.computed)}). Motif : ${g.reason}`);
+      else if (g.specialCase) m.set(c.code, `Cas particulier appliqué depuis le bilan : ${c.specialCases?.find((x) => x.code === g.specialCase)?.labelFr ?? g.specialCase}.`);
+      else if (g.computed !== null) m.set(c.code, `Calculé depuis le bilan : ${num(g.computed)}.${g.noteFr ? ` ${g.noteFr}` : ""}`);
+    }
+    return m;
+  }, [fin, model, draft.criteria]);
+
   const answered = (c: CriterionConfig) =>
-    isGatedOut(c, draft.materiality, draft.materialityEvidence) || isAnswered(c, draft.criteria[c.code]);
+    isGatedOut(c, draft.materiality, draft.materialityEvidence) || linked.has(c.code) || isAnswered(c, draft.criteria[c.code]);
   const answeredCount = applicable.filter(answered).length;
   const unansweredCritical = applicable.filter((c) => c.unavailablePolicy === "BLOCK" && !answered(c));
 
@@ -358,6 +377,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
                     state={draft.criteria[c.code]}
                     gatedOut={isGatedOut(c, draft.materiality, draft.materialityEvidence)}
                     aiFilled={ai(`criteria.${c.code}.value`) || ai(`criteria.${c.code}.score`) || ai(`criteria.${c.code}.status`)}
+                    linked={linked.get(c.code)}
                     onChange={(patch) => update(c.code, patch)}
                   />
                 ))}
@@ -659,6 +679,7 @@ function CriterionRow({
   state,
   gatedOut,
   aiFilled,
+  linked,
   onChange,
 }: {
   criterion: CriterionConfig;
@@ -666,6 +687,8 @@ function CriterionRow({
   state: CriterionDraft;
   gatedOut: boolean;
   aiFilled: boolean;
+  /** Texte du ratio calculé depuis le bilan (remplace la saisie). */
+  linked?: string;
   onChange: (patch: Partial<CriterionDraft>) => void;
 }) {
   const weight = (criterion.weightsBps[segment] ?? 0) / 100;
@@ -720,7 +743,14 @@ function CriterionRow({
             ))}
           </select>
 
-          {editable ? (
+          {linked ? (
+            <div className="balance-linked" style={{ fontSize: 12, paddingTop: 4 }}>
+              <span style={{ fontWeight: 600 }}>Bilan</span> · {linked}{" "}
+              <a href="#bilan" style={{ color: "var(--brand)" }}>
+                Voir ou corriger dans la section Bilan
+              </a>
+            </div>
+          ) : editable ? (
             criterion.type === "QUANTITATIVE" ? (
               <div>
                 <input
@@ -796,7 +826,7 @@ function CriterionRow({
           )}
         </div>
       )}
-      {!gatedOut && missing && (
+      {!gatedOut && missing && !linked && (
         <div
           className="muted"
           style={{ fontSize: 11, marginTop: 4, color: criterion.unavailablePolicy === "BLOCK" ? "var(--bad)" : undefined }}

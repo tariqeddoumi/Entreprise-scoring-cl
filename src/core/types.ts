@@ -481,6 +481,45 @@ export interface GroupSupportInput {
   requestedNotches?: number;
 }
 
+/** Ratio de la grille calculé depuis le bilan, et valeur retenue après correction éventuelle. */
+export interface FinancialGridRatio {
+  criterion: string;
+  indicator: string;
+  /** Valeur calculée par l'outil (null : non calculable, cf. note). */
+  computed: number | null;
+  /** Cas spécial appliqué à la place d'une valeur (ex. EBITDA nul ou négatif). */
+  specialCase?: string;
+  /** Valeur transmise au moteur. */
+  retained: number | null;
+  overridden: boolean;
+  /** Motif de la correction, obligatoire quand la valeur est corrigée. */
+  reason?: string;
+  noteFr?: string;
+}
+
+export interface FinancialControl {
+  key: string;
+  labelFr: string;
+  status: "OK" | "ALERTE" | "KO";
+  detailFr: string;
+}
+
+/** Instantané figé du bilan qui fonde une notation. */
+export interface FinancialBasis {
+  chartVersion: string;
+  statementModel: "NORMAL" | "SIMPLIFIE";
+  certified: boolean;
+  source: "SAISIE" | "EXCEL" | "IA";
+  currency?: string;
+  document?: { id: string; name: string; sha256: string };
+  /** N, N−1, N−2 : postes lus et totaux recalculés (montants non vides seulement). */
+  years: Array<{ fiscalYear: string; closingDate: string; postes: Record<string, number> }>;
+  /** Tous les indicateurs calculés, même hors grille, par exercice (même ordre que `years`). */
+  indicators: Array<{ key: string; values: Array<number | null> }>;
+  gridRatios: FinancialGridRatio[];
+  controls: FinancialControl[];
+}
+
 export interface RatingInput {
   modelId: string;
   /** Segment fourni ou calculé par le référentiel de segmentation. */
@@ -512,6 +551,12 @@ export interface RatingInput {
    * statut conformité, qui porte seul l'interdiction d'entrée en relation.
    */
   existingExposure?: boolean;
+  /**
+   * Base financière de la notation : bilan et CPC retenus, ratios calculés et
+   * retenus, contrôles. Conservée dans l'instantané d'entrée pour la fiche de
+   * notation, SANS effet sur le calcul : le moteur ne lit que `criteria`.
+   */
+  financialBasis?: FinancialBasis;
   /** Défaut avéré selon la définition applicable : force un grade défaut. */
   defaultTriggered?: boolean;
   /** Grade de défaut constaté (DEF1/DEF2/DEF3) ; DEF1 par défaut. */

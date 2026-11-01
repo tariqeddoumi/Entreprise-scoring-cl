@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { RatingResult } from "@/core/types";
 import { AiError } from "@/lib/ai";
-import { addDocument, decideProposal, generateProposals } from "@/lib/ai-assist";
+import {
+  addDocument,
+  decideProposal,
+  extractFinancials,
+  generateProposals,
+  importFinancialsTemplate,
+  type ExtractedFinancials,
+} from "@/lib/ai-assist";
 import type { CaseDraft } from "@/lib/case-input";
 import { cancelCase, CaseError, createCase, decideCase, previewCase, reopenCase, saveDraft, submitCase } from "@/lib/cases";
 import type { FxConversion } from "@/lib/fx";
@@ -184,6 +191,47 @@ export async function decideProposalAction(
   try {
     const { field, value } = await decideProposal(await getDb(), session.identity, proposalId, accept);
     return { ok: true, field, value };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+// --- Bilan ------------------------------------------------------------------------
+
+/** Lecture du bilan par l'IA : remplit le tableau à l'écran, rien n'est enregistré. */
+export async function extractFinancialsAction(
+  caseId: string,
+  documentIds: string[]
+): Promise<ActionResult & { financials?: ExtractedFinancials }> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    const financials = await extractFinancials(await getDb(), session.identity, caseId, { documentIds });
+    return {
+      ok: true,
+      financials,
+      okFr: `${financials.recognized} montant(s) lus${financials.discarded ? `, ${financials.discarded} écarté(s)` : ""}. Relisez le tableau, en priorité les valeurs signalées, puis enregistrez.`,
+    };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+/** Import du gabarit Excel : la pièce est conservée au dossier, le tableau est rempli à l'écran. */
+export async function importFinancialsAction(fd: FormData): Promise<ActionResult & { financials?: ExtractedFinancials }> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  const caseId = String(fd.get("caseId") ?? "");
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, errorFr: "Choisissez le gabarit Excel rempli." };
+  try {
+    const financials = await importFinancialsTemplate(await getDb(), session.identity, caseId, {
+      name: file.name,
+      type: file.type,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    });
+    revalidatePath(`/cases/${caseId}`);
+    return { ok: true, financials, okFr: `${financials.recognized} montant(s) importés depuis le gabarit. Vérifiez puis enregistrez.` };
   } catch (e) {
     return failure(e);
   }

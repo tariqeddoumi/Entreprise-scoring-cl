@@ -697,6 +697,81 @@ components:
             Exposition déjà au bilan. Accepté et conservé dans l'instantané
             d'entrée, sans effet sur le calcul dans la version actuelle : la
             notation est produite quel que soit le statut conformité.
+        financialBasis:
+          type: object
+          additionalProperties: false
+          description: >
+            Base financière de la notation : bilan et CPC retenus (N, N−1, N−2,
+            gabarit CGNC), tous les indicateurs calculés, ratios de la grille
+            calculés et retenus (correction motivée) et contrôles. Conservée
+            dans l'instantané d'entrée et restituée sur la fiche de notation,
+            SANS effet sur le calcul : le moteur ne lit que `criteria`.
+          required: [chartVersion, statementModel, certified, source, years, indicators, gridRatios, controls]
+          properties:
+            chartVersion: { type: string, maxLength: 40, example: BILAN-CGNC-2026.1 }
+            statementModel: { type: string, enum: [NORMAL, SIMPLIFIE] }
+            certified: { type: boolean }
+            source: { type: string, enum: [SAISIE, EXCEL, IA] }
+            currency: { type: string, pattern: "^[A-Z]{3}$" }
+            document:
+              type: object
+              additionalProperties: false
+              required: [id, name, sha256]
+              properties:
+                id: { type: string }
+                name: { type: string }
+                sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+            years:
+              type: array
+              maxItems: 3
+              items:
+                type: object
+                additionalProperties: false
+                required: [fiscalYear, closingDate, postes]
+                properties:
+                  fiscalYear: { type: string }
+                  closingDate: { type: string }
+                  postes:
+                    type: object
+                    additionalProperties: { type: number }
+            indicators:
+              type: array
+              maxItems: 80
+              items:
+                type: object
+                additionalProperties: false
+                required: [key, values]
+                properties:
+                  key: { type: string }
+                  values: { type: array, maxItems: 3, items: { type: number, nullable: true } }
+            gridRatios:
+              type: array
+              maxItems: 30
+              items:
+                type: object
+                additionalProperties: false
+                required: [criterion, indicator, computed, retained, overridden]
+                properties:
+                  criterion: { type: string }
+                  indicator: { type: string }
+                  computed: { type: number, nullable: true }
+                  specialCase: { type: string }
+                  retained: { type: number, nullable: true }
+                  overridden: { type: boolean }
+                  reason: { type: string, maxLength: 500 }
+                  noteFr: { type: string }
+            controls:
+              type: array
+              maxItems: 200
+              items:
+                type: object
+                additionalProperties: false
+                required: [key, labelFr, status, detailFr]
+                properties:
+                  key: { type: string }
+                  labelFr: { type: string }
+                  status: { type: string, enum: [OK, ALERTE, KO] }
+                  detailFr: { type: string }
         defaultTriggered:
           type: boolean
           description: Définition de défaut déclenchée — force un grade défaut

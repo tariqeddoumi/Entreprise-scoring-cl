@@ -6,6 +6,7 @@ import { emptyDraft, type CaseDraft } from "@/lib/case-input";
 import { simulateDraftAction } from "./actions";
 import { ResultPanel } from "./ResultPanel";
 import { buttonGhostStyle, ScoringForm } from "./ScoringForm";
+import { FinancialsSection } from "./FinancialsSection";
 
 /** Simulation libre : la grille et le calcul serveur, sans dossier ni enregistrement. */
 export function SimulationWorkspace({ model, canRate, today }: { model: ModelConfig; canRate: boolean; today: string }) {
@@ -33,6 +34,7 @@ export function SimulationWorkspace({ model, canRate, today }: { model: ModelCon
 
   return (
     <div style={{ display: "grid", gap: 18, paddingBottom: 72 }}>
+      <FinancialsSection model={model} draft={draft} onChange={setDraft} readOnly={!canRate} currency="MAD" />
       <ScoringForm model={model} draft={draft} onChange={setDraft} readOnly={!canRate} />
       <div className="card no-print action-bar">
         <button type="button" className="btn-primary" onClick={simulate} disabled={pending || !canRate}>
