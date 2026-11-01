@@ -731,17 +731,30 @@ function CriterionRow({
         </div>
       ) : (
         <div className="criterion-input">
-          <select
-            aria-label={`Statut de la donnée — ${name}`}
-            value={state.status}
-            onChange={(e) => onChange({ status: e.target.value as DataStatus })}
-          >
-            {DATA_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {DATA_STATUS_LABELS[s] ?? s}
-              </option>
-            ))}
-          </select>
+          {linked ? (
+            // Ratio calculé depuis le bilan : la donnée vient du bilan ; seul
+            // « non applicable » reste un choix de l'analyste.
+            <select
+              aria-label={`Statut de la donnée — ${name}`}
+              value="BILAN"
+              onChange={(e) => onChange({ status: e.target.value === "NOT_APPLICABLE" ? "NOT_APPLICABLE" : "AVAILABLE" })}
+            >
+              <option value="BILAN">Du bilan</option>
+              <option value="NOT_APPLICABLE">{DATA_STATUS_LABELS.NOT_APPLICABLE ?? "Non applicable"}</option>
+            </select>
+          ) : (
+            <select
+              aria-label={`Statut de la donnée — ${name}`}
+              value={state.status}
+              onChange={(e) => onChange({ status: e.target.value as DataStatus })}
+            >
+              {DATA_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {DATA_STATUS_LABELS[s] ?? s}
+                </option>
+              ))}
+            </select>
+          )}
 
           {linked ? (
             <div className="balance-linked" style={{ fontSize: 12, paddingTop: 4 }}>
