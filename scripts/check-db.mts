@@ -253,6 +253,14 @@ async function main() {
         AND t.tgname = 'audit_events_append_only'
         AND NOT t.tgisinternal
     `);
+    // 5. Index unique partiel non déclarable dans Prisma
+    const [{ pending }] = await prisma.$queryRawUnsafe<{ pending: number }[]>(`
+      SELECT count(*)::int AS pending FROM pg_indexes
+      WHERE schemaname = current_schema() AND indexname = 'overrides_one_pending_per_run'
+    `);
+    if (pending > 0) ok("une seule dérogation en attente par notation (index unique partiel)");
+    else fail("index « overrides_one_pending_per_run » absent : lancer « npm run db:indexes ».");
+
     if (guarded > 0) {
       ok("piste d'audit protégée en ajout seul");
     } else {

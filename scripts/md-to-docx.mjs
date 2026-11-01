@@ -16,7 +16,11 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import {
+import { createRequire } from "node:module";
+// « docx » est résolu comme module CommonJS : il peut être installé
+// globalement (NODE_PATH), ce que la résolution ESM ignore.
+const require = createRequire(import.meta.url);
+const {
   Document,
   Packer,
   Paragraph,
@@ -36,7 +40,9 @@ import {
   VerticalAlign,
   TabStopType,
   TabStopPosition,
-} from "docx";
+  ImageRun,
+} = require("docx");
+import { fileURLToPath } from "node:url";
 
 const [, , srcArg, outArg, ...coverArgs] = process.argv;
 if (!srcArg || !outArg) {
@@ -68,10 +74,19 @@ function firstHeading() {
   return h ? h.replace(/^#\s+/, "").trim() : null;
 }
 
-const BRAND = "1F3864";
-const BRAND2 = "2E5395";
-const LIGHT = "EDF2FA";
-const FONT = "Calibri";
+// Charte Groupe BCP — mêmes couleurs, police et logo que le guide utilisateur
+// et les présentations.
+const BRAND = "E37B05"; // orange
+const BRAND2 = "462016"; // brun
+const GRIS = "3D3D3B";
+const LIGHT = "F2E8DB";
+const LIGHT2 = "FBF6F0";
+const BORD = "D9C7B0";
+const MUTED = "8A7A6A";
+const FONT = "Arial";
+const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), "assets");
+const LOGO = fs.readFileSync(path.join(ASSETS, "groupe-bcp-logo.png"));
+const BAND = fs.readFileSync(path.join(ASSETS, "groupe-bcp-bandeau.png"));
 const CONTENT_WIDTH = 9600; // dxa
 
 // ---------------------------------------------------------------------------
@@ -221,10 +236,10 @@ function buildTable(headerCells, aligns, bodyRows) {
     deficit -= take;
   }
 
-  const cell = (text, { header = false, align = AlignmentType.LEFT, width }) =>
+  const cell = (text, { header = false, align = AlignmentType.LEFT, width, rowIdx = 0 }) =>
     new TableCell({
       width: { size: width, type: WidthType.DXA },
-      shading: header ? { type: ShadingType.CLEAR, fill: BRAND } : undefined,
+      shading: header ? { type: ShadingType.CLEAR, fill: BRAND } : { type: ShadingType.CLEAR, fill: rowIdx % 2 ? LIGHT2 : LIGHT },
       verticalAlign: VerticalAlign.CENTER,
       margins: { top: 60, bottom: 60, left: 100, right: 100 },
       children: [
@@ -233,7 +248,7 @@ function buildTable(headerCells, aligns, bodyRows) {
           children: toRuns(parseInline(text), {
             bold: header,
             size: 18,
-            color: header ? "FFFFFF" : undefined,
+            color: header ? "FFFFFF" : GRIS,
           }),
         }),
       ],
@@ -243,12 +258,12 @@ function buildTable(headerCells, aligns, bodyRows) {
     width: { size: CONTENT_WIDTH, type: WidthType.DXA },
     columnWidths: widths,
     borders: {
-      top: { style: BorderStyle.SINGLE, size: 2, color: "B7C6E5" },
-      bottom: { style: BorderStyle.SINGLE, size: 2, color: "B7C6E5" },
-      left: { style: BorderStyle.SINGLE, size: 2, color: "B7C6E5" },
-      right: { style: BorderStyle.SINGLE, size: 2, color: "B7C6E5" },
-      insideHorizontal: { style: BorderStyle.SINGLE, size: 2, color: "D7DFF2" },
-      insideVertical: { style: BorderStyle.SINGLE, size: 2, color: "D7DFF2" },
+      top: { style: BorderStyle.SINGLE, size: 4, color: BORD },
+      bottom: { style: BorderStyle.SINGLE, size: 4, color: BORD },
+      left: { style: BorderStyle.SINGLE, size: 4, color: BORD },
+      right: { style: BorderStyle.SINGLE, size: 4, color: BORD },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: BORD },
+      insideVertical: { style: BorderStyle.SINGLE, size: 4, color: BORD },
     },
     rows: [
       new TableRow({
@@ -258,10 +273,11 @@ function buildTable(headerCells, aligns, bodyRows) {
         ),
       }),
       ...bodyRows.map(
-        (r) =>
+        (r, rowIdx) =>
           new TableRow({
+            cantSplit: true,
             children: r.map((c, idx) =>
-              cell(c, { align: aligns[idx] || AlignmentType.LEFT, width: widths[idx] })
+              cell(c, { align: aligns[idx] || AlignmentType.LEFT, width: widths[idx], rowIdx })
             ),
           })
       ),
@@ -305,10 +321,9 @@ function flushBlockquote() {
     body.push(
       new Paragraph({
         indent: { left: 360 },
-        border: { left: { style: BorderStyle.SINGLE, size: 18, color: BRAND2, space: 8 } },
         shading: { type: ShadingType.CLEAR, fill: LIGHT },
         spacing: { after: 80 },
-        children: toRuns(parseInline(l), { italics: true, size: 20, color: "3B4A66" }),
+        children: toRuns(parseInline(l), { italics: true, size: 20, color: BRAND2 }),
       })
     );
   }
@@ -399,7 +414,7 @@ while (i < lines.length) {
       new Paragraph({
         indent: { left: 360, hanging: 200 },
         spacing: { after: 80 },
-        children: toRuns(parseInline(marker + listItem[3])),
+        children: toRuns(parseInline(marker + listItem[3]), { color: GRIS }),
       })
     );
     i += 1;
@@ -407,7 +422,7 @@ while (i < lines.length) {
   }
 
   body.push(
-    new Paragraph({ spacing: { after: 140 }, children: toRuns(parseInline(line.trim())) })
+    new Paragraph({ spacing: { after: 140, line: 276 }, children: toRuns(parseInline(line.trim()), { color: GRIS }) })
   );
   i += 1;
 }
@@ -425,49 +440,59 @@ const centered = (text, opts) =>
   });
 
 const cover = [
-  new Paragraph({ spacing: { before: 1200 }, text: "" }),
-  centered(COVER.title, {
-    spacing: { after: 120 },
-    run: { bold: true, size: 52, color: BRAND },
+  new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { before: 400, after: 500 },
+    children: [new ImageRun({ type: "png", data: LOGO, transformation: { width: 230, height: 120 }, altText: { title: "Groupe BCP", description: "Logo Groupe BCP", name: "logo" } })],
+  }),
+  centered(COVER.title.toUpperCase(), {
+    spacing: { after: 200 },
+    run: { bold: true, size: 44, color: BRAND },
   }),
 ];
 if (COVER.subtitle) {
   cover.push(
     centered(COVER.subtitle, {
-      spacing: { before: 120, after: 100 },
-      run: { bold: true, size: 30, color: BRAND2 },
+      spacing: { before: 60, after: 160 },
+      run: { size: 28, color: BRAND2 },
     })
   );
 }
 if (COVER.tagline) {
   cover.push(
     centered(COVER.tagline, {
-      spacing: { after: 400 },
-      run: { italics: true, size: 24, color: "44546A" },
+      spacing: { after: 300 },
+      run: { italics: true, size: 22, color: GRIS },
     })
   );
 }
+cover.push(
+  new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 400 },
+    children: [new ImageRun({ type: "png", data: BAND, transformation: { width: 620, height: 45 }, altText: { title: "Bandeau", description: "Bandeau décoratif Groupe BCP", name: "bandeau" } })],
+  })
+);
 for (const field of ["Public", "Destinataires", "Durée de présentation conseillée", "Version", "Date"]) {
   const value = headerField(field);
   if (value) {
-    cover.push(centered(value, { spacing: { after: 40 }, run: { size: 20, color: "44546A" } }));
+    cover.push(centered(value, { spacing: { after: 40 }, run: { size: 20, color: GRIS } }));
   }
 }
 const classification = headerField("Classification");
 cover.push(
   centered(classification ?? "Classification : usage interne", {
-    spacing: { after: 420 },
-    run: { size: 20, italics: true, color: "44546A" },
+    spacing: { after: 360 },
+    run: { size: 20, italics: true, color: MUTED },
   })
 );
 for (const quote of coverQuotes()) {
   cover.push(
     new Paragraph({
       indent: { left: 360, right: 360 },
-      border: { left: { style: BorderStyle.SINGLE, size: 18, color: BRAND2, space: 8 } },
       shading: { type: ShadingType.CLEAR, fill: LIGHT },
       spacing: { after: 160 },
-      children: toRuns(parseInline(quote), { italics: true, size: 20, color: "3B4A66" }),
+      children: toRuns(parseInline(quote), { italics: true, size: 19, color: BRAND2 }),
     })
   );
 }
@@ -488,20 +513,18 @@ const headingStyle = (id, name, size, color, extra = {}) => ({
 });
 
 const doc = new Document({
-  creator: "Direction des Risques",
+  creator: "Groupe BCP — Direction des Risques",
   title: COVER.title,
   description: COVER.subtitle,
   styles: {
-    default: { document: { run: { font: FONT, size: 21 } } },
+    default: { document: { run: { font: FONT, size: 21, color: GRIS } } },
     paragraphStyles: [
-      headingStyle("Heading1", "Heading 1", 30, BRAND, { spacing: { before: 360, after: 180 } }),
-      headingStyle("Heading2", "Heading 2", 25, BRAND2, {
-        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: "C3CFE8", space: 4 } },
-      }),
-      headingStyle("Heading3", "Heading 3", 22, "31456A"),
+      headingStyle("Heading1", "Heading 1", 34, BRAND, { spacing: { before: 360, after: 220 } }),
+      headingStyle("Heading2", "Heading 2", 26, BRAND2),
+      headingStyle("Heading3", "Heading 3", 22, BRAND),
       {
-        ...headingStyle("Heading4", "Heading 4", 21, "44546A"),
-        run: { font: FONT, size: 21, bold: true, italics: true, color: "44546A" },
+        ...headingStyle("Heading4", "Heading 4", 21, BRAND2),
+        run: { font: FONT, size: 21, bold: true, italics: true, color: BRAND2 },
       },
     ],
   },
@@ -510,42 +533,41 @@ const doc = new Document({
       properties: {
         page: {
           size: { width: 11906, height: 16838 }, // A4
-          margin: { top: 1000, bottom: 1000, left: 1150, right: 1150 },
+          margin: { top: 1300, bottom: 1134, left: 1150, right: 1150, header: 600, footer: 500 },
         },
+        titlePage: true,
       },
       headers: {
         default: new Header({
           children: [
             new Paragraph({
               tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
-              border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: "C3CFE8", space: 4 } },
+              border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: BRAND, space: 4 } },
               children: [
-                new TextRun({ text: COVER.header, size: 15, color: "6B7A99", font: FONT }),
-                new TextRun({
-                  text: `\t${COVER.version.split(" · ")[0]}`,
-                  size: 15,
-                  color: "6B7A99",
-                  font: FONT,
-                }),
+                new ImageRun({ type: "png", data: LOGO, transformation: { width: 69, height: 36 }, altText: { title: "Groupe BCP", description: "Logo", name: "logo-entete" } }),
+                new TextRun({ text: `\t${COVER.header}${COVER.version ? ` · ${COVER.version.split(" · ")[0]}` : ""}`, size: 16, color: BRAND2, font: FONT }),
               ],
             }),
           ],
         }),
+        first: new Header({ children: [new Paragraph({ children: [] })] }),
       },
       footers: {
         default: new Footer({
           children: [
             new Paragraph({
-              alignment: AlignmentType.CENTER,
+              tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
               children: [
-                new TextRun({ text: "Usage interne — ", size: 15, color: "6B7A99", font: FONT }),
-                new TextRun({ children: [PageNumber.CURRENT], size: 15, color: "6B7A99", font: FONT }),
-                new TextRun({ text: " / ", size: 15, color: "6B7A99", font: FONT }),
-                new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 15, color: "6B7A99", font: FONT }),
+                new TextRun({ text: "Groupe BCP — document interne", size: 16, color: MUTED, font: FONT }),
+                new TextRun({ text: "\tPage ", size: 16, color: MUTED, font: FONT }),
+                new TextRun({ children: [PageNumber.CURRENT], size: 16, color: MUTED, font: FONT }),
+                new TextRun({ text: " / ", size: 16, color: MUTED, font: FONT }),
+                new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: MUTED, font: FONT }),
               ],
             }),
           ],
         }),
+        first: new Footer({ children: [new Paragraph({ children: [] })] }),
       },
       children: [...cover, ...body],
     },
