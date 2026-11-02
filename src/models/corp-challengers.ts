@@ -1,5 +1,5 @@
-import type { CriterionConfig, GradeScaleConfig, ModelConfig } from "@/core/types";
-import { DEFAULT_GRADES } from "@/reference/default-policy";
+import type { CriterionConfig, ModelConfig } from "@/core/types";
+import { MASTER_GRADE_SCALE } from "@/reference/rating-scale";
 import { CORP_STD_V1 } from "./corp-std-v1";
 import { CORP_TPE_BEHAV_V1 } from "./corp-tpe-behav-v1";
 import { anchors, bins5 } from "./helpers";
@@ -35,21 +35,6 @@ const DISCLAIMER =
 
 const MISSING_LOW = { unavailablePolicy: "CONSERVATIVE_SCORE" as const, unavailableScore: 0 as const };
 
-function scale(scaleId: string, labelFr: string, prefix: string, cuts: number[], labels: string[]): GradeScaleConfig {
-  return {
-    scaleId,
-    labelFr,
-    comparableWith: [],
-    status: "PROVISIONAL",
-    bands: labels.map((l, i) => ({
-      grade: `${prefix}${i + 1}`,
-      minScore: i < cuts.length ? cuts[i] : null,
-      maxScore: i === 0 ? null : cuts[i - 1],
-      labelFr: l,
-    })),
-    defaultGrades: DEFAULT_GRADES,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Ancrages qualitatifs communs (document 03, § 5)
@@ -333,7 +318,7 @@ const stdCriteria: CriterionConfig[] = [
 
 export const CORP_STD_CHALLENGER_V1: ModelConfig = {
   modelId: "CORP_STD_CHALLENGER_V1",
-  version: "0.1.0",
+  version: "0.2.0",
   labelFr: "Grille challenger standard (16 critères) — pilote, en parallèle de CORP_STD_V1",
   status: "DRAFT_EXPERT_SEED",
   routeFamily: "STANDARD",
@@ -354,13 +339,7 @@ export const CORP_STD_CHALLENGER_V1: ModelConfig = {
     { code: "C", labelFr: "Climat" },
   ],
   criteria: stdCriteria,
-  gradeScale: scale(
-    "STD-CIBLE-PILOTE",
-    "Échelle provisoire de la grille challenger standard (coupures de l'échelle actuelle, sans transfert de performance ni de PD)",
-    "STD-S",
-    [88, 82, 76, 70, 64, 57, 48],
-    ["Très solide", "Solide", "Bon", "Satisfaisant", "Acceptable", "Fragile", "Faible", "Très faible"]
-  ),
+  gradeScale: MASTER_GRADE_SCALE,
   nonCompensatoryRules: [],
   redFlags: CORP_STD_V1.redFlags,
   confidence: CORP_STD_V1.confidence,
@@ -520,7 +499,7 @@ const tpeCriteria: CriterionConfig[] = [
 
 export const CORP_TPE_CHALLENGER_V1: ModelConfig = {
   modelId: "CORP_TPE_CHALLENGER_V1",
-  version: "0.1.0",
+  version: "0.2.0",
   labelFr: "Grille challenger TPE comportementale (12 critères) — pilote, en parallèle de CORP_TPE_BEHAV_V1",
   status: "DRAFT_EXPERT_SEED",
   routeFamily: "BEHAVIORAL",
@@ -540,13 +519,7 @@ export const CORP_TPE_CHALLENGER_V1: ModelConfig = {
     { code: "TE", labelFr: "Climat" },
   ],
   criteria: tpeCriteria,
-  gradeScale: scale(
-    "TPE-CIBLE-PILOTE",
-    "Échelle provisoire de la grille challenger TPE (coupures de l'échelle actuelle, sans transfert de performance ni de PD)",
-    "TPE-T",
-    [85, 76, 68, 60, 50],
-    ["Très solide", "Solide", "Correct", "Acceptable", "Fragile", "Faible"]
-  ),
+  gradeScale: MASTER_GRADE_SCALE,
   nonCompensatoryRules: [],
   redFlags: CORP_TPE_BEHAV_V1.redFlags,
   confidence: CORP_TPE_BEHAV_V1.confidence,

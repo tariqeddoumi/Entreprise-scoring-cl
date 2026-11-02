@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getModel } from "@/models";
+import { effectiveScale } from "@/lib/rating-scale";
 import {
   BATCH_STATUS_LABELS,
   describeFilters,
@@ -83,10 +83,16 @@ export default async function BatchPage({
   const filters = (safeJson(batch.filters) ?? {}) as RenotationFilters;
   const options = safeJson(batch.options) as { notchThreshold?: number; openCases?: boolean } | null;
 
-  // Matrice de migration : grades de l'échelle du modèle, dans l'ordre.
-  const scale = getModel("CORP_STD_V1")?.gradeScale.bands.map((b) => b.grade) ?? [];
+  // Matrice de migration : classes de l'échelle maîtresse en vigueur, dans
+  // l'ordre, puis défauts, puis grades d'échelles antérieures (STD-P…) que
+  // portait la note précédente.
+  const current = (await effectiveScale()).bands.map((b) => b.grade);
+  const scale = [...current, "DEF1", "DEF2", "DEF3"];
   const seen = new Set(matrix.flatMap((m) => [m.previousGrade ?? "—", m.newGrade ?? "—"]));
-  const grades = [...scale.filter((g) => seen.has(g)), ...[...seen].filter((g) => !scale.includes(g)).sort()];
+  const grades = [
+    ...scale.filter((g) => seen.has(g)),
+    ...[...seen].filter((g) => !scale.includes(g)).sort((a, b) => a.localeCompare(b, "fr", { numeric: true })),
+  ];
   const cell = (from: string, to: string) =>
     matrix.find((m) => (m.previousGrade ?? "—") === from && (m.newGrade ?? "—") === to)?._count._all ?? 0;
 
@@ -179,12 +185,12 @@ export default async function BatchPage({
 
       <section className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <h2 style={{ fontWeight: 600 }}>Contreparties</h2>
+          <h2 style={{ fontWeight: 600 }}>Clients</h2>
           <a href={`/renotation/${batch.id}/export`} className="btn-ghost" style={{ fontSize: 13 }}>
             Exporter le lot (CSV)
           </a>
         </div>
-        <nav className="tabs" aria-label="Filtre des contreparties">
+        <nav className="tabs" aria-label="Filtre des clients">
           {FILTERS.map((x) => (
             <Link key={x.key} href={`/renotation/${batch.id}?f=${x.key}`} aria-current={x.key === f ? "page" : undefined}>
               {x.label}
@@ -192,13 +198,13 @@ export default async function BatchPage({
           ))}
         </nav>
         {items.length === 0 ? (
-          <p className="muted">Aucune contrepartie dans ce filtre.</p>
+          <p className="muted">Aucun client dans ce filtre.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table className="data">
               <thead>
                 <tr>
-                  <th>Contrepartie</th>
+                  <th>Client</th>
                   <th>Segment</th>
                   <th>Secteur</th>
                   <th>Avant</th>

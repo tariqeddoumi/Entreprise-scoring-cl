@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getModel } from "@/models";
+import { scaleById, snapshotScaleId } from "@/lib/rating-scale";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
@@ -78,7 +79,10 @@ export default async function RatingRunPage({
     !run.cappedGrade.startsWith("DEF") &&
     !run.overrides.some((o) => o.status === "PENDING") &&
     !!model;
-  const performingGrades = model ? model.gradeScale.bands.map((b) => b.grade).filter((g) => !g.startsWith("DEF")) : [];
+  // Classes possibles d'une dérogation : celles de l'échelle consignée dans la
+  // notation, même si une autre version de l'échelle est entrée en vigueur depuis.
+  const runScale = await scaleById(snapshotScaleId(run.resultSnapshot), run.cappedGrade);
+  const performingGrades = model ? runScale.bands.map((b) => b.grade) : [];
   const canDecideOverride = hasRole(identity.role, "RISK_MANAGER");
 
   return (
@@ -86,7 +90,7 @@ export default async function RatingRunPage({
       <div>
         <p className="muted" style={{ fontSize: 13 }}>
           <Link href="/counterparties" style={{ color: "var(--brand)" }}>
-            Contreparties
+            Clients
           </Link>{" "}
           ›{" "}
           <Link
@@ -123,7 +127,7 @@ export default async function RatingRunPage({
           <CaseStatusBadge status={run.ratingCase.status} />
           <span style={{ fontSize: 13 }}>
             {official
-              ? `Notation validée${run.ratingCase.decidedBy ? ` par ${run.ratingCase.decidedBy}` : ""} : c'est la note de la contrepartie.`
+              ? `Notation validée${run.ratingCase.decidedBy ? ` par ${run.ratingCase.decidedBy}` : ""} : c'est la note du client.`
               : run.ratingCase.status === "REJECTED"
                 ? "Notation rejetée : elle ne fait pas foi."
                 : "Notation proposée, en attente de validation : elle ne fait pas encore foi."}

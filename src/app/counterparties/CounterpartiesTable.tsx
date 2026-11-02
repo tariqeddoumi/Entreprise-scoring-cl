@@ -13,10 +13,13 @@ export interface CounterpartyRow {
   sectorCode: string | null;
   entityCode: string;
   currency: string;
+  isActive: boolean;
+  /** L'utilisateur peut ouvrir un dossier de notation pour ce client. */
+  canRate: boolean;
   /** Statut du dossier en cours (brouillon ou soumis), s'il y en a un. */
   openCase: string | null;
   /** Dernière notation OFFICIELLE (validée, ou antérieure au workflow). */
-  ratingRuns: Array<{ finalGrade: string | null; rawScore: unknown; asOfDate: string }>;
+  ratingRuns: Array<{ finalGrade: string | null; rawScore: number | null; asOfDate: string; equivalent?: string | null }>;
 }
 
 const SEGMENTS = ["TPE", "PME", "GE"] as const;
@@ -33,7 +36,7 @@ function downloadCsv(rows: CounterpartyRow[]) {
       c.segment ?? "",
       c.sectorCode ?? "",
       last?.rawScore ? Number(last.rawScore).toFixed(2) : "",
-      last?.finalGrade ?? "",
+      last?.equivalent ? `${last.finalGrade} (≈ classe ${last.equivalent})` : (last?.finalGrade ?? ""),
       last?.asOfDate ?? "",
     ]);
   });
@@ -44,7 +47,7 @@ function downloadCsv(rows: CounterpartyRow[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `contreparties-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `clients-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -52,10 +55,13 @@ function downloadCsv(rows: CounterpartyRow[]) {
 export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
   const [query, setQuery] = useState("");
   const [segment, setSegment] = useState<string>("");
+  const [showInactive, setShowInactive] = useState(false);
+  const inactiveCount = items.filter((c) => !c.isActive).length;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((c) => {
+      if (!showInactive && !c.isActive) return false;
       if (segment && c.segment !== segment) return false;
       if (!q) return true;
       return (
@@ -64,7 +70,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
         c.entityCode.toLowerCase().includes(q)
       );
     });
-  }, [items, query, segment]);
+  }, [items, query, segment, showInactive]);
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
@@ -75,7 +81,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{ maxWidth: 280 }}
-          aria-label="Rechercher une contrepartie"
+          aria-label="Rechercher un client"
         />
         <select
           value={segment}
@@ -90,8 +96,14 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
             </option>
           ))}
         </select>
+        {inactiveCount > 0 && (
+          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+            Afficher les désactivés ({inactiveCount})
+          </label>
+        )}
         <span className="muted" style={{ fontSize: 13 }}>
-          {filtered.length} / {items.length} contrepartie(s)
+          {filtered.length} / {items.length} client(s)
         </span>
         <button
           type="button"
@@ -112,7 +124,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="muted">Aucune contrepartie ne correspond à la recherche.</p>
+        <p className="muted">Aucun client ne correspond à la recherche.</p>
       ) : (
         <table className="data">
           <thead>
@@ -126,6 +138,9 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
               <th>Score validé</th>
               <th>Grade validé</th>
               <th>Arrêté</th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -137,6 +152,11 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }}>
                       {c.name}
                     </Link>
+                    {!c.isActive && (
+                      <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
+                        · désactivé
+                      </span>
+                    )}
                     {c.openCase && (
                       <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
                         {c.openCase === "SUBMITTED" ? "· dossier à valider" : "· dossier en cours"}
@@ -148,11 +168,30 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                   <td className="muted">{c.currency}</td>
                   <td>{c.segment ?? "—"}</td>
                   <td className="muted">{c.sectorCode ?? "—"}</td>
-                  <td>{last?.rawScore ? Number(last.rawScore).toFixed(2) : "—"}</td>
+                  <td>{last?.rawScore != null ? last.rawScore.toFixed(2) : "—"}</td>
                   <td>
                     <GradeBadge grade={last?.finalGrade ?? null} />
+                    {last?.equivalent && (
+                      <span
+                        className="muted"
+                        style={{ fontSize: 11, marginLeft: 6 }}
+                        title="Note produite sur l'échelle antérieure : classe équivalente sur l'échelle 1 à 10 en vigueur (lecture seulement, jusqu'à la prochaine notation)"
+                      >
+                        ≈ classe {last.equivalent}
+                      </span>
+                    )}
                   </td>
                   <td className="muted nowrap">{last?.asOfDate ?? "—"}</td>
+                  <td className="nowrap" style={{ display: "flex", gap: 10 }}>
+                    {c.canRate && (
+                      <Link href={`/counterparties/${c.id}#noter`} style={{ color: "var(--brand)", fontWeight: 600 }}>
+                        Noter
+                      </Link>
+                    )}
+                    <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }} aria-label={`Fiche de ${c.name}`}>
+                      Fiche
+                    </Link>
+                  </td>
                 </tr>
               );
             })}

@@ -2,7 +2,7 @@ import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
 import { CORP_STD_V1 } from "./corp-std-v1";
-import { DEFAULT_GRADES } from "@/reference/default-policy";
+import { MASTER_GRADE_SCALE } from "@/reference/rating-scale";
 import calibrationJson from "./calibrations/CORP_TPE_BEHAV_V1-SYNTH-20260824.json";
 
 /**
@@ -450,7 +450,7 @@ const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
 
 export const CORP_TPE_BEHAV_V1: ModelConfig = {
   modelId: "CORP_TPE_BEHAV_V1",
-  version: "3.1.0",
+  version: "3.2.0",
   labelFr: "Modèle TPE comportemental — flux bancaires et informations alternatives",
   status: "DRAFT_EXPERT_SEED",
   routeFamily: "BEHAVIORAL",
@@ -501,29 +501,16 @@ export const CORP_TPE_BEHAV_V1: ModelConfig = {
   criteria,
 
   /**
-   * Échelle PROPRE au modèle comportemental (constat C03).
+   * Échelle maîtresse commune 1 à 10 (décision D-53, novembre 2026), au lieu
+   * de l'échelle propre TPE-B1…B6 (constat C03).
    *
-   * Six grades seulement. Le modèle observe des flux bancaires, pas des états
-   * financiers : sa capacité de séparation est structurellement plus faible, et
-   * la calibration synthétique montrait déjà deux grades voisins que les
-   * données ne distinguaient pas. Afficher dix grades donnerait une précision
-   * que l'information ne porte pas.
+   * Point de vigilance consigné : ce modèle observe des flux bancaires, pas des
+   * états financiers ; sa capacité de séparation est structurellement plus
+   * faible et la calibration synthétique distinguait mal deux grades voisins
+   * sur six. Sur dix classes, des classes voisines porteront des risques
+   * proches : la calibration sur défauts observés dira lesquelles fusionner.
    */
-  gradeScale: {
-    scaleId: "TPE-B-2026.1",
-    labelFr: "Échelle provisoire du modèle TPE comportemental",
-    comparableWith: [],
-    status: "PROVISIONAL",
-    bands: [
-      { grade: "TPE-B1", minScore: 85, maxScore: null, labelFr: "Comportement très sain" },
-      { grade: "TPE-B2", minScore: 76, maxScore: 85, labelFr: "Comportement sain" },
-      { grade: "TPE-B3", minScore: 68, maxScore: 76, labelFr: "Comportement acceptable" },
-      { grade: "TPE-B4", minScore: 60, maxScore: 68, labelFr: "Tensions ponctuelles" },
-      { grade: "TPE-B5", minScore: 50, maxScore: 60, labelFr: "Tensions installées" },
-      { grade: "TPE-B6", minScore: null, maxScore: 50, labelFr: "Comportement très dégradé" },
-    ],
-    defaultGrades: DEFAULT_GRADES,
-  },
+  gradeScale: MASTER_GRADE_SCALE,
 
   /**
    * Aucune exception non compensatoire (constat C08).

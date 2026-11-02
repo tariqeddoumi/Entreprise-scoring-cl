@@ -368,6 +368,36 @@ while (i < lines.length) {
   }
   flushBlockquote();
 
+  // Figure : « ![légende](chemin.png) », chemin relatif au document source.
+  const figure = /^!\[([^\]]*)\]\(([^)]+\.png)\)\s*$/.exec(line.trim());
+  if (figure) {
+    const file = path.resolve(path.dirname(SRC), figure[2]);
+    const data = fs.readFileSync(file);
+    // Dimensions lues dans l'en-tête PNG ; largeur ramenée à 16 cm au plus.
+    const w = data.readUInt32BE(16);
+    const h = data.readUInt32BE(20);
+    const width = Math.min(w / h < 1.4 ? 400 : 580, w);
+    body.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 120, after: 60 },
+        keepNext: true,
+        children: [new ImageRun({ type: "png", data, transformation: { width, height: Math.round((h * width) / w) }, altText: { title: figure[1], description: figure[1], name: path.basename(file) } })],
+      })
+    );
+    if (figure[1]) {
+      body.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 200 },
+          children: [new TextRun({ text: figure[1], font: FONT, italics: true, size: 18, color: BRAND2 })],
+        })
+      );
+    }
+    i += 1;
+    continue;
+  }
+
   const heading = /^(#{1,4})\s+(.*)$/.exec(line);
   if (heading) {
     const level = heading[1].length;

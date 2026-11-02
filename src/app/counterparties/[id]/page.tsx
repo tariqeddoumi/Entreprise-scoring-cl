@@ -5,13 +5,24 @@ import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { isOfficialRun } from "@/lib/cases";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
 import { safeQuery } from "@/lib/safe-db";
-import { requireSession } from "@/lib/session";
+import { hasRole } from "@/lib/auth";
+import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
+import { getPerimeter, requireSession } from "@/lib/session";
+import { listModels } from "@/models";
+import { transposeGrade } from "@/core/grades";
+import { effectiveScale } from "@/lib/rating-scale";
+import { legacyScaleForGrade } from "@/reference/legacy-scales";
+import { toGradeScaleConfig } from "@/reference/rating-scale";
 import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
+import { NewCaseForm } from "@/app/scoring/NewCaseForm";
+import { ClientActions } from "../ClientActions";
+import { NewCounterpartyForm, type WritableEntity } from "../NewCounterpartyForm";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Fiche contrepartie : identité, historique des notations et attribution de
+ * Fiche client : identité (modifiable), notation directe depuis la fiche,
+ * suppression ou désactivation, historique des notations et attribution de
  * l'écart entre les deux dernières exécutions.
  */
 export default async function CounterpartyPage({
@@ -19,7 +30,8 @@ export default async function CounterpartyPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireSession();
+  const identity = await requireSession();
+  const perimeter = await getPerimeter();
   const { id } = await params;
 
   const { data, dbAvailable } = await safeQuery(async (db) => {
@@ -59,7 +71,7 @@ export default async function CounterpartyPage({
         select: { id: true, resultSnapshot: true },
       });
       const snapshotById = new Map(snapshots.map((r) => [r.id, r.resultSnapshot]));
-      const [entity, cases] = await Promise.all([
+      const [entity, cases, tree] = await Promise.all([
         db.entity.findUnique({ where: { id: counterparty.entityId }, select: { name: true, code: true } }),
         db.ratingCase.findMany({
           where: { counterpartyId: id },
@@ -67,8 +79,17 @@ export default async function CounterpartyPage({
           take: 20,
           select: { id: true, status: true, asOfDate: true, createdBy: true, submittedBy: true, decidedBy: true, updatedAt: true },
         }),
+        loadTree(),
       ]);
-      return { counterparty, runs, snapshotById, entity, cases };
+      const [renotations] = await Promise.all([db.renotationItem.count({ where: { counterpartyId: id } })]);
+      const writable: WritableEntity[] = sortTree(writableEntities(tree, perimeter)).map((e) => ({
+        id: e.id,
+        name: e.name,
+        level: e.level,
+        country: e.country,
+        currency: e.currency,
+      }));
+      return { counterparty, runs, snapshotById, entity, cases, writable, renotations };
     },
     null
   );
@@ -82,7 +103,20 @@ export default async function CounterpartyPage({
   }
   if (!data) notFound();
 
-  const { counterparty, runs, snapshotById, entity, cases } = data;
+  const { counterparty, runs, snapshotById, entity, cases, writable, renotations } = data;
+  const writableHere = canWrite(perimeter, counterparty.entityId);
+  const canEdit = writableHere && hasRole(identity.role, "ANALYST");
+  const canDelete = writableHere && hasRole(identity.role, "RISK_MANAGER");
+  const canRate = canEdit && counterparty.isActive;
+  const hasHistory = runs.length + cases.length + renotations > 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const opt = (v: string | null) => v ?? "";
+  // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
+  const master = toGradeScaleConfig(await effectiveScale());
+  const equivalentOf = (grade: string | null, rawScore: unknown) => {
+    const legacy = grade ? legacyScaleForGrade(grade) : undefined;
+    return legacy ? transposeGrade(legacy, grade, rawScore === null ? null : Number(rawScore), master) : null;
+  };
 
   // Attribution de l'écart entre les deux dernières notations exploitables.
   // Deux instantanés ne se comparent que s'ils ont la même forme : un
@@ -106,11 +140,20 @@ export default async function CounterpartyPage({
       <div>
         <p className="muted" style={{ fontSize: 13 }}>
           <Link href="/counterparties" style={{ color: "var(--brand)" }}>
-            Contreparties
+            Clients
           </Link>{" "}
           › {counterparty.name}
         </p>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>{counterparty.name}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>
+          {counterparty.name}
+          {!counterparty.isActive && (
+            <span
+              style={{ marginLeft: 10, fontSize: 12, verticalAlign: "middle", padding: "2px 8px", borderRadius: 999, background: "var(--warn-bg)", fontWeight: 600 }}
+            >
+              Désactivé
+            </span>
+          )}
+        </h1>
         <p className="muted">
           {[
             entity && `${entity.name} (${entity.code})`,
@@ -141,6 +184,55 @@ export default async function CounterpartyPage({
           )}
         </p>
       </div>
+
+      {(canEdit || canDelete) && (
+        <section className="card" style={{ padding: 16, display: "grid", gap: 12 }}>
+          <h2 style={{ fontWeight: 600 }}>Gérer la fiche</h2>
+          {canEdit && (
+            <NewCounterpartyForm
+              entities={writable}
+              defaultEntityId={counterparty.entityId}
+              aiUsable={false}
+              edit={{
+                id: counterparty.id,
+                entityId: counterparty.entityId,
+                values: {
+                  name: counterparty.name,
+                  ice: opt(counterparty.ice),
+                  rc: opt(counterparty.rc),
+                  fiscalId: opt(counterparty.fiscalId),
+                  legalForm: opt(counterparty.legalForm),
+                  sectorCode: opt(counterparty.sectorCode),
+                  city: opt(counterparty.city),
+                  country: opt(counterparty.country),
+                  currency: counterparty.currency,
+                },
+              }}
+            />
+          )}
+          {canDelete && (
+            <ClientActions id={counterparty.id} name={counterparty.name} isActive={counterparty.isActive} hasHistory={hasHistory} />
+          )}
+          {!counterparty.isActive && (
+            <p className="muted" style={{ fontSize: 13 }}>
+              Client désactivé : son historique reste consultable, mais aucun nouveau dossier ni lot ne peut le concerner.
+            </p>
+          )}
+        </section>
+      )}
+
+      {canRate && (
+        <div id="noter">
+        <NewCaseForm
+          models={listModels().map((m) => ({ modelId: m.modelId, label: `${m.labelFr} · v${m.version}` }))}
+          defaultModelId="CORP_STD_V1"
+          counterparties={[{ id: counterparty.id, name: counterparty.name, currency: counterparty.currency, entityCode: entity?.code ?? "—" }]}
+          today={today}
+          canRate
+          fixedCounterpartyId={counterparty.id}
+        />
+        </div>
+      )}
 
       {comparisonSkippedFr && (
         <section className="card" style={{ padding: 16 }}>
@@ -252,12 +344,12 @@ export default async function CounterpartyPage({
       <section className="card" style={{ padding: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
           <h2 style={{ fontWeight: 600 }}>Historique des notations</h2>
-          <Link href="/scoring" style={{ color: "var(--brand)" }}>
-            Nouvelle notation →
+          <Link href={`/scoring`} style={{ color: "var(--brand)" }}>
+            Simulation →
           </Link>
         </div>
         {runs.length === 0 ? (
-          <p className="muted">Aucune notation enregistrée pour cette contrepartie.</p>
+          <p className="muted">Aucune notation enregistrée pour ce client.</p>
         ) : (
           <table className="data">
             <thead>
@@ -283,6 +375,11 @@ export default async function CounterpartyPage({
                   <td><GradeBadge grade={r.engineGrade} /></td>
                   <td>
                     <GradeBadge grade={r.finalGrade} />
+                    {equivalentOf(r.finalGrade, r.rawScore) && (
+                      <span className="muted" style={{ fontSize: 11 }} title="Classe équivalente sur l'échelle 1 à 10 en vigueur">
+                        {" "}≈ classe {equivalentOf(r.finalGrade, r.rawScore)}
+                      </span>
+                    )}
                     {r.finalGrade !== r.cappedGrade && r.finalGrade && (
                       <span className="muted" style={{ fontSize: 11 }}> (dérogé)</span>
                     )}

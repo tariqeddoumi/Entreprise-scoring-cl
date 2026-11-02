@@ -133,6 +133,34 @@ l'administrateur du groupe rattache chaque compte non administrateur à sa banqu
 ou filiale (écran **Utilisateurs**) : sans rattachement, ces comptes n'ont plus
 accès à aucun dossier.
 
+### Renotation par lot et corrections du diagnostic (novembre 2026)
+
+Deux scripts, à appliquer dans l'ordre **avant** le déploiement correspondant
+(tous deux idempotents et transactionnels ; déjà appliqués en production) :
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/05-renotation-groupes.sql
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/06-diagnostic-novembre-2026.sql
+```
+
+Le premier crée les groupes d'affaires, les lots et les planifications de
+renotation ; le second rattache les webhooks à une entité, crée l'outbox des
+événements sortants et l'index unique partiel `overrides_one_pending_per_run`
+(une seule dérogation en attente par notation).
+
+**Base neuve.** `npm run db:push` crée les tables puis, via
+`scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
+déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son
+absence. Le module Bilan ne demande aucune migration : le bilan est conservé
+dans la saisie du dossier et dans l'instantané de la notation.
+
+**Échelle de notation 1 à 10 (moteur 3.2).** Aucune migration : les versions de l'échelle sont enregistrées dans le paramétrage (`app_settings`, clé `RATING_SCALE_VERSIONS`) ; sans version enregistrée, la version embarquée ECH10-2026.1 s'applique.
+
+**Variable `DATABASE_URL`.** Ne coller que la chaîne `postgresql://…&schema=corp_scoring`,
+sans guillemets ni nom de variable devant (`DATABASE_URL=postgresql://…` est
+refusé au démarrage avec un message explicite). Même règle pour `DIRECT_URL`,
+sur Vercel comme sur Hostinger.
+
 ## 5. Migration vers PostgreSQL autonome
 
 Le passage ne demande aucune modification de code.

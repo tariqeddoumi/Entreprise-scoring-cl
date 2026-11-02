@@ -260,7 +260,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
           ))}
         </div>
         <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-          Montants saisis dans la devise de la contrepartie. Ils sont convertis en MAD au
+          Montants saisis dans la devise du client. Ils sont convertis en MAD au
           cours publié à la date d&apos;arrêté pour la segmentation et la délégation ; la
           conversion est consignée dans le dossier.
           {!draft.segment && " Sans segment imposé, le chiffre d'affaires est obligatoire."} Quand les montants

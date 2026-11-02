@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma";
 import type { z } from "zod";
 import { gradeRank } from "@/core/grades";
+import { scaleById, snapshotScaleId } from "./rating-scale";
 import { getModel } from "@/models";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
@@ -88,9 +89,12 @@ export async function requestOverride(
       `Run produit par ${run.modelId} v${run.modelVersion} ; version chargée : v${model.version}. Produire une nouvelle notation, puis déroger sur celle-ci.`
     );
   }
+  // Échelle consignée dans la notation : une version d'échelle publiée depuis
+  // ne change ni les classes possibles ni l'écart mesuré.
+  const scale = await scaleById(snapshotScaleId(run.resultSnapshot), run.cappedGrade);
   let notches: number;
   try {
-    notches = Math.abs(gradeRank(model.gradeScale, toGrade) - gradeRank(model.gradeScale, run.cappedGrade));
+    notches = Math.abs(gradeRank(scale, toGrade) - gradeRank(scale, run.cappedGrade));
   } catch {
     throw new OverrideError(400, `Grade cible inconnu : ${toGrade}`);
   }

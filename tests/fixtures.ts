@@ -22,7 +22,7 @@ function v(value: number): CriterionInput {
  * D2 = 50, D3 = 75, D4 = 50, D5 = 75, D6 = 75, D7 = 50.
  *
  * Score global attendu :
- * 61×0,25 + 50×0,10 + 75×0,25 + 50×0,15 + 75×0,15 + 75×0,07 + 50×0,03 = 64,50 → STD-P5.
+ * 61×0,25 + 50×0,10 + 75×0,25 + 50×0,15 + 75×0,15 + 75×0,07 + 50×0,03 = 64,50 → classe 6.
  *
  * D7.1 et D7.2 sont conditionnés à la matérialité : sans déclaration, leur poids
  * est transféré à D7.3 et D7.4 selon la règle déclarée, et le score du domaine

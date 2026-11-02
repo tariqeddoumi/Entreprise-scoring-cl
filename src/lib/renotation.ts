@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { PrismaClient } from "@/generated/prisma";
-import { gradeRank } from "@/core/grades";
+import { gradeRank, notchDeltaAcross } from "@/core/grades";
+import { scaleById, snapshotScaleId } from "./rating-scale";
 import type { ModelConfig, RatingInput, RatingResult } from "@/core/types";
 import { getModel, listModels } from "@/models";
 import type { Identity } from "./auth";
@@ -123,7 +124,7 @@ export function describeFilters(
   if (f.segment) parts.push(`segment ${f.segment}`);
   if (f.sectorPrefix) parts.push(`secteur ${f.sectorPrefix}*`);
   if (f.validatedBeforeMonths) parts.push(`validées depuis plus de ${f.validatedBeforeMonths} mois`);
-  if (f.counterpartyIds) parts.push(`${f.counterpartyIds.length} contrepartie(s) désignée(s)`);
+  if (f.counterpartyIds) parts.push(`${f.counterpartyIds.length} client(s) désigné(s)`);
   return parts.length ? parts.join(", ") : "tout le périmètre";
 }
 
@@ -202,7 +203,7 @@ export function refreshFieldsFor(model: ModelConfig): ProposableField[] {
     // Un fichier de rafraîchissement peut porter un ratio du bilan : il est
     // appliqué comme correction motivée (le lot en est le motif).
     ...proposableFields(model, { includeBalanceSheetRatios: true }),
-    { key: "amounts.globalBankExposure", kind: "number", labelFr: "Engagement global banque/groupe", guideFr: "Devise de la contrepartie." },
+    { key: "amounts.globalBankExposure", kind: "number", labelFr: "Engagement global banque/groupe", guideFr: "Devise du client." },
   ];
 }
 
@@ -335,7 +336,7 @@ export async function createBatch(db: PrismaClient, perimeter: Perimeter, identi
   const options = renotationOptionsSchema.parse({ ...DEFAULT_OPTIONS, ...(input.options ?? {}) });
 
   const ids = await selectCounterparties(db, perimeter, filters);
-  if (ids.length === 0) throw new RenotationError(409, "Aucune contrepartie ne correspond à la sélection.");
+  if (ids.length === 0) throw new RenotationError(409, "Aucun client ne correspond à la sélection.");
 
   // Données rafraîchies : rattachées par ICE ou par identifiant.
   const updatesById = new Map<string, Record<string, string>>();
@@ -424,7 +425,7 @@ export function batchIdentity(batch: { createdBy: string; entityId: string | nul
   };
 }
 
-/** Écart en crans (positif : dégradation), ou null si les grades ne se comparent pas. */
+/** Écart en crans (positif : dégradation) sur l'échelle du modèle, ou null si les grades ne s'y trouvent pas. */
 export function notchDelta(model: ModelConfig, previous: string | null, next: string | null): number | null {
   if (!previous || !next) return null;
   try {
@@ -508,18 +509,25 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
       select: { id: true, entityId: true, currency: true, isActive: true },
     });
     if (!counterparty || !counterparty.isActive) {
-      await finish({ status: "SKIPPED", messageFr: "Contrepartie désactivée ou hors périmètre." });
+      await finish({ status: "SKIPPED", messageFr: "Client désactivé ou hors périmètre." });
       return;
     }
     const official = await db.ratingRun.findFirst({
       where: { counterpartyId: counterparty.id, ...OFFICIAL_RUN_WHERE },
       orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
-      select: { id: true, modelId: true, finalGrade: true, ratingCase: { select: { id: true, draftInput: true } } },
+      select: {
+        id: true,
+        modelId: true,
+        finalGrade: true,
+        rawScore: true,
+        resultSnapshot: true,
+        ratingCase: { select: { id: true, draftInput: true } },
+      },
     });
     if (!official) {
       await finish({
         status: "SKIPPED",
-        messageFr: "Aucune notation validée : nouvelle relation ou contrepartie jamais notée, à traiter par un dossier.",
+        messageFr: "Aucune notation validée : nouvelle relation ou client jamais noté, à traiter par un dossier.",
       });
       return;
     }
@@ -592,7 +600,14 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
       undefined,
       "BATCH"
     );
-    const delta = notchDelta(model, official.finalGrade, result.finalGrade);
+    // La note précédente peut relever d'une autre échelle (STD-P…, version
+    // antérieure de l'échelle 1 à 10) : elle est alors transposée.
+    const previousScale = await scaleById(snapshotScaleId(official.resultSnapshot), official.finalGrade);
+    const nextScale = await scaleById(result.gradeScaleId, result.finalGrade);
+    const delta = notchDeltaAcross(
+      { scale: previousScale, grade: official.finalGrade, rawScore: official.rawScore === null ? null : Number(official.rawScore) },
+      { scale: nextScale, grade: result.finalGrade }
+    );
     const movement = movementOf(result, delta);
 
     const notes: string[] = [];

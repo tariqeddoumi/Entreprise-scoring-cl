@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createCounterpartyAction, extractCounterpartyAction } from "./actions";
+import { createCounterpartyAction, extractCounterpartyAction, updateCounterpartyAction } from "./actions";
 
 const FIELD_STYLE = { width: "100%" } as const;
 
@@ -32,6 +32,13 @@ const EMPTY: FormState = {
 
 const TEXT_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency"] as const;
 
+/** Fiche existante à modifier (mode édition). */
+export interface EditableCounterparty {
+  id: string;
+  entityId: string;
+  values: Partial<FormState>;
+}
+
 export interface WritableEntity {
   id: string;
   name: string;
@@ -46,14 +53,22 @@ interface Props {
   /** Entité de rattachement par défaut (celle de l'utilisateur). */
   defaultEntityId: string | null;
   aiUsable: boolean;
+  /** Présent : la fiche s'ouvre en modification de ce client. */
+  edit?: EditableCounterparty;
 }
 
-export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable }: Props) {
+/** Création ou modification d'une fiche client. */
+export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit }: Props) {
   const router = useRouter();
+  const initial: FormState = edit ? { ...EMPTY, ...edit.values } : EMPTY;
   const [open, setOpen] = useState(false);
-  const [values, setValues] = useState<FormState>(EMPTY);
+  const [values, setValues] = useState<FormState>(initial);
   const [entityId, setEntityId] = useState(
-    defaultEntityId && entities.some((e) => e.id === defaultEntityId) ? defaultEntityId : (entities[0]?.id ?? "")
+    edit
+      ? edit.entityId
+      : defaultEntityId && entities.some((e) => e.id === defaultEntityId)
+        ? defaultEntityId
+        : (entities[0]?.id ?? "")
   );
   const [pending, startTransition] = useTransition();
   const [extracting, startExtraction] = useTransition();
@@ -116,17 +131,23 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable }: Pro
       return;
     }
 
-    const payload: Record<string, string> = { name };
+    const payload: Record<string, string | null> = { name };
     if (entityId) payload.entityId = entityId;
     for (const key of TEXT_FIELDS) {
       const v = values[key].trim();
       if (v) payload[key] = key === "country" || key === "currency" ? v.toUpperCase() : v;
+      // En modification, un champ vidé est effacé (la devise, elle, reste).
+      else if (edit && key !== "currency" && initial[key]) payload[key] = null;
     }
 
     startTransition(async () => {
-      const res = await createCounterpartyAction(payload);
-      if (res.ok) {
-        setSuccessFr("Contrepartie enregistrée.");
+      const res = edit ? await updateCounterpartyAction(edit.id, payload) : await createCounterpartyAction(payload);
+      if (res.ok && edit) {
+        setSuccessFr("Fiche client mise à jour.");
+        setOpen(false);
+        router.refresh();
+      } else if (res.ok) {
+        setSuccessFr("Client enregistré.");
         setValues(EMPTY);
         setAiFilled(new Set());
         setAiNote(null);
@@ -139,21 +160,33 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable }: Pro
 
   if (!open) {
     return (
-      <button type="button" className="btn-primary" onClick={() => setOpen(true)} style={{ justifySelf: "start", fontSize: 13 }}>
-        + Nouvelle contrepartie
-      </button>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          className={edit ? "btn-ghost" : "btn-primary"}
+          onClick={() => setOpen(true)}
+          style={{ justifySelf: "start", fontSize: 13 }}
+        >
+          {edit ? "Modifier la fiche" : "+ Nouveau client"}
+        </button>
+        {successFr && (
+          <span style={{ color: "var(--good)", fontSize: 13 }} role="status">
+            {successFr}
+          </span>
+        )}
+      </div>
     );
   }
 
   return (
     <div className="card" style={{ padding: 16, display: "grid", gap: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700 }}>Nouvelle contrepartie</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 700 }}>{edit ? "Modifier la fiche client" : "Nouveau client"}</h2>
         <button
           type="button"
           onClick={() => {
             setOpen(false);
-            setValues(EMPTY);
+            setValues(initial);
             setErrorFr(null);
             setSuccessFr(null);
             setAiFilled(new Set());
@@ -164,7 +197,7 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable }: Pro
         </button>
       </div>
 
-      {aiUsable && (
+      {aiUsable && !edit && (
         <form action={extract} style={{ display: "grid", gap: 8, padding: 12, background: "var(--brand-soft)", borderRadius: 8 }}>
           <strong style={{ fontSize: 13 }}>Pré-remplir avec l&apos;IA</strong>
           <span className="muted" style={{ fontSize: 12 }}>

@@ -35,7 +35,7 @@ export default async function MethodologyPage() {
           <tbody>
             <tr>
               <td>Note emprunteur / PD (moteur A — implémenté)</td>
-              <td>Risque intrinsèque de défaut de la contrepartie</td>
+              <td>Risque intrinsèque de défaut du client</td>
               <td>Aucun effet direct sur la PD, sauf support de tiers démontré</td>
             </tr>
             <tr>
@@ -81,7 +81,7 @@ export default async function MethodologyPage() {
             absente », transferts de non-applicabilité
           </li>
           <li>Score brut : agrégation à poids total constant</li>
-          <li>Grade moteur : échelle propre au modèle</li>
+          <li>Grade moteur : échelle maîtresse 1 à 10 en vigueur (1 = meilleur risque, défaut hors échelle)</li>
           <li>Exceptions non compensatoires</li>
           <li>Grade autonome, conservé séparément du grade final</li>
           <li>Support groupe : relèvement plafonné et conditionné</li>

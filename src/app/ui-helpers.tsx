@@ -11,24 +11,24 @@ import type { CSSProperties } from "react";
 /**
  * Couleur d'un grade.
  *
- * Chaque modèle porte désormais son échelle propre — STD-P1…STD-P8 pour le
- * modèle standard, TPE-B1…TPE-B6 pour le comportemental — et les deux n'ont
- * ni la même longueur ni la même signification (constat C03). La couleur est
- * donc calculée sur la POSITION RELATIVE dans l'échelle du grade lu, à partir
- * du nombre de grades que porte son préfixe, et non sur un numéro absolu.
+ * Échelle maîtresse 1 à 10 (1 = meilleur risque) : la couleur dépend de la
+ * position de la classe dans l'échelle (10 classes par défaut). Les grades des
+ * échelles antérieures (STD-P1…P8, TPE-B1…B6, STD-S, TPE-T), conservés dans
+ * l'historique, gardent leur couleur d'origine, calculée sur la longueur de
+ * leur échelle.
  *
- * Reste purement cosmétique : aucun calcul métier n'en dépend.
+ * Purement cosmétique : aucun calcul métier n'en dépend.
  */
-const SCALE_LENGTHS: Record<string, number> = { "STD-P": 8, "TPE-B": 6, "STD-S": 8, "TPE-T": 6 };
+const LEGACY_LENGTHS: Record<string, number> = { "STD-P": 8, "TPE-B": 6, "STD-S": 8, "TPE-T": 6 };
 
-export function gradeAccent(grade: string | null | undefined): string {
+export function gradeAccent(grade: string | null | undefined, scaleLength = 10): string {
   if (!grade) return "var(--muted)";
   if (grade.startsWith("DEF")) return "var(--bad)";
-  const match = /^([A-Z]+-[A-Z])(\d+)$/.exec(grade);
-  if (!match) return "var(--muted)";
-  const total = SCALE_LENGTHS[match[1]];
-  if (!total) return "var(--muted)";
-  const position = Number(match[2]) / total;
+  let position: number | null = null;
+  const legacy = /^([A-Z]+-[A-Z])(\d+)$/.exec(grade);
+  if (legacy && LEGACY_LENGTHS[legacy[1]]) position = Number(legacy[2]) / LEGACY_LENGTHS[legacy[1]];
+  else if (/^\d+$/.test(grade)) position = Number(grade) / scaleLength;
+  if (position === null) return "var(--muted)";
   if (position <= 0.4) return "var(--good)";
   if (position <= 0.75) return "var(--warn)";
   return "var(--bad)";

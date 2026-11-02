@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getModel } from "@/models";
+import { getScoringModel } from "@/lib/rating-scale";
 import type { Segment } from "@/core/types";
 import { requireSession } from "@/lib/session";
 import {
@@ -19,7 +20,8 @@ export default async function ModelDetailPage({
   await requireSession();
 
   const { modelId } = await params;
-  const model = getModel(modelId);
+  // Grille publiée, appliquée avec l'échelle maîtresse en vigueur.
+  const model = await getScoringModel(modelId);
   if (!model) notFound();
 
   const segments = model.segments;
@@ -115,14 +117,12 @@ export default async function ModelDetailPage({
 
       <section className="card" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 10 }}>
-          Échelle propre au modèle — {model.gradeScale.scaleId}
+          Échelle maîtresse 1 à 10 en vigueur — {model.gradeScale.scaleId}
         </h2>
         <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-          Statut {model.gradeScale.status === "PROVISIONAL" ? "provisoire" : "calibré"}.{" "}
-          {model.gradeScale.comparableWith.length === 0
-            ? "Aucune correspondance validée avec une autre échelle : ces grades ne sont pas comparables à ceux d\u2019un autre modèle."
-            : `Correspondance validée avec : ${model.gradeScale.comparableWith.join(", ")}.`}{" "}
-          L&apos;échelle ne porte aucune décision indicative : la décision de crédit
+          Statut {model.gradeScale.status === "PROVISIONAL" ? "provisoire" : "calibré"}. Échelle commune à toutes les grilles,
+          1 = meilleur risque ; le défaut constaté est noté hors échelle (DEF1 à DEF3). Elle se paramètre par versions datées
+          (Administration › Échelle de notation) ; chaque notation consigne la version appliquée. L&apos;échelle ne porte aucune décision indicative : la décision de crédit
           relève d&apos;un moteur distinct, qui tient compte de l&apos;exposition, du
           produit, des garanties et de l&apos;appétence.
         </p>

@@ -8,6 +8,8 @@
 
 ---
 
+> **Mise à jour de novembre 2026.** Quatre évolutions depuis la première version de cet argumentaire : (1) le **bilan est obligatoire** avant soumission — chargé par l'IA, par le gabarit Excel ou par saisie, il alimente automatiquement les ratios de la grille, que l'analyste ne peut corriger qu'avec un motif tracé ; (2) une **information absente prend la borne basse** (score 0), le score haut possible étant affiché à côté — un dossier incomplet ne peut plus être mieux noté qu'un dossier complet ; (3) la **méthode et le script de modélisation statistique** sont prêts (`docs/13-modelisation-statistique.md`) et prendront le relais de la calibration experte dès que l'historique de défauts le permettra. (4) La note s'exprime sur une **échelle unique de 1 à 10** pour toutes les grilles (1 = meilleur risque, défaut noté à part), paramétrable par versions datées ; les plafonds se lisent « au mieux classe 8 » (ancien STD-P7) et « au mieux classe 7 » (ancien STD-P6). La présentation `docs/presentations/Defense_nouveau_modele_notation.pptx` détaille les arbitrages, slide par slide.
+
 > **En une phrase.** L'outil ne refuse aucun client et ne prend aucune décision : il vous dit, dès le départ, ce qu'un dossier doit contenir pour être instruit — et quand il manque quelque chose, il vous donne la liste exacte au lieu de vous faire deviner.
 
 ---
@@ -99,14 +101,15 @@ Trois apports spécifiques à votre fonction.
 
 | Objection | Réponse |
 |---|---|
-| « 45 critères, c'est intenable » | Une partie est préremplie depuis les systèmes de la banque. Le reste, ce sont des appréciations que vous portez déjà — oralement, dans la note, ou dans votre tête. Elles sont simplement écrites une fois |
+| « 45 critères, c'est intenable » | Les ratios financiers sont calculés depuis le bilan chargé, et une partie du reste est préremplie depuis les systèmes de la banque. Le reste, ce sont des appréciations que vous portez déjà — oralement, dans la note, ou dans votre tête. Elles sont simplement écrites une fois |
 | « Je connais mon client mieux qu'une grille » | Exact, et c'est pour cela que 31 critères sur 45 vous demandent votre avis. L'outil ne connaît pas votre client ; il s'assure que ce que vous savez soit dit d'une façon comparable et conservée |
 | « Et si la note est mauvaise alors que le client est bon ? » | Pendant le pilote, la note ne décide de rien. Et un désaccord documenté est la donnée la plus utile du programme : ce sont les seuils qui bougeront, pas votre jugement |
 | « On va me comparer aux autres » | Le taux d'accord est mesuré sur des dossiers étalons, pour corriger les critères mal formulés. Un écart entre deux analystes chevronnés est d'abord un problème de grille |
 | « Mes concurrents vont plus vite » | Un dossier complet dès le premier envoi va plus vite qu'un dossier incomplet renvoyé trois fois. C'est précisément ce que le formulaire structuré permet |
 | « Mon client ne comprendra pas qu'on lui demande autant » | Vous pouvez lui expliquer, ce qui n'était pas possible avant : chaque pièce correspond à un critère nommé, avec sa raison. Beaucoup de clients préfèrent une demande complète à trois demandes successives |
 | « Et pour les clients historiques qu'on connaît depuis vingt ans ? » | Ils passent la même grille, et leur ancienneté se reflète où elle doit : régularité des flux, absence d'incidents, stabilité du dirigeant, continuité d'activité |
-| « Qu'est-ce qui se passe si je ne remplis pas tout ? » | Les critères non critiques reçoivent une valeur prudente et la couverture du dossier baisse. Sous un seuil, aucune note n'est produite — le dossier n'est pas refusé, il est incomplet |
+| « Qu'est-ce qui se passe si je ne remplis pas tout ? » | Un critère non renseigné reçoit la borne basse (0) : un dossier incomplet ne peut jamais être mieux noté qu'un dossier complet. L'outil affiche à côté le score haut possible, ce qui montre ce que la pièce manquante changerait. Une donnée critique manquante, ou une couverture sous le seuil, empêche la note — le dossier n'est pas refusé, il est incomplet |
+| « Je dois ressaisir tout le bilan ? » | Non : le bilan se charge en trois façons — lecture du PDF ou de l'image par l'IA, gabarit Excel rempli par le client ou son comptable, ou saisie. L'outil calcule lui-même les ratios de la grille, avec les mêmes formules pour tous, et contrôle l'équilibre du bilan. Vous pouvez corriger un ratio, avec un motif qui reste tracé |
 
 ## 6. Ce qu'on vous demande pendant le pilote
 

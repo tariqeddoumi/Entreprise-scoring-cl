@@ -40,19 +40,19 @@ function exemple(): RatingInput {
 }
 
 describe("Grille challenger standard (document 03)", () => {
-  it("retrouve le cas chiffré : 64,25 points, soit STD-S5", () => {
+  it("retrouve le cas chiffré : 64,25 points, soit la classe 6", () => {
     const r = computeRating(CORP_STD_CHALLENGER_V1, exemple(), AT);
     expect(r.ratingStatus).toBe("RATED");
     expect(r.rawScore).toBeCloseTo(64.25, 10);
-    expect(r.finalGrade).toBe("STD-S5");
+    expect(r.finalGrade).toBe("6");
     expect(r.mandatoryReviewsFr).toEqual([]);
   });
 
-  it("F3 de 75 à 0 : 55,25 points, STD-S7, et revue risques obligatoire si le DSCR est sous 1", () => {
+  it("F3 de 75 à 0 : 55,25 points, classe 8, et revue risques obligatoire si le DSCR est sous 1", () => {
     const base = exemple();
     const r = computeRating(CORP_STD_CHALLENGER_V1, { ...base, criteria: { ...base.criteria, F3: v(0.9) } }, AT);
     expect(r.rawScore).toBeCloseTo(55.25, 10);
-    expect(r.finalGrade).toBe("STD-S7");
+    expect(r.finalGrade).toBe("8");
     expect(r.mandatoryReviewsFr.join(" ")).toContain("F3");
     // Aucun plafond numéroté : la revue s'ajoute, le grade reste celui du score.
     expect(r.appliedRules).toEqual([]);
@@ -122,7 +122,7 @@ describe("Grille challenger TPE comportementale (document 03)", () => {
     const r = computeRating(CORP_TPE_CHALLENGER_V1, tpe(), AT);
     // 15 + 7,5 + 15 + 7,5 + 6 + 5,25 + 3,75 + 2,5 + 2,5 + 3,75 + 3,75 + 2,5 = 75
     expect(r.rawScore).toBeCloseTo(75, 10);
-    expect(r.finalGrade).toBe("TPE-T3");
+    expect(r.finalGrade).toBe("4");
   });
 
   it("refuse une TPE dont les comptes sont exploitables", () => {

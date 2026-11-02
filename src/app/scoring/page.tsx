@@ -1,4 +1,5 @@
-import { getModel, listModels } from "@/models";
+import { listModels } from "@/models";
+import { getScoringModel } from "@/lib/rating-scale";
 import { safeQuery } from "@/lib/safe-db";
 import { hasRole } from "@/lib/auth";
 import { getPerimeter, requireSession } from "@/lib/session";
@@ -16,7 +17,9 @@ export default async function ScoringPage({ searchParams }: { searchParams: Prom
   const canRate = hasRole(identity.role, "ANALYST");
 
   const { model: modelParam } = await searchParams;
-  const model = getModel(modelParam ?? "CORP_STD_V1");
+  // Grille publiée avec l'échelle maîtresse en vigueur : la simulation affiche
+  // les classes que produira la notation.
+  const model = await getScoringModel(modelParam ?? "CORP_STD_V1");
   if (!model) return <p>Modèle inconnu.</p>;
   const today = new Date().toISOString().slice(0, 10);
 

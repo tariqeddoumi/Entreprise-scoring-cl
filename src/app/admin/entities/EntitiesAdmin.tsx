@@ -149,7 +149,7 @@ export function EntitiesAdmin({ entities, groupAdmin }: { entities: EntityRow[];
               <th>Type</th>
               <th>Pays</th>
               <th>Devise</th>
-              <th>Contreparties</th>
+              <th>Clients</th>
               <th>Utilisateurs</th>
               <th>État</th>
               <th>

@@ -75,7 +75,7 @@ export function AssignForm({ groupId, detach = false }: { groupId: string | null
   return (
     <form action={action} style={{ display: "grid", gap: 8 }}>
       <input type="hidden" name="groupId" value={groupId ?? ""} />
-      <textarea name="refs" rows={detach ? 2 : 4} required placeholder="ICE ou identifiants des contreparties, un par ligne" />
+      <textarea name="refs" rows={detach ? 2 : 4} required placeholder="ICE ou identifiants des clients, un par ligne" />
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <button type="submit" className={detach ? "btn-ghost" : "btn-primary"} disabled={pending}>
           {detach ? "Détacher du groupe" : "Rattacher au groupe"}

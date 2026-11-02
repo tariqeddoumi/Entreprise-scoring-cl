@@ -12,7 +12,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Scoring Entreprises Maroc — TPE / PME / GE",
   description:
-    "Plateforme de notation interne des contreparties entreprises non financières au Maroc (BAM, IFRS 9, Bâle II/III).",
+    "Plateforme de notation interne des clients entreprises non financières au Maroc (BAM, IFRS 9, Bâle II/III).",
 };
 
 /**

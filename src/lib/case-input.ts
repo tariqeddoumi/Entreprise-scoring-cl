@@ -367,8 +367,8 @@ export function proposableFields(
   for (const [k, l] of Object.entries(GROUP_SUPPORT_LABELS)) {
     out.push({ key: `groupSupport.${k}`, kind: "boolean", labelFr: l, guideFr: "Uniquement si une pièce l'établit." });
   }
-  out.push({ key: "amounts.annualTurnover", kind: "number", labelFr: "Chiffre d'affaires HT (devise de la contrepartie)", guideFr: "Dernier exercice clos." });
-  out.push({ key: "amounts.groupAnnualTurnover", kind: "number", labelFr: "Chiffre d'affaires du groupe", guideFr: "Si la contrepartie appartient à un groupe." });
+  out.push({ key: "amounts.annualTurnover", kind: "number", labelFr: "Chiffre d'affaires HT (devise du client)", guideFr: "Dernier exercice clos." });
+  out.push({ key: "amounts.groupAnnualTurnover", kind: "number", labelFr: "Chiffre d'affaires du groupe", guideFr: "Si le client appartient à un groupe." });
   out.push({ key: "defaultTriggered", kind: "boolean", labelFr: "Défaut avéré", guideFr: "Impayé au-delà du seuil de défaut, restructuration en difficulté, procédure collective." });
   return out;
 }

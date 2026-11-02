@@ -22,7 +22,12 @@ export function ResultPanel({
   result: RatingResult;
   model: ModelConfig;
 }) {
-  const gradeBand = model.gradeScale.bands.find((b) => b.grade === result.finalGrade);
+  // Libellé de la classe : seulement si le résultat relève de l'échelle chargée
+  // (une notation archivée garde l'échelle de son calcul).
+  const gradeBand =
+    result.gradeScaleId === model.gradeScale.scaleId
+      ? model.gradeScale.bands.find((b) => b.grade === result.finalGrade)
+      : undefined;
   const accent =
     result.ratingStatus === "RATED"
       ? "var(--good)"
@@ -107,11 +112,10 @@ export function ResultPanel({
 
       {gradeBand && (
         <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>
-          <strong>{gradeBand.grade} — {gradeBand.labelFr}</strong>, sur l&apos;échelle{" "}
-          {result.gradeScaleId} propre à ce modèle. Cette échelle mesure un risque, elle
-          ne porte aucune décision : l&apos;octroi, la limite, le prix et les garanties
-          relèvent du moteur de décision, qui n&apos;est pas implémenté ici. Les grades ne
-          sont pas comparables à ceux d&apos;un autre modèle sans correspondance validée.
+          <strong>Classe {gradeBand.grade} — {gradeBand.labelFr}</strong>, sur l&apos;échelle maîtresse{" "}
+          {result.gradeScaleId} (1 = meilleur risque, {model.gradeScale.bands.length} classes, défaut hors échelle).
+          Cette échelle mesure un risque, elle ne porte aucune décision : l&apos;octroi, la limite, le prix et les
+          garanties relèvent du moteur de décision, qui n&apos;est pas implémenté ici.
         </p>
       )}
 

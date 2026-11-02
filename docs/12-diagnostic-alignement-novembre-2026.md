@@ -44,4 +44,4 @@ Le déploiement de la PR #15 est en ligne, mais la base n'est pas connectée. Le
 
 Dans Vercel › Settings › Environment Variables, la valeur de `DATABASE_URL` commence par `DATABASE_URL=`. Il faut n'y laisser que la chaîne `postgresql://…&schema=corp_scoring`, sans guillemets, puis redéployer. Même vérification pour `DIRECT_URL`, et pour Hostinger.
 
-Les commits postérieurs à la PR #15 (présentation de défense, guide mis à jour, correctif « Du bilan », index et ce diagnostic) attendent une nouvelle PR.
+Les commits postérieurs à la PR #15 (présentation de défense, guide mis à jour, correctif « Du bilan », index et ce diagnostic) ont été fusionnés par la PR #16. Le simulateur Excel dynamique, le script de modélisation statistique et la mise à jour des documents (2 novembre 2026) suivent sur la branche de travail.

@@ -109,13 +109,13 @@ export async function createCase(
   if (!model) throw new CaseError(404, `Modèle inconnu : ${input.modelId}`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOfDate)) throw new CaseError(400, "Date d'arrêté au format AAAA-MM-JJ.");
   const counterparty = await db.counterparty.findUnique({ where: { id: input.counterpartyId } });
-  if (!counterparty) throw new CaseError(404, "Contrepartie introuvable.");
-  if (!counterparty.isActive) throw new CaseError(409, "Contrepartie désactivée.");
+  if (!counterparty) throw new CaseError(404, "Client introuvable.");
+  if (!counterparty.isActive) throw new CaseError(409, "Client désactivé : réactivez-le depuis sa fiche avant d'ouvrir un dossier.");
   const open = await db.ratingCase.findFirst({
     where: { counterpartyId: counterparty.id, status: { in: ["DRAFT", "SUBMITTED"] } },
     select: { id: true },
   });
-  if (open) throw new CaseError(409, `Un dossier est déjà en cours pour cette contrepartie (${open.id}).`);
+  if (open) throw new CaseError(409, `Un dossier est déjà en cours pour ce client (${open.id}).`);
 
   const previous = await db.ratingCase.findFirst({
     where: { counterpartyId: counterparty.id, modelId: model.modelId, status: { in: ["VALIDATED", "REJECTED"] } },
@@ -222,7 +222,7 @@ export async function previewCase(
 ): Promise<{ result: RatingResult; fx: FxConversion | null }> {
   const c = await loadCase(db, caseId);
   const { input, fx } = await buildInput(db, c, draft);
-  return { result: simulateRating(input), fx };
+  return { result: await simulateRating(input), fx };
 }
 
 export async function submitCase(db: PrismaClient, identity: Identity, caseId: string, draft: CaseDraft) {
@@ -248,7 +248,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
       }
     }
   }
-  const check = simulateRating(input);
+  const check = await simulateRating(input);
   if (check.finalGrade === null) {
     throw new CaseError(
       409,
@@ -380,7 +380,7 @@ export async function reopenCase(db: PrismaClient, identity: Identity, caseId: s
     where: { counterpartyId: c.counterpartyId, status: { in: ["DRAFT", "SUBMITTED"] } },
     select: { id: true },
   });
-  if (open) throw new CaseError(409, `Un dossier est déjà en cours pour cette contrepartie (${open.id}).`);
+  if (open) throw new CaseError(409, `Un dossier est déjà en cours pour ce client (${open.id}).`);
   return db.$transaction(async (tx) => {
     const created = await tx.ratingCase.create({
       data: {

@@ -5,10 +5,11 @@ import { prisma } from "./prisma";
  *
  * Ce qui se paramètre ici : les règles du workflow, les dérogations, la durée de
  * validité d'une note, les pièces et l'intelligence artificielle. Ce qui ne s'y
- * paramètre PAS : les grilles de notation (poids, barèmes, échelles). Elles
- * forment la version du modèle, validée par le comité modèles et consignée dans
- * chaque notation ; les rendre modifiables à l'écran rendrait deux notes d'une
- * même version incomparables.
+ * paramètre PAS : les grilles de notation (poids, barèmes). Elles forment la
+ * version du modèle, validée par le comité modèles et consignée dans chaque
+ * notation ; les rendre modifiables à l'écran rendrait deux notes d'une même
+ * version incomparables. L'échelle maîtresse 1 à 10, elle, se paramètre par
+ * versions datées et figées (src/lib/rating-scale.ts, écran Échelle de notation).
  *
  * Les secrets (clé d'API de l'IA) ne s'enregistrent jamais en base, où ils
  * seraient lisibles par tout accès à la base et recopiés dans les sauvegardes :
@@ -79,7 +80,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Workflow",
     labelFr: "Validité d'une note (mois)",
     helpFr:
-      "Au-delà, la contrepartie apparaît dans « Notes à renouveler » (file À traiter des dossiers). La politique de revue annuelle correspond à 12.",
+      "Au-delà, le client apparaît dans « Notes à renouveler » (file À traiter des dossiers). La politique de revue annuelle correspond à 12.",
     kind: "integer",
     default: "12",
     min: 1,

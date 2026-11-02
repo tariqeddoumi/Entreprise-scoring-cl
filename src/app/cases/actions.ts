@@ -113,7 +113,7 @@ export async function decideCaseAction(_prev: ActionResult, fd: FormData): Promi
   revalidatePath(`/cases/${caseId}`);
   revalidatePath("/cases");
   revalidatePath("/");
-  return { ok: true, okFr: decision === "VALIDATED" ? "Notation validée : elle devient la note de la contrepartie." : "Dossier rejeté." };
+  return { ok: true, okFr: decision === "VALIDATED" ? "Notation validée : elle devient la note du client." : "Dossier rejeté." };
 }
 
 export async function reopenCaseAction(_prev: ActionResult, fd: FormData): Promise<ActionResult> {

@@ -139,6 +139,20 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: ICE déjà enregistré }
+    delete:
+      tags: [Contreparties]
+      summary: Suppression ou désactivation d'un client
+      description: |
+        Un client sans historique (notation, dossier, renotation par lot) est
+        supprimé. Un client qui en a un est désactivé (`isActive: false`) :
+        son historique reste consultable et il peut être réactivé par `PATCH`.
+        Rôle minimal : gestionnaire des risques. Suppression et audit sont
+        écrits dans la même transaction.
+      parameters: [{ $ref: "#/components/parameters/Id" }]
+      responses:
+        "200": { description: "Résultat : `mode` vaut DELETED ou DEACTIVATED" }
+        "403": { description: Client hors du périmètre d'écriture }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /counterparties/{id}/rating-runs:
     get:
@@ -557,18 +571,18 @@ components:
 
     CounterpartyPatch:
       type: object
-      description: Mise à jour partielle — tous les champs sont facultatifs.
+      description: Mise à jour partielle — tous les champs sont facultatifs ; `null` efface un champ facultatif (pays, ICE, RC, identifiant fiscal, forme juridique, secteur, ville).
       properties:
         name: { type: string, maxLength: 300 }
         entityId: { type: string, maxLength: 40, description: "Banque ou filiale de rattachement ; à défaut, celle de l'appelant (dans son périmètre d'écriture)" }
-        country: { type: string, pattern: "^[A-Z]{2}$", description: "Pays (ISO 3166-1 alpha-2) ; à défaut, celui de l'entité" }
+        country: { type: [string, "null"], pattern: "^[A-Z]{2}$", description: "Pays (ISO 3166-1 alpha-2) ; à défaut, celui de l'entité" }
         currency: { type: string, pattern: "^[A-Z]{3}$", description: "Devise des montants (ISO 4217) ; à défaut, celle de l'entité. Convertie en MAD au cours de la date d'arrêté" }
-        ice: { type: string, maxLength: 20 }
-        rc: { type: string, maxLength: 30 }
-        fiscalId: { type: string, maxLength: 30 }
-        legalForm: { type: string, maxLength: 60 }
-        sectorCode: { type: string, maxLength: 30 }
-        city: { type: string, maxLength: 80 }
+        ice: { type: [string, "null"], maxLength: 20 }
+        rc: { type: [string, "null"], maxLength: 30 }
+        fiscalId: { type: [string, "null"], maxLength: 30 }
+        legalForm: { type: [string, "null"], maxLength: 60 }
+        sectorCode: { type: [string, "null"], maxLength: 30 }
+        city: { type: [string, "null"], maxLength: 80 }
         isActive: { type: boolean, description: Désactivation sans suppression }
 
     CriterionInput:
@@ -998,7 +1012,7 @@ components:
       required: [ratingRunId, toGrade, reasonCode, comment]
       properties:
         ratingRunId: { type: string }
-        toGrade: { type: string, example: STD-P4, description: Grade de l'échelle du modèle qui a produit le run }
+        toGrade: { type: string, example: "4", description: "Classe de l'échelle consignée dans le run (échelle maîtresse 1 à 10 depuis le moteur 3.2)" }
         reasonCode:
           type: string
           enum:

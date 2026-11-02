@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CORP_STD_V1 } from "@/models";
+import { notchDeltaAcross } from "@/core/grades";
+import { LEGACY_SCALES } from "@/reference/legacy-scales";
 import { isOfficialRun, OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import {
   createBatchSchema,
@@ -98,19 +100,32 @@ describe("Renotation par lot : fichier de mise à jour", () => {
 
 describe("Renotation par lot : migration", () => {
   it("compte les crans sur l'échelle du modèle (positif : dégradation)", () => {
-    expect(notchDelta(CORP_STD_V1, "STD-P3", "STD-P5")).toBe(2);
-    expect(notchDelta(CORP_STD_V1, "STD-P5", "STD-P4")).toBe(-1);
-    expect(notchDelta(CORP_STD_V1, "STD-P4", "STD-P4")).toBe(0);
-    expect(notchDelta(CORP_STD_V1, "STD-P4", null)).toBeNull();
-    expect(notchDelta(CORP_STD_V1, "TPE-B2", "STD-P4")).toBeNull();
+    expect(notchDelta(CORP_STD_V1, "3", "5")).toBe(2);
+    expect(notchDelta(CORP_STD_V1, "5", "4")).toBe(-1);
+    expect(notchDelta(CORP_STD_V1, "4", "4")).toBe(0);
+    expect(notchDelta(CORP_STD_V1, "4", null)).toBeNull();
+    expect(notchDelta(CORP_STD_V1, "TPE-B2", "4")).toBeNull();
+  });
+
+  it("transpose une note de l'échelle précédente sur l'échelle 1 à 10", () => {
+    const std = LEGACY_SCALES.find((s) => s.scaleId === "STD-P-2026.1")!;
+    const next = CORP_STD_V1.gradeScale;
+    // STD-P3 à 80,75 : classe 3 (80 à 85) ; nouvelle note 3 : inchangée.
+    expect(notchDeltaAcross({ scale: std, grade: "STD-P3", rawScore: 80.75 }, { scale: next, grade: "3" })).toBe(0);
+    // Plafond STD-P7 sur un score de 66 : ramené dans 48–57, soit la classe 8.
+    expect(notchDeltaAcross({ scale: std, grade: "STD-P7", rawScore: 66.06 }, { scale: next, grade: "8" })).toBe(0);
+    expect(notchDeltaAcross({ scale: std, grade: "STD-P7", rawScore: 66.06 }, { scale: next, grade: "6" })).toBe(-2);
+    // Un défaut reste un défaut ; sans score, pas de transposition.
+    expect(notchDeltaAcross({ scale: std, grade: "DEF1", rawScore: null }, { scale: next, grade: "DEF1" })).toBe(0);
+    expect(notchDeltaAcross({ scale: std, grade: "STD-P4", rawScore: null }, { scale: next, grade: "5" })).toBeNull();
   });
 
   it("classe le mouvement : défaut et absence de note priment", () => {
     expect(movementOf({ ratingStatus: "DEFAULTED", finalGrade: "DEF1" }, 3)).toBe("DEFAULTED");
     expect(movementOf({ ratingStatus: "NO_RATING_INSUFFICIENT_DATA", finalGrade: null }, null)).toBe("NO_RATING");
-    expect(movementOf({ ratingStatus: "RATED", finalGrade: "STD-P5" }, 2)).toBe("DOWNGRADE");
-    expect(movementOf({ ratingStatus: "RATED", finalGrade: "STD-P3" }, -1)).toBe("UPGRADE");
-    expect(movementOf({ ratingStatus: "RATED", finalGrade: "STD-P4" }, 0)).toBe("UNCHANGED");
+    expect(movementOf({ ratingStatus: "RATED", finalGrade: "5" }, 2)).toBe("DOWNGRADE");
+    expect(movementOf({ ratingStatus: "RATED", finalGrade: "3" }, -1)).toBe("UPGRADE");
+    expect(movementOf({ ratingStatus: "RATED", finalGrade: "4" }, 0)).toBe("UNCHANGED");
   });
 });
 
