@@ -1,9 +1,10 @@
+import { getScoringModel } from "@/lib/rating-scale";
 import { z } from "zod";
 import type { PrismaClient } from "@/generated/prisma";
 import { gradeRank, notchDeltaAcross } from "@/core/grades";
 import { scaleById, snapshotScaleId } from "./rating-scale";
 import type { ModelConfig, RatingInput, RatingResult } from "@/core/types";
-import { getModel, listModels } from "@/models";
+import { listModels } from "@/models";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { applyField, normalizeProposal, parseDraft, proposableFields, type CaseDraft, type ProposableField } from "./case-input";
@@ -540,7 +541,7 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
       });
       return;
     }
-    const model = getModel(official.modelId);
+    const model = await getScoringModel(official.modelId);
     if (!model) {
       await finish({ status: "ERROR", messageFr: `Modèle ${official.modelId} indisponible.` });
       return;

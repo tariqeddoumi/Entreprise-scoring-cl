@@ -1,7 +1,7 @@
 "use server";
 
+import { getScoringModel } from "@/lib/rating-scale";
 import type { RatingInput, RatingResult } from "@/core/types";
-import { getModel } from "@/models";
 import { draftToRequest, type CaseDraft } from "@/lib/case-input";
 import { simulateRating } from "@/lib/rating-service";
 import { ratingRequestSchema } from "@/lib/schemas";
@@ -28,7 +28,7 @@ export interface SimulationResult {
 export async function simulateDraftAction(modelId: string, draft: CaseDraft): Promise<SimulationResult> {
   const session = await getSessionIdentity("ANALYST");
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
-  const model = getModel(modelId);
+  const model = await getScoringModel(modelId);
   if (!model) return { ok: false, errorFr: `Modèle inconnu : ${modelId}` };
   if (!draft.segment) {
     return {

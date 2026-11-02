@@ -154,7 +154,7 @@ déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son
 absence. Le module Bilan ne demande aucune migration : le bilan est conservé
 dans la saisie du dossier et dans l'instantané de la notation.
 
-**Échelle de notation 1 à 10 (moteur 3.2).** Aucune migration : les versions de l'échelle sont enregistrées dans le paramétrage (`app_settings`, clé `RATING_SCALE_VERSIONS`) ; sans version enregistrée, la version embarquée ECH10-2026.1 s'applique.
+**Échelle de notation 1 à 10 (moteur 3.2).** Aucune migration : les versions de l'échelle sont enregistrées dans le paramétrage (`app_settings`, clé `RATING_SCALE_VERSIONS`) ; sans version enregistrée, la version embarquée ECH10-2026.1 s'applique. De même, les versions de paramètres des grilles (D-54) sont enregistrées sous la clé `MODEL_PARAM_VERSIONS` ; sans version, la grille embarquée s'applique.
 
 **Variable `DATABASE_URL`.** Ne coller que la chaîne `postgresql://…&schema=corp_scoring`,
 sans guillemets ni nom de variable devant (`DATABASE_URL=postgresql://…` est

@@ -1,8 +1,8 @@
+import { getScoringModel } from "@/lib/rating-scale";
 import type { PrismaClient } from "@/generated/prisma";
 import type { z } from "zod";
 import { gradeRank } from "@/core/grades";
 import { scaleById, snapshotScaleId } from "./rating-scale";
-import { getModel } from "@/models";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import type { overrideRequestSchema } from "./schemas";
@@ -79,7 +79,7 @@ export async function requestOverride(
   // unique partiel « une seule dérogation en attente par run » (SQL 06) le
   // fait, et sa violation est traduite en conflit métier.
 
-  const model = getModel(run.modelId);
+  const model = await getScoringModel(run.modelId);
   if (!model) throw new OverrideError(500, "Version de modèle du run indisponible.");
   // L'écart se mesure sur l'échelle de la version qui a produit le grade.
   if (run.modelVersion !== model.version) {

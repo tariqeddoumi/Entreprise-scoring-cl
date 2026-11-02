@@ -1,35 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f6f7f9;
+  /* Charte Groupe Banque Populaire, alignée sur les présentations :
+     orange #E37B05, brun #462016, gris #3D3D3B, teintes crème.
+     L'orange vif sert aux éléments décoratifs (bandeau, soulignés, onglet
+     actif) ; les textes, liens et boutons utilisent un orange assombri
+     (#A85600) et le brun, pour un contraste d'au moins 4,5:1 (WCAG 2.1 AA) —
+     le texte blanc sur l'orange vif ne dépasse pas 3:1. */
+  --bcp-orange: #e37b05;
+  --bcp-brun: #462016;
+  --bcp-gris: #3d3d3b;
+  --bcp-tint: #f2e8db;
+  --bcp-tint-2: #fbf6f0;
+  --bcp-bord: #d9c7b0;
+  --bg: var(--bcp-tint-2);
   --surface: #ffffff;
-  --border: #e2e5ea;
-  --text: #16191d;
-  --muted: #5c6470;
-  --brand: #0f3d63;
-  --brand-soft: #e8eff5;
-  /* Teintes assombries pour un contraste d'au moins 4,5:1 sur les badges
-     teintés (WCAG 2.1 AA) : #1a7f5a et #b06f12 descendaient à 4,2 et 3,6. */
+  --border: #e6d9c6;
+  --text: var(--bcp-gris);
+  --heading: var(--bcp-brun);
+  --muted: #6b5e52;
+  --brand: #a85600;
+  --accent: var(--bcp-orange);
+  --brand-soft: var(--bcp-tint);
   --good: #146c4c;
   --warn: #8a5508;
   --bad: #b3261e;
-  --surface-2: #f1f4f8;
+  --surface-2: #f7efe4;
   --warn-bg: #fff3d6;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e1116;
-    --surface: #161b22;
-    --border: #2a323d;
-    --text: #e8eaed;
-    --muted: #9aa4b2;
-    --brand: #6ba7d8;
-    --brand-soft: #1a2836;
+    --bg: #17120e;
+    --surface: #211a14;
+    --border: #3b3026;
+    --text: #efe7dd;
+    --heading: #f6c88f;
+    --muted: #b9aa98;
+    --brand: #f0a14a;
+    --accent: #e37b05;
+    --brand-soft: #33261a;
     --good: #4ac795;
     --warn: #e0a955;
     --bad: #f0796f;
-    --surface-2: #1d2430;
+    --surface-2: #2a2119;
     --warn-bg: #3a2e14;
   }
 }
@@ -37,7 +51,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: Arial, "Helvetica Neue", Helvetica, ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.55;
 }
@@ -46,6 +60,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--bcp-brun) 6%, transparent);
 }
 
 .muted {
@@ -67,12 +82,37 @@ table.data td {
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
+/* En-tête de tableau au style des présentations : teinte crème, texte brun,
+   filet orange. */
 table.data th {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--heading);
+  background: var(--brand-soft);
+  border-bottom: 2px solid var(--accent);
+}
+table.data tbody tr:hover td {
+  background: color-mix(in srgb, var(--brand-soft) 45%, transparent);
+}
+
+/* Titres : brun, titre de page souligné d'un filet orange (bandeau des
+   présentations). */
+main h1 {
+  color: var(--heading);
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+}
+main h1:not(.card h1) {
+  padding-bottom: 6px;
+  border-bottom: 3px solid var(--accent);
+  display: inline-block;
+}
+main h2 {
+  color: var(--heading);
+}
+main a {
+  color: var(--brand);
 }
 
 input,
@@ -128,9 +168,27 @@ main li a {
 }
 .site-brand {
   font-weight: 700;
-  color: var(--brand);
+  color: var(--heading);
   font-size: 15px;
   white-space: nowrap;
+}
+/* Bandeau supérieur orange, comme l'en-tête des présentations. */
+.site-band {
+  height: 5px;
+  background: var(--accent);
+}
+.site-nav a {
+  color: var(--text);
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+.site-nav a[aria-current="page"] {
+  color: var(--heading);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
+}
+.site-nav a:hover {
+  color: var(--brand);
 }
 .site-nav {
   display: flex;
@@ -190,6 +248,10 @@ main li a {
 .site-main > *,
 .site-main > * > *,
 .card {
+  min-width: 0;
+}
+/* Les enfants d'une carte en grille ne s'élargissent pas au tableau qu'ils contiennent. */
+.card > * {
   min-width: 0;
 }
 
@@ -314,9 +376,12 @@ main li a {
   opacity: 0.55;
   cursor: not-allowed;
 }
+.btn-primary:hover:not(:disabled) {
+  background: var(--bcp-brun);
+}
 .btn-ghost {
   background: none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--bcp-bord);
   border-radius: 6px;
   padding: 7px 14px;
   color: var(--text);
@@ -329,6 +394,20 @@ main li a {
   padding: 7px 14px;
   color: var(--bad);
   font-size: 13px;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+/* Conteneur défilant d'un tableau large : le tableau défile dans sa carte. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 /* Statut d'un dossier de notation. */
@@ -375,7 +454,8 @@ main li a {
   color: var(--muted);
 }
 .tabs a[aria-current="page"] {
-  color: var(--brand);
+  color: #fff;
+  background: var(--brand);
   border-color: var(--brand);
   font-weight: 600;
 }

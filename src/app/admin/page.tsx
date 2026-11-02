@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
+import { loadParamVersions } from "@/lib/model-params";
+import { effectiveScale, today } from "@/lib/rating-scale";
 import { safeQuery } from "@/lib/safe-db";
 import { getPerimeter, requireSession } from "@/lib/session";
 
@@ -22,10 +24,26 @@ export default async function AdminHome() {
     { users: 0, entities: 0, currencies: 0, settings: 0 }
   );
   const ai = await aiStatus();
+  const day = today();
+  const [scale, paramVersions] = await Promise.all([effectiveScale(day, { fresh: true }), loadParamVersions({ fresh: true })]);
+  const inForce = new Set(paramVersions.filter((v) => v.effectiveFrom <= day).map((v) => v.modelId)).size;
+  const upcoming = paramVersions.filter((v) => v.effectiveFrom > day).length;
   const cards = [
     { href: "/admin/users", title: "Utilisateurs", value: `${data.users} actif(s)`, text: "Comptes, rôles, rattachement à une banque ou filiale, réinitialisation des mots de passe." },
     { href: "/admin/entities", title: "Banques et filiales", value: `${data.entities} entité(s)`, text: "Organisation du groupe, devise et pays de chaque entité, habillage (nom, logo, couleur)." },
     { href: "/admin/currencies", title: "Devises", value: `${data.currencies} devise(s) cotée(s)`, text: "Cours de change datés vers le dirham, utilisés pour convertir les montants des dossiers." },
+    {
+      href: "/admin/grilles",
+      title: "Paramétrage des grilles",
+      value: inForce ? `${inForce} grille(s) paramétrée(s)` : "Grilles embarquées",
+      text: `Poids, barèmes, repères, critères, exceptions, revues, confiance — versions datées${upcoming ? ` ; ${upcoming} version(s) à venir` : ""}.`,
+    },
+    {
+      href: "/admin/scale",
+      title: "Échelle de notation",
+      value: `${scale.version} · ${scale.bands.length} classes`,
+      text: "Bornes et libellés des classes 1 à 10, versions datées ; défaut hors échelle.",
+    },
     {
       href: "/admin/settings",
       title: "Paramétrage",

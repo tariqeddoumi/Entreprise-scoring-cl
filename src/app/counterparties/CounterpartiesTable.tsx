@@ -182,7 +182,8 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     )}
                   </td>
                   <td className="muted nowrap">{last?.asOfDate ?? "—"}</td>
-                  <td className="nowrap" style={{ display: "flex", gap: 10 }}>
+                  <td className="nowrap">
+                    <span style={{ display: "inline-flex", gap: 10 }}>
                     {c.canRate && (
                       <Link href={`/counterparties/${c.id}#noter`} style={{ color: "var(--brand)", fontWeight: 600 }}>
                         Noter
@@ -191,6 +192,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     <Link href={`/counterparties/${c.id}`} style={{ color: "var(--brand)" }} aria-label={`Fiche de ${c.name}`}>
                       Fiche
                     </Link>
+                    </span>
                   </td>
                 </tr>
               );
