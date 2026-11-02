@@ -2,6 +2,7 @@ import { listUsers } from "@/lib/accounts";
 import { safeQuery } from "@/lib/safe-db";
 import { loadTree, readableEntities, sortTree } from "@/lib/scope";
 import { getPerimeter, requireSession } from "@/lib/session";
+import { loadCircuit } from "@/lib/workflow";
 import { UsersAdmin } from "./UsersAdmin";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export default async function UsersAdminPage() {
     label: `${"— ".repeat(e.level)}${e.name}${e.isActive ? "" : " (désactivée)"}`,
   }));
   const now = Date.now();
+  const { circuit } = await loadCircuit({ fresh: true });
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -41,9 +43,11 @@ export default async function UsersAdminPage() {
           me={me.name}
           entities={entities}
           groupAdmin={perimeter.all}
+          functions={circuit.functions}
           users={users.map((u) => ({
             entityId: u.entityId,
             writeScope: u.writeScope,
+            jobFunction: u.jobFunction ?? null,
             id: u.id,
             username: u.username,
             displayName: u.displayName,

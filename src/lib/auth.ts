@@ -31,6 +31,8 @@ export interface Identity {
   writeScope?: string | null;
   /** Code d'entité d'une clé API, résolu en identifiant par le garde. */
   entityCode?: string | null;
+  /** Fonction métier dans le circuit de validation (utilisateurs seulement). */
+  jobFunction?: string | null;
 }
 
 /** Longueur minimale d'une clé API, en caractères. */

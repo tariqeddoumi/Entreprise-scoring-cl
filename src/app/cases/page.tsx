@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Prisma } from "@/generated/prisma";
 import { hasRole } from "@/lib/auth";
-import { CASE_STATUSES, OFFICIAL_RUN_WHERE } from "@/lib/cases";
+import { caseWorkflow, CASE_STATUSES, OFFICIAL_RUN_WHERE } from "@/lib/cases";
+import { pendingStepIndex, stepConcerns } from "@/reference/workflow";
 import { settingInt } from "@/lib/settings";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 const TABS = [
   { key: "todo", label: "À traiter" },
   { key: "DRAFT", label: "Brouillons" },
-  { key: "SUBMITTED", label: "À valider" },
+  { key: "SUBMITTED", label: "En validation" },
   { key: "VALIDATED", label: "Validés" },
   { key: "REJECTED", label: "Rejetés" },
   { key: "CANCELLED", label: "Abandonnés" },
@@ -22,21 +23,21 @@ const TABS = [
 
 /**
  * Dossiers de notation du périmètre. « À traiter » rassemble ce qui attend
- * l'utilisateur : ses brouillons et ses dossiers rejetés à reprendre, et, pour
- * un valideur, les dossiers soumis par d'autres.
+ * l'utilisateur : ses brouillons et ses dossiers rejetés à reprendre, et les
+ * dossiers dont l'étape en attente du circuit lui revient (fonction et rôle).
  */
 export default async function CasesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const identity = await requireSession();
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof TABS)[number]["key"]) : "todo";
-  const validator = hasRole(identity.role, "RISK_MANAGER");
+  const decider = hasRole(identity.role, "ANALYST");
 
   let where: Prisma.RatingCaseWhereInput = {};
   if (tab === "todo") {
     where = {
       OR: [
         { status: { in: ["DRAFT", "REJECTED"] }, createdBy: identity.name },
-        ...(validator ? [{ status: "SUBMITTED", submittedBy: { not: identity.name } }] : []),
+        ...(decider ? [{ status: "SUBMITTED", submittedBy: { not: identity.name } }] : []),
       ],
     };
   } else if ((CASE_STATUSES as readonly string[]).includes(tab)) {
@@ -58,9 +59,22 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         db.ratingCase.groupBy({ by: ["status"], _count: { _all: true } }),
       ]);
       const entities = await db.entity.findMany({ select: { id: true, code: true } });
-      return { cases, counts, entityCode: new Map(entities.map((e) => [e.id, e.code])) };
+      // Étape en attente de chaque dossier soumis ; « À traiter » ne garde que
+      // les dossiers dont l'étape revient à l'utilisateur.
+      const actor = { name: identity.name, role: identity.role, jobFunction: identity.jobFunction ?? null };
+      const stepOf = new Map<string, string>();
+      const mine = new Set<string>();
+      for (const c of cases) {
+        if (c.status !== "SUBMITTED") continue;
+        const w = await caseWorkflow(c);
+        const i = pendingStepIndex(w);
+        if (i !== null) stepOf.set(c.id, `${w.steps[i].labelFr} (${i + 1}/${w.steps.length})`);
+        if (stepConcerns(w, actor)) mine.add(c.id);
+      }
+      const shown = tab === "todo" ? cases.filter((c) => c.status !== "SUBMITTED" || mine.has(c.id)) : cases;
+      return { cases: shown, counts, entityCode: new Map(entities.map((e) => [e.id, e.code])), stepOf };
     },
-    { cases: [], counts: [], entityCode: new Map<string, string>() }
+    { cases: [], counts: [], entityCode: new Map<string, string>(), stepOf: new Map<string, string>() }
   );
   const count = (s: string) => data.counts.find((c) => c.status === s)?._count._all ?? 0;
 
@@ -92,7 +106,8 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Dossiers de notation</h1>
           <p className="muted">
-            Brouillon → soumission → validation par une seconde personne. Seule une notation validée devient la note du client.
+            Brouillon → soumission → circuit de validation (par défaut : directeur du centre d&apos;affaires, puis contre-étude). Seule
+            une notation ayant franchi la validation finale devient la note du client.
           </p>
         </div>
         {hasRole(identity.role, "ANALYST") && (
@@ -185,6 +200,11 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
                   <td>{c.asOfDate}</td>
                   <td>
                     <CaseStatusBadge status={c.status} />
+                    {data.stepOf.get(c.id) && (
+                      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        {data.stepOf.get(c.id)}
+                      </div>
+                    )}
                   </td>
                   <td>{c.run ? <GradeBadge grade={c.run.finalGrade} /> : <span className="muted">—</span>}</td>
                   <td className="muted">{c.createdBy}</td>

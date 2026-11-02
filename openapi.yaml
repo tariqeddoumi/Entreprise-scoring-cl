@@ -352,12 +352,17 @@ paths:
   /rating-cases/{id}/decision:
     post:
       tags: [Notation]
-      summary: Validation ou rejet d'un dossier soumis (seconde personne)
+      summary: Décision sur l'étape en attente du circuit de validation
       description: |
-        Le valideur est distinct de tout contributeur du dossier (création,
-        enregistrements, soumission, décisions sur les propositions de l'IA). Le
-        rôle requis suit le paramétrage du workflow et la délégation par montant
-        (engagements convertis en MAD). Motif obligatoire en cas de rejet.
+        Le circuit de validation est paramétrable (par défaut : directeur du
+        centre d'affaires, puis contre-étude) et figé sur le dossier à sa
+        soumission. `VALIDATED` valide l'étape en attente ; à la dernière étape,
+        la notation devient la note officielle. `REJECTED` rejette le dossier,
+        à n'importe quelle étape (motif obligatoire). Chaque étape exige la
+        fonction et le rôle paramétrés ; le valideur est distinct de tout
+        contributeur du dossier et des valideurs des étapes précédentes. Une
+        clé API ne porte pas de fonction : elle ne décide que des étapes
+        ouvertes à toute fonction.
       parameters: [{ $ref: "#/components/parameters/Id" }]
       requestBody:
         required: true
@@ -365,9 +370,21 @@ paths:
           application/json:
             schema: { $ref: "#/components/schemas/CaseDecision" }
       responses:
-        "200": { description: Décision enregistrée }
+        "200":
+          description: Décision enregistrée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string, enum: [SUBMITTED, VALIDATED, REJECTED], description: "SUBMITTED : étape validée, étape suivante en attente" }
+                  step: { type: string, description: Libellé de l'étape décidée }
+                  nextStep: { type: string, nullable: true, description: Libellé de l'étape suivante, nul si le circuit est achevé }
+                  decidedBy: { type: string, nullable: true }
+                  decidedAt: { type: string, format: date-time, nullable: true }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "403": { description: "Rôle insuffisant (délégation) ou valideur contributeur du dossier" }
+        "403": { description: "Fonction ou rôle de l'étape non détenus, valideur contributeur du dossier ou ayant déjà décidé d'une étape" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Dossier non soumis ou déjà décidé }
 

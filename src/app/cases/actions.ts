@@ -105,15 +105,22 @@ export async function decideCaseAction(_prev: ActionResult, fd: FormData): Promi
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   const caseId = String(fd.get("caseId") ?? "");
   const decision = fd.get("decision") === "VALIDATED" ? "VALIDATED" : "REJECTED";
+  let outcome: Awaited<ReturnType<typeof decideCase>>;
   try {
-    await decideCase(await getDb(), session.identity, caseId, decision, String(fd.get("comment") ?? "") || undefined);
+    outcome = await decideCase(await getDb(), session.identity, caseId, decision, String(fd.get("comment") ?? "") || undefined);
   } catch (e) {
     return failure(e);
   }
   revalidatePath(`/cases/${caseId}`);
   revalidatePath("/cases");
   revalidatePath("/");
-  return { ok: true, okFr: decision === "VALIDATED" ? "Notation validée : elle devient la note du client." : "Dossier rejeté." };
+  const okFr =
+    outcome.status === "VALIDATED"
+      ? "Validation finale : la notation devient la note du client."
+      : outcome.status === "REJECTED"
+        ? "Dossier rejeté."
+        : `Étape « ${outcome.stepFr} » validée. Étape suivante : ${outcome.nextStepFr}.`;
+  return { ok: true, okFr };
 }
 
 export async function reopenCaseAction(_prev: ActionResult, fd: FormData): Promise<ActionResult> {

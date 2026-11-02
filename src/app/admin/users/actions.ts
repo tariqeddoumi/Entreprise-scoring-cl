@@ -7,6 +7,7 @@ import {
   resetUserPassword,
   setUserActive,
   setUserEntity,
+  setUserFunction,
   setUserRole,
 } from "@/lib/accounts";
 import { getPerimeter, getSessionIdentity } from "@/lib/session";
@@ -45,6 +46,7 @@ export async function adminUsersAction(
           role: String(formData.get("role") ?? ""),
           entityId: entityOf(formData.get("entityId")),
           writeScope: String(formData.get("writeScope") ?? "ENTITY"),
+          jobFunction: String(formData.get("jobFunction") ?? "") || null,
         });
         revalidatePath("/admin/users");
         return {
@@ -64,6 +66,10 @@ export async function adminUsersAction(
         await setUserRole(actor, scope, userId, String(formData.get("role") ?? ""));
         revalidatePath("/admin/users");
         return { okFr: "Rôle modifié." };
+      case "function":
+        await setUserFunction(actor, scope, userId, String(formData.get("jobFunction") ?? "") || null);
+        revalidatePath("/admin/users");
+        return { okFr: "Fonction modifiée : elle s'applique dès la prochaine page consultée." };
       case "deactivate":
       case "reactivate":
         await setUserActive(actor, scope, userId, op === "reactivate");

@@ -69,7 +69,8 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Score de confiance, porte de couverture et caps de qualité | Opérationnel |
 | Caps structurels, revues obligatoires et red flags | Opérationnel |
 | Support groupe (au plus 2 crans, 4 conditions documentées) | Opérationnel |
-| Workflow dossier : saisie, soumission, validation, dérogations sous double validation | Opérationnel |
+| Workflow dossier : saisie, soumission, circuit de validation paramétrable (directeur du centre d'affaires puis contre-étude par défaut), dérogations sous double validation | Opérationnel |
+| Couverture des critères BAM 1/W/2025 et 19/G/2002 vérifiée critère par critère (docs/14) | Diagnostic livré |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
 | Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |
 | Renotation par lot (groupe d'affaires, segment, secteur, entité), ponctuelle ou planifiée | Opérationnel |
@@ -121,7 +122,7 @@ src/middleware.ts  en-têtes de sécurité, politique d'origine croisée
 src/app/api/v1/    interface REST
 prisma/schema.template.prisma  source canonique unique du schéma
 prisma/sql/        durcissement PostgreSQL rejouable
-tests/             322 tests : moteur, échelle, bilan, workflow, renotation, sécurité
+tests/             343 tests : moteur, échelle, bilan, workflow, renotation, sécurité
 ```
 
 ---
@@ -299,7 +300,7 @@ npm run build
 | Contrôle | Résultat |
 |---|---|
 | Contrôle de types | 0 erreur |
-| Tests | 322 tests, 322 passés |
+| Tests | 343 tests, 343 passés |
 | Lint | 0 erreur |
 | Alignement back-end / API / écrans | `scripts/check-alignment.mts` : aucune divergence |
 | Schéma sur 4 dialectes | valide |

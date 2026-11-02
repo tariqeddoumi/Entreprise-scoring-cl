@@ -641,6 +641,16 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-55 — Circuit de validation à plusieurs étapes, paramétrable — **À CONFIRMER**
+
+*Contexte :* processus de la banque (2 novembre 2026) : l'analyste ou le chargé d'affaires instruit, le directeur du centre d'affaires valide, la contre-étude valide en dernier ressort ; « ce schéma peut changer ».
+
+*Décision :* circuit paramétrable d'étapes ordonnées (fonctions habilitées, rôle minimal, seuil d'exposition facultatif), circuit par défaut directeur du centre d'affaires puis contre-étude. La fonction est un attribut du compte, distinct du rôle. Le circuit est figé sur le dossier à la soumission. Une même personne ne décide que d'une étape ; un contributeur n'en décide aucune ; une exposition inconnue applique toutes les étapes. La délégation par montant existante relève le rôle de la dernière étape. Le même service s'applique à l'écran et par l'API ; un dossier créé par l'API reçoit le même circuit et son exposition est lue (constat C01 du diagnostic BAM du 2 novembre 2026). Migration 07 (colonnes `users.jobFunction` et `rating_cases.workflow`).
+
+*À confirmer par la banque :* les fonctions et leur attribution ; les seuils d'un éventuel comité de crédit ; la place de la contre-étude dans les dérogations.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

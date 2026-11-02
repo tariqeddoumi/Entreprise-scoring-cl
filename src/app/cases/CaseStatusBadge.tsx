@@ -2,7 +2,7 @@ import { CASE_STATUS_LABELS } from "@/lib/cases";
 
 const SHORT: Record<string, string> = {
   DRAFT: "Brouillon",
-  SUBMITTED: "À valider",
+  SUBMITTED: "En validation",
   VALIDATED: "Validé",
   REJECTED: "Rejeté",
   CANCELLED: "Abandonné",

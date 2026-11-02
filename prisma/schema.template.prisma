@@ -334,6 +334,9 @@ model User {
   entity             Entity?   @relation(fields: [entityId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   // ENTITY : écrit dans sa seule entité ; BRANCH : dans toute sa descendance.
   writeScope         String    @default("ENTITY")
+  // Fonction métier (circuit de validation) : CHARGE_AFFAIRES, ANALYSTE,
+  // DIRECTEUR_CA, CONTRE_ETUDE… — référentiel paramétrable, distinct du rôle.
+  jobFunction        String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -388,6 +391,9 @@ model RatingCase {
   decidedBy       String?
   decidedAt       DateTime?
   decisionComment String?      @db.Text
+  // Circuit de validation figé à la soumission (étapes applicables, décisions).
+  // Nul : dossier antérieur au circuit, validé en une étape.
+  workflow        String?      @db.Text
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

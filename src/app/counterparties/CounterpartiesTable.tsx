@@ -159,7 +159,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     )}
                     {c.openCase && (
                       <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
-                        {c.openCase === "SUBMITTED" ? "· dossier à valider" : "· dossier en cours"}
+                        {c.openCase === "SUBMITTED" ? "· dossier en validation" : "· dossier en cours"}
                       </span>
                     )}
                   </td>

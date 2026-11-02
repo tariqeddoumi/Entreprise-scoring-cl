@@ -8,22 +8,37 @@ import { BASE_CURRENCY, convertToBase, FxError, type FxConversion } from "./fx";
 import { executeRatingRun, RatingServiceError, simulateRating } from "./rating-service";
 import { ratingRequestSchema } from "./schemas";
 import { settingBool, settingInt, settingText } from "./settings";
+import { loadCircuit } from "./workflow";
+import {
+  applyDecision,
+  parseCaseWorkflow,
+  pendingStepIndex,
+  startWorkflow,
+  stepBlocker,
+  type CaseWorkflow,
+  type WorkflowRole,
+} from "@/reference/workflow";
 
 /**
  * Workflow des dossiers de notation.
  *
- *   DRAFT ──soumission──▶ SUBMITTED ──validation──▶ VALIDATED
- *     ▲                       │
+ *   DRAFT ──soumission──▶ SUBMITTED ──étape 1 … étape n──▶ VALIDATED
+ *     ▲                       │ (rejet à n'importe quelle étape)
  *     └──── reprise ◀── REJECTED (motif obligatoire)
  *   DRAFT ──abandon──▶ CANCELLED
+ *
+ * Le circuit de validation (étapes, fonctions habilitées, rôles, seuils) est
+ * paramétrable (src/reference/workflow.ts) et figé sur le dossier à sa
+ * soumission. Par défaut : directeur du centre d'affaires, puis contre-étude.
  *
  * Règles :
  *  - la notation est calculée par le serveur à la soumission, à partir du
  *    brouillon enregistré, et figée (RatingRun immuable) ;
  *  - le valideur est distinct de l'auteur et de TOUT contributeur du dossier
  *    (enregistrements, soumission, décisions sur les propositions de l'IA) ;
- *  - le rôle du valideur suit le paramétrage, et la délégation par montant :
- *    au-delà du seuil (devise de base), un rôle supérieur est exigé ;
+ *  - une même personne ne décide que d'une étape ; chaque étape exige la
+ *    fonction et le rôle paramétrés ; la délégation par montant relève le
+ *    rôle de la dernière étape au-delà du seuil (devise de base) ;
  *  - seule une notation validée devient la note de la contrepartie ;
  *  - toutes les opérations passent par le client cloisonné : un dossier hors du
  *    périmètre est introuvable.
@@ -34,7 +49,7 @@ export type CaseStatus = (typeof CASE_STATUSES)[number];
 
 export const CASE_STATUS_LABELS: Record<string, string> = {
   DRAFT: "Brouillon",
-  SUBMITTED: "Soumis, en attente de validation",
+  SUBMITTED: "En cours de validation",
   VALIDATED: "Validé",
   REJECTED: "Rejeté",
   CANCELLED: "Abandonné",
@@ -228,6 +243,11 @@ export async function previewCase(
 export async function submitCase(db: PrismaClient, identity: Identity, caseId: string, draft: CaseDraft) {
   const c = await loadCase(db, caseId);
   if (c.status !== "DRAFT") throw new CaseError(409, "Seul un brouillon se soumet.");
+  const { circuit } = await loadCircuit();
+  if (circuit.submitFunctions.length > 0 && (!identity.jobFunction || !circuit.submitFunctions.includes(identity.jobFunction))) {
+    const labels = circuit.functions.filter((f) => circuit.submitFunctions.includes(f.code)).map((f) => f.labelFr);
+    throw new CaseError(403, `La soumission revient à : ${labels.join(", ")}.`);
+  }
   const { input, fx } = await buildInput(db, c, draft);
   // Un dossier se soumet pour faire valider une NOTE : un calcul sans grade
   // (donnée critique manquante, couverture insuffisante) se complète, il ne se
@@ -249,6 +269,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
     }
   }
   const check = await simulateRating(input);
+  const workflow = await initialWorkflow(fx?.amounts.globalBankExposure?.base ?? input.segmentationData?.globalBankExposure ?? null);
   if (check.finalGrade === null) {
     throw new CaseError(
       409,
@@ -273,6 +294,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
           decidedBy: null,
           decidedAt: null,
           decisionComment: null,
+          workflow: JSON.stringify(workflow),
         },
       });
       if (updated.count === 0) throw new CaseError(409, "Le dossier a changé d'état entre-temps.");
@@ -283,7 +305,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
         resourceType: "RatingCase",
         resourceId: caseId,
         entityId: c.counterparty.entityId,
-        detail: { runId, devise: fx?.currency ?? BASE_CURRENCY, cours: fx?.rate ?? 1 },
+        detail: { runId, devise: fx?.currency ?? BASE_CURRENCY, cours: fx?.rate ?? 1, etapes: workflow.steps.map((st) => st.code) },
       });
     }, "CASE");
   } catch (e) {
@@ -292,7 +314,10 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   }
 }
 
-/** Rôle exigé pour valider : paramétrage et délégation par montant. */
+/**
+ * Rôle exigé pour valider un dossier soumis AVANT le circuit à étapes
+ * (validation en une étape) : paramétrage et délégation par montant.
+ */
 export async function requiredValidatorRole(exposureBase: number | null): Promise<{ role: Role; reasonFr: string }> {
   const base = (await settingText("WORKFLOW_VALIDATOR_ROLE")) as Role;
   const threshold = await settingInt("WORKFLOW_DELEGATION_THRESHOLD");
@@ -306,13 +331,29 @@ export async function requiredValidatorRole(exposureBase: number | null): Promis
   return { role: base, reasonFr: "paramétrage du workflow" };
 }
 
-function exposureOf(fxDetail: string | null, draftInput: string): number | null {
+/** Circuit figé d'un nouveau dossier soumis : étapes applicables à son exposition. */
+export async function initialWorkflow(exposureBase: number | null): Promise<CaseWorkflow> {
+  const { circuit } = await loadCircuit();
+  const threshold = await settingInt("WORKFLOW_DELEGATION_THRESHOLD");
+  const role = (await settingText("WORKFLOW_DELEGATION_ROLE")) as WorkflowRole;
+  return startWorkflow(circuit, exposureBase, { threshold, role });
+}
+
+/**
+ * Exposition du dossier dans la devise de base : conversion consignée à la
+ * soumission, à défaut montant saisi (écran) ou transmis (API). Les deux formes
+ * de dossier sont lues : un dossier créé par l'API ne doit pas échapper à la
+ * délégation faute d'être lu au bon endroit.
+ */
+export function exposureOf(fxDetail: string | null, draftInput: string): number | null {
   try {
     if (fxDetail) {
       const fx = JSON.parse(fxDetail) as FxConversion;
       if (fx.amounts.globalBankExposure) return fx.amounts.globalBankExposure.base;
     }
-    const d = JSON.parse(draftInput) as Partial<CaseDraft>;
+    const d = JSON.parse(draftInput) as Partial<CaseDraft> & { apiRequest?: { segmentationData?: { globalBankExposure?: unknown } } };
+    const api = d.apiRequest?.segmentationData?.globalBankExposure;
+    if (api !== undefined && api !== null && Number.isFinite(Number(api))) return Number(api);
     const n = Number(String(d.amounts?.globalBankExposure ?? "").replace(/\s/g, "").replace(",", "."));
     return d.amounts?.globalBankExposure && Number.isFinite(n) ? n : null;
   } catch {
@@ -320,20 +361,33 @@ function exposureOf(fxDetail: string | null, draftInput: string): number | null 
   }
 }
 
-/** Ce qui empêche une identité de valider, ou null si elle le peut. */
+/**
+ * Circuit d'un dossier soumis : le circuit figé, ou — dossier soumis avant le
+ * circuit à étapes — une validation en une étape au rôle paramétré.
+ */
+export async function caseWorkflow(c: { workflow?: string | null; fxDetail: string | null; draftInput: string }): Promise<CaseWorkflow> {
+  const frozen = parseCaseWorkflow(c.workflow);
+  if (frozen) return frozen;
+  const exposure = exposureOf(c.fxDetail, c.draftInput);
+  const { role } = await requiredValidatorRole(exposure);
+  return {
+    circuitVersion: 0,
+    exposureBase: exposure,
+    steps: [{ code: "VALIDATION", labelFr: "Validation", functions: [], functionLabels: [], minRole: role === "ADMIN" ? "ADMIN" : "RISK_MANAGER" }],
+    decisions: [],
+  };
+}
+
+/** Ce qui empêche une identité de décider de l'étape en attente, ou null si elle le peut. */
 export async function validationBlocker(
   db: PrismaClient,
   identity: Identity,
-  c: { id: string; status: string; fxDetail: string | null; draftInput: string }
+  c: { id: string; status: string; fxDetail: string | null; draftInput: string; workflow?: string | null }
 ): Promise<string | null> {
   if (c.status !== "SUBMITTED") return "le dossier n'est pas en attente de validation";
-  const { role, reasonFr } = await requiredValidatorRole(exposureOf(c.fxDetail, c.draftInput));
-  if (!hasRole(identity.role, role)) return `rôle ${role} requis (${reasonFr})`;
+  const w = await caseWorkflow(c);
   const contributors = await contributorsOf(db, c.id);
-  if (contributors.includes(identity.name)) {
-    return "vous avez contribué à ce dossier : la validation revient à une autre personne (séparation des fonctions)";
-  }
-  return null;
+  return stepBlocker(w, { name: identity.name, role: identity.role, jobFunction: identity.jobFunction ?? null }, contributors);
 }
 
 export async function decideCase(
@@ -342,7 +396,7 @@ export async function decideCase(
   caseId: string,
   decision: "VALIDATED" | "REJECTED",
   comment: string | undefined
-) {
+): Promise<{ status: "SUBMITTED" | "VALIDATED" | "REJECTED"; stepFr: string; nextStepFr: string | null }> {
   const c = await loadCase(db, caseId);
   const blocker = await validationBlocker(db, identity, c);
   if (blocker) throw new CaseError(403, `Décision impossible : ${blocker}.`);
@@ -350,22 +404,50 @@ export async function decideCase(
   if (decision === "REJECTED" && motif.length < 10) {
     throw new CaseError(400, "Motif de rejet obligatoire (10 caractères au moins).");
   }
+  const w = await caseWorkflow(c);
+  const before = pendingStepIndex(w);
+  const now = new Date();
+  const applied = applyDecision(
+    w,
+    { name: identity.name, role: identity.role, jobFunction: identity.jobFunction ?? null },
+    decision === "VALIDATED" ? "APPROVED" : "REJECTED",
+    motif || null,
+    now
+  );
+  const nextIndex = pendingStepIndex(applied.workflow);
   await db.$transaction(async (tx) => {
+    // La garde porte sur le circuit lu : deux valideurs de la même étape ne
+    // peuvent pas décider tous les deux (le second voit un circuit changé).
     const updated = await tx.ratingCase.updateMany({
-      where: { id: caseId, status: "SUBMITTED" },
-      data: { status: decision, decidedBy: identity.name, decidedAt: new Date(), decisionComment: motif || null },
+      where: { id: caseId, status: "SUBMITTED", workflow: c.workflow ?? null },
+      data: applied.final
+        ? { status: applied.status, decidedBy: identity.name, decidedAt: now, decisionComment: motif || null, workflow: JSON.stringify(applied.workflow) }
+        : { workflow: JSON.stringify(applied.workflow) },
     });
-    if (updated.count === 0) throw new CaseError(409, "Dossier déjà décidé par un autre valideur.");
+    if (updated.count === 0) throw new CaseError(409, "Dossier déjà décidé à cette étape par un autre valideur.");
     await auditWithin(tx, {
       actor: identity.name,
       actorRole: identity.role,
-      action: decision === "VALIDATED" ? "CASE_VALIDATED" : "CASE_REJECTED",
+      action: applied.status === "VALIDATED" ? "CASE_VALIDATED" : applied.status === "REJECTED" ? "CASE_REJECTED" : "CASE_STEP_APPROVED",
       resourceType: "RatingCase",
       resourceId: caseId,
       entityId: c.counterparty.entityId,
-      detail: { runId: c.runId, motif: motif || undefined },
+      detail: {
+        runId: c.runId,
+        etape: applied.step.code,
+        libelleEtape: applied.step.labelFr,
+        rang: (before ?? 0) + 1,
+        etapes: w.steps.length,
+        fonction: identity.jobFunction ?? undefined,
+        motif: motif || undefined,
+      },
     });
   });
+  return {
+    status: applied.status,
+    stepFr: applied.step.labelFr,
+    nextStepFr: nextIndex !== null ? applied.workflow.steps[nextIndex].labelFr : null,
+  };
 }
 
 /**
