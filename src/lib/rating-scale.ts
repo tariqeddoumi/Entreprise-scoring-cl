@@ -10,6 +10,7 @@ import {
   type MasterScaleVersion,
 } from "@/reference/rating-scale";
 import { prisma } from "./prisma";
+import { buildModel, effectiveParams, loadParamVersions } from "./model-params";
 
 /**
  * Versions de l'échelle maîtresse, paramétrées par l'administrateur du groupe.
@@ -77,7 +78,10 @@ export async function effectiveScale(dateIso: string = today(), opts: { fresh?: 
 export async function getScoringModel(modelId: string, dateIso: string = today()): Promise<ModelConfig | undefined> {
   const model = getModel(modelId);
   if (!model) return undefined;
-  return withMasterScale(model, await effectiveScale(dateIso));
+  const [scale, versions] = await Promise.all([effectiveScale(dateIso), loadParamVersions()]);
+  // Paramètres de la grille en vigueur (Administration › Paramétrage des
+  // grilles), puis échelle maîtresse.
+  return buildModel(model, effectiveParams(versions, modelId, dateIso), scale);
 }
 
 /**

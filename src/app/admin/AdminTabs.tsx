@@ -7,6 +7,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/users", label: "Utilisateurs" },
   { href: "/admin/entities", label: "Banques et filiales" },
   { href: "/admin/currencies", label: "Devises" },
+  { href: "/admin/grilles", label: "Paramétrage des grilles" },
   { href: "/admin/scale", label: "Échelle de notation" },
   { href: "/admin/settings", label: "Paramétrage" },
 ];

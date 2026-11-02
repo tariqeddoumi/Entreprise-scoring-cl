@@ -1,20 +1,22 @@
 import Link from "next/link";
 import { listModels } from "@/models";
 import { requireSession } from "@/lib/session";
+import { getScoringModel } from "@/lib/rating-scale";
 import { CodeLabel, MODEL_STATUS_LABELS } from "@/app/ui-helpers";
 
 export default async function ModelsPage() {
   // Toute page porteuse de données exige une session authentifiée.
   await requireSession();
 
-  const models = listModels();
+  const models = (await Promise.all(listModels().map((m) => getScoringModel(m.modelId)))).filter((m) => m !== undefined);
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Versions de modèle</h1>
         <p className="muted">
-          Chaque version est immuable et validée au chargement (somme des poids,
-          exhaustivité des barèmes, master scale, bandes de confiance).
+          Grille embarquée, complétée des paramètres en vigueur (Administration › Paramétrage des grilles) et de
+          l&apos;échelle de notation en vigueur. Chaque version est validée au chargement (somme des poids, exhaustivité des
+          barèmes, échelle, bandes de confiance) ; une version « +P… » porte des paramètres administrés.
         </p>
       </div>
       {models.map((m) => (

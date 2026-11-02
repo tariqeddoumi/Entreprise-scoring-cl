@@ -1,6 +1,6 @@
+import { getScoringModel } from "@/lib/rating-scale";
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma";
-import { getModel } from "@/models";
 import { AI_READABLE_TYPES, AiError, runAi, type AiDocument } from "./ai";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
@@ -178,7 +178,7 @@ export async function generateProposals(
 ): Promise<GeneratedProposals> {
   const c = await draftCase(db, caseId);
   if (c.status !== "DRAFT") throw new CaseError(409, "Les propositions de l'IA s'appliquent à un brouillon.");
-  const model = getModel(c.modelId);
+  const model = await getScoringModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const notes = (input.notes ?? "").trim().slice(0, MAX_NOTES);
   const ids = [...new Set(input.documentIds)].slice(0, MAX_DOCUMENTS_PER_CALL);

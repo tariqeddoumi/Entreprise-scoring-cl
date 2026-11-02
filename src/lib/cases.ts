@@ -1,6 +1,6 @@
+import { getScoringModel } from "@/lib/rating-scale";
 import type { PrismaClient } from "@/generated/prisma";
 import type { RatingInput, RatingResult } from "@/core/types";
-import { getModel } from "@/models";
 import { hasRole, type Identity, type Role } from "./auth";
 import { auditWithin } from "./audit";
 import { draftAmounts, draftFinancials, draftToRequest, parseDraft, type CaseDraft } from "./case-input";
@@ -105,7 +105,7 @@ export async function createCase(
   identity: Identity,
   input: { counterpartyId: string; modelId: string; asOfDate: string }
 ) {
-  const model = getModel(input.modelId);
+  const model = await getScoringModel(input.modelId);
   if (!model) throw new CaseError(404, `Modèle inconnu : ${input.modelId}`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.asOfDate)) throw new CaseError(400, "Date d'arrêté au format AAAA-MM-JJ.");
   const counterparty = await db.counterparty.findUnique({ where: { id: input.counterpartyId } });
@@ -200,7 +200,7 @@ async function convertAmounts(
  * calcule exactement ce qu'aurait calculé le dossier.
  */
 export async function buildInput(db: PrismaClient, c: { modelId: string; counterparty: { currency: string } }, draft: CaseDraft) {
-  const model = getModel(c.modelId);
+  const model = await getScoringModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const { base, fx } = await convertAmounts(db, draft, c.counterparty.currency);
   const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency }));
@@ -234,7 +234,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   // valide pas — sinon une « absence de note » deviendrait la note officielle.
   // Bilan : exigé pour une grille standard (paramétrable) ; dès qu'il est
   // présent, ses contrôles bloquants s'appliquent, quelle que soit la grille.
-  const model = getModel(c.modelId);
+  const model = await getScoringModel(c.modelId);
   if (model) {
     const fin = draftFinancials(draft, model);
     const required = model.routeFamily === "STANDARD" && (await settingBool("WORKFLOW_BALANCE_SHEET_REQUIRED"));

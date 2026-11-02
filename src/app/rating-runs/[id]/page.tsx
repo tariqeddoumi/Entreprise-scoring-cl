@@ -1,6 +1,6 @@
+import { getScoringModel } from "@/lib/rating-scale";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getModel } from "@/models";
 import { scaleById, snapshotScaleId } from "@/lib/rating-scale";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
@@ -65,7 +65,7 @@ export default async function RatingRunPage({
   }
   if (!run) notFound();
 
-  const model = getModel(run.modelId);
+  const model = await getScoringModel(run.modelId);
   // L'instantané persisté peut provenir d'un moteur antérieur : sa forme n'est
   // pas garantie, il est donc reconnu avant d'être passé aux composants V3.
   const snapshot = readResultSnapshot(run.resultSnapshot);
