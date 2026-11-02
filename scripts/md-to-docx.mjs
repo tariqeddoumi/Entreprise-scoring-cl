@@ -202,21 +202,26 @@ function longestWord(s) {
 function buildTable(headerCells, aligns, bodyRows) {
   const n = headerCells.length;
   const maxLen = new Array(n).fill(0);
+  const sumLen = new Array(n).fill(0);
   const maxWord = new Array(n).fill(0);
   const measure = (cells) =>
     cells.forEach((c, idx) => {
       maxLen[idx] = Math.max(maxLen[idx] || 0, c.length);
+      sumLen[idx] += c.length;
       maxWord[idx] = Math.max(maxWord[idx] || 0, longestWord(c));
     });
   measure(headerCells);
   bodyRows.forEach(measure);
 
-  const rawWidths = maxLen.map((l) => Math.max(700, Math.min(l * 55, 3000)));
+  // Largeur selon la longueur moyenne des cellules (bornée par la plus longue) :
+  // une colonne de textes longs reçoit plus de place qu'une colonne de codes.
+  const rows = bodyRows.length + 1;
+  const rawWidths = maxLen.map((l, idx) => Math.max(700, Math.min(Math.max(sumLen[idx] / rows, l / 4) * 55, 6000)));
   const total = rawWidths.reduce((a, b) => a + b, 0);
   const widths = rawWidths.map((w) => Math.round((w / total) * CONTENT_WIDTH));
   widths[widths.length - 1] += CONTENT_WIDTH - widths.reduce((a, b) => a + b, 0);
 
-  const floors = maxWord.map((w) => Math.min(2700, Math.max(1000, w * 118 + 300)));
+  const floors = maxWord.map((w) => Math.min(2700, Math.max(650, w * 118 + 300)));
   let deficit = 0;
   for (let idx = 0; idx < widths.length; idx += 1) {
     if (widths[idx] < floors[idx]) {
