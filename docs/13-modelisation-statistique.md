@@ -1,7 +1,7 @@
 # Modélisation statistique de la probabilité de défaut des entreprises
 
-**Version :** 1.0 — novembre 2026
-**Script :** `scripts/modelisation/modelisation.py` (version 1.0.0)
+**Version :** 1.1 — novembre 2026 (échelle 1 à 10)
+**Script :** `scripts/modelisation/modelisation.py` (version 1.1.0)
 **Périmètre :** entreprises notées par l'outil (TPE, PME, grandes entreprises)
 **Statut :** méthode de référence ; tout modèle produit est un projet soumis à la validation indépendante et au comité modèles
 
@@ -261,58 +261,26 @@ Dans la démonstration (8 années), la marge C ressort à 8,9 % de la PD central
 
 ### 10.4 Échelle maîtresse
 
-Les dossiers sont répartis en **8 grades** (paramétrable) dont les bornes de PD sont **géométriques** : chaque grade correspond à un risque environ 1,8 fois supérieur au précédent. Pour chaque grade, la PD retenue est la PD centrale moyenne du grade majorée de la marge de prudence, avec un **plancher de 0,03 %** et une monotonie stricte d'un grade au suivant.
+Les dossiers sont répartis en **10 classes** (paramétrable), numérotées comme l'échelle de l'outil — 1 = meilleur risque —, dont les bornes de PD sont **géométriques** : chaque classe correspond à un risque environ 1,6 fois supérieur au précédent. Pour chaque classe, la PD retenue est la PD centrale moyenne de la classe majorée de la marge de prudence, avec un **plancher de 0,03 %** et une monotonie stricte d'une classe à la suivante.
 
-| Grade | PD min | PD max | Effectif | Défauts | Taux observé | PD retenue |
+| Classe | PD min | PD max | Effectif | Défauts | Taux observé | PD retenue |
 |---|---:|---:|---:|---:|---:|---:|
-| S1 | 0,00 % | 0,40 % | 405 | 2 | 0,49 % | 0,31 % |
-| S2 | 0,40 % | 0,72 % | 688 | 6 | 0,87 % | 0,62 % |
-| S3 | 0,72 % | 1,30 % | 1 204 | 7 | 0,58 % | 1,10 % |
-| S4 | 1,30 % | 2,33 % | 1 765 | 39 | 2,21 % | 1,94 % |
-| S5 | 2,33 % | 4,19 % | 1 936 | 63 | 3,25 % | 3,43 % |
-| S6 | 4,19 % | 7,53 % | 1 626 | 85 | 5,23 % | 6,11 % |
-| S7 | 7,53 % | 13,53 % | 1 008 | 103 | 10,22 % | 10,84 % |
-| S8 | 13,53 % | 100 % | 549 | 99 | 18,03 % | 21,06 % |
+| 1 | 0,00 % | 0,36 % | 305 | 1 | 0,33 % | 0,28 % |
+| 2 | 0,36 % | 0,57 % | 441 | 5 | 1,13 % | 0,51 % |
+| 3 | 0,57 % | 0,91 % | 749 | 3 | 0,40 % | 0,80 % |
+| 4 | 0,91 % | 1,46 % | 1 139 | 11 | 0,97 % | 1,29 % |
+| 5 | 1,46 % | 2,33 % | 1 428 | 34 | 2,38 % | 2,04 % |
+| 6 | 2,33 % | 3,73 % | 1 567 | 43 | 2,74 % | 3,23 % |
+| 7 | 3,73 % | 5,96 % | 1 387 | 72 | 5,19 % | 5,12 % |
+| 8 | 5,96 % | 9,52 % | 1 074 | 75 | 6,98 % | 8,11 % |
+| 9 | 9,52 % | 15,21 % | 674 | 83 | 12,31 % | 12,92 % |
+| 10 | 15,21 % | 100 % | 417 | 77 | 18,47 % | 22,81 % |
 
 *Échelle de la démonstration (données synthétiques), développement et test réunis.*
 
-La correspondance avec les grades de l'outil (STD-P1 à P8, TPE-B1 à B6) se fait par les bornes de PD : quand le modèle statistique sera validé, chaque grade de l'outil recevra la PD de l'échelle maîtresse, et le statut de calibration de l'outil passera de « non calibré » à « calibré ».
+**Correspondance avec l'échelle 1 à 10 de l'outil.** L'outil classe aujourd'hui par **score** (version d'échelle ECH10-2026.1 : 1 ≥ 90, …, 10 < 40) ; l'échelle statistique classe par **PD**. À la validation du modèle, deux voies sont possibles : publier une nouvelle version datée de l'échelle de l'outil dont les bornes de score reproduisent les bornes de PD ci-dessus (le score de la grille étant une fonction décroissante de la PD), ou conserver les bornes de score et attacher à chaque classe la PD observée. Dans les deux cas, le statut de calibration de l'outil passe de « non calibré » à « calibré », et la version d'échelle consignée dans chaque notation garde l'historique lisible. Remarquer, dans la démonstration, que des classes voisines ne se distinguent pas toujours (classe 2 contre classe 3) : c'est exactement le signal qui conduit à resserrer une échelle.
 
-## 11. Validation
-
-La validation répond à trois questions : le modèle **classe-t-il** bien les entreprises ? Ses **PD sont-elles justes** et prudentes ? Est-il **stable** dans le temps ?
-
-### 11.1 Discrimination
-
-- **Gini** (ou AUC = (Gini + 1) / 2) : capacité à donner un score plus risqué aux entreprises qui feront défaut. 0 = hasard, 100 % = parfait. Pour un modèle entreprises, un Gini de 40 % à 60 % est usuel ; au-dessus de 70 %, il faut chercher une fuite d'information.
-- **Intervalle de confiance à 95 %** du Gini, par rééchantillonnage (500 tirages) : il montre si deux Gini diffèrent vraiment.
-- **KS** : écart maximal entre les répartitions cumulées des défauts et des sains.
-- **Gini des grades** : discrimination après regroupement en 8 grades (une échelle trop grossière détruit de l'information).
-
-![Courbes ROC par échantillon (données synthétiques)](modelisation/figures/01_courbe_roc.png)
-
-| Échantillon | Effectif | Défauts | Gini | IC 95 % | KS | Gini grille (paliers 25) | Gini des grades |
-|---|---:|---:|---:|---|---:|---:|---:|
-| Développement | 6 380 | 283 | 54,1 % | [48,6 % ; 59,7 %] | 41,6 % | 53,9 % | 52,9 % |
-| Test | 2 801 | 121 | 48,3 % | [38,7 % ; 57,2 %] | 39,3 % | 48,2 % | 46,0 % |
-| Hors temps | 2 058 | 73 | 47,1 % | [34,0 % ; 59,6 %] | 37,3 % | 47,3 % | 45,8 % |
-
-*Démonstration (données synthétiques).*
-
-**Lecture.** La baisse du développement au test (≈ 6 points) est normale ; une baisse de plus de 10 points signalerait un sur-apprentissage. Le hors temps confirme le test. L'intervalle de confiance du hors temps est large (73 défauts) : c'est l'illustration chiffrée de l'exigence de volume du § 1.
-
-![Courbe de puissance (CAP) — données synthétiques](modelisation/figures/02_courbe_cap.png)
-
-### 11.2 Calibration
-
-Deux familles de tests, qui répondent à deux questions différentes :
-
-- **Prudence (unilatéral), par grade** : la PD retenue est-elle sous-estimée ? Test **binomial** et test de **Jeffreys** (méthode recommandée par la BCE pour la validation des PD) sur l'échantillon hors temps. Feu vert si la p-valeur est d'au moins 5 %, orange entre 1 % et 5 %, rouge en dessous de 1 %.
-- **Justesse (bilatéral), sur l'ensemble des grades** : test de **Hosmer-Lemeshow** sur la PD centrale. Il signale aussi les PD trop élevées.
-
-![Taux de défaut observé et PD retenue par grade, échantillon hors temps (données synthétiques)](modelisation/figures/05_calibration_grades.png)
-
-**Lecture de la démonstration.** Les huit grades sont au vert : aucune PD n'est sous-estimée. Le Hosmer-Lemeshow est en revanche significatif (p = 0,001) : les grades S6 et S7 observent moins de défauts que prévu sur l'année hors temps, qui est une année favorable (taux de défaut de 3,55 % contre 4,44 % de tendance centrale). C'est le comportement attendu d'une PD de long terme en haut de cycle : elle est volontairement plus élevée que le taux d'une bonne année. Ce constat ne justifie pas de recalibrer, mais il doit être suivi : s'il persiste sur plusieurs années, la tendance centrale est trop prudente.
+**Lecture de la démonstration.** Neuf classes sur dix sont au vert ; la classe 10 est orange (p = 0,04), avec 24 défauts sur 76 dossiers : la PD de la dernière classe est à surveiller. Le Hosmer-Lemeshow est significatif (p = 0,002) : les classes 7 à 9 observent moins de défauts que prévu sur l'année hors temps, qui est une année favorable (taux de défaut de 3,55 % contre 4,44 % de tendance centrale). C'est le comportement attendu d'une PD de long terme en haut de cycle : elle est volontairement plus élevée que le taux d'une bonne année. Ce constat ne justifie pas de recalibrer, mais il doit être suivi : s'il persiste sur plusieurs années, la tendance centrale est trop prudente.
 
 ### 11.3 Stabilité et concentration
 
@@ -414,7 +382,7 @@ La grille experte reste en vigueur tant que le modèle statistique n'est pas val
 | p-valeur d'entrée et de sortie | 5 % |
 | Nombre maximal de variables | 10 |
 | Années hors temps / part du test | 1 / 30 % |
-| Nombre de grades / plancher de PD | 8 / 0,03 % |
+| Nombre de classes / plancher de PD | 10 / 0,03 % |
 | Niveau de confiance de la marge C | 90 % |
 | Rééchantillonnages du Gini | 500 |
 | PSI : surveillance / instabilité | 0,10 / 0,25 |

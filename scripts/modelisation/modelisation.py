@@ -45,7 +45,7 @@ from scipy.optimize import brentq
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # --------------------------------------------------------------------------------------
 # Configuration par défaut (surchargée par --config)
@@ -89,7 +89,7 @@ DEFAULT_CONFIG = {
     "selection": {"iv_min": 0.02, "iv_suspect": 0.50, "correlation_max": 0.60, "vif_max": 5.0,
                   "p_entree": 0.05, "p_sortie": 0.05, "variables_max": 10},
     "points": {"score_reference": 600, "cote_reference": 50, "pdo": 20},
-    "calibration": {"nb_grades": 8, "pd_plancher": 0.0003, "pd_plafond_derniere_classe": 0.30,
+    "calibration": {"nb_grades": 10, "pd_plancher": 0.0003, "pd_plafond_derniere_classe": 0.30,
                     "moc_a": 0.0, "moc_b": 0.0, "niveau_confiance_moc_c": 0.90},
     "validation": {"bootstrap": 500, "seuil_psi_surveillance": 0.10, "seuil_psi_instable": 0.25},
     "grille_outil": {"model_id": "CORP_STAT_V1", "segments": ["TPE", "PME", "GE"]},
@@ -667,7 +667,7 @@ def echelle_maitresse(pd_cal: pd.Series, y: pd.Series, moc: float, cfg: dict) ->
         borne_basse = 0.0 if k == 0 else bornes[k - 1]
         borne_haute = 1.0 if k == n - 1 else bornes[k]
         pd_c = float(d["pd"].mean()) if len(d) else float(math.sqrt(max(borne_basse, 1e-6) * borne_haute))
-        rows.append({"grade": f"S{k + 1}", "pd_min": borne_basse, "pd_max": borne_haute, "effectif": int(len(d)), "defauts": int(d["y"].sum()),
+        rows.append({"grade": str(k + 1), "pd_min": borne_basse, "pd_max": borne_haute, "effectif": int(len(d)), "defauts": int(d["y"].sum()),
                      "taux_observe": float(d["y"].mean()) if len(d) else np.nan, "pd_centrale": pd_c,
                      "pd_retenue": max(c["pd_plancher"], pd_c * (1 + moc))})
     t = pd.DataFrame(rows)
@@ -676,7 +676,7 @@ def echelle_maitresse(pd_cal: pd.Series, y: pd.Series, moc: float, cfg: dict) ->
 
 
 def grade_de(pd_cal: pd.Series, bornes: list) -> pd.Series:
-    return pd.Series(["S" + str(k + 1) for k in np.searchsorted(bornes, pd_cal.to_numpy(), side="right")], index=pd_cal.index)
+    return pd.Series([str(k + 1) for k in np.searchsorted(bornes, pd_cal.to_numpy(), side="right")], index=pd_cal.index)
 
 
 # --------------------------------------------------------------------------------------
@@ -1037,7 +1037,7 @@ def modeliser(df_brut: pd.DataFrame, cfg: dict, out: str, demo: bool) -> dict:
         vals.append({"échantillon": ech, "effectif": len(d), "défauts": int(y.sum()), "taux de défaut": f"{y.mean():.2%}",
                      "Gini modèle": f"{gini(y, s):.1%}", "IC 95 % Gini": f"[{lo:.1%} ; {hi:.1%}]", "KS": f"{ks(y, s):.1%}",
                      "Gini grille (paliers 25)": f"{gini(y, -d['_score_grille'].to_numpy()):.1%}",
-                     "Gini des grades": f"{gini(y, d['_grade'].str[1:].astype(int).to_numpy()):.1%}"})
+                     "Gini des grades": f"{gini(y, d['_grade'].astype(int).to_numpy()):.1%}"})
     validation = pd.DataFrame(vals)
     ech_calib = "Hors temps" if (df["_ech"] == "Hors temps").any() else "Test"
     dc = df[df["_ech"] == ech_calib]

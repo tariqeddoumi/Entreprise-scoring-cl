@@ -5,7 +5,7 @@ import { DEFAULT_GRADES } from "./default-policy";
  * Échelle maîtresse de notation — 1 (meilleur risque) à 10 (risque le plus
  * élevé), commune à toutes les grilles, défaut hors échelle (DEF1 à DEF3).
  *
- * Décision de novembre 2026 (journal D-52) : une seule échelle, lisible par
+ * Décision de novembre 2026 (journal D-53) : une seule échelle, lisible par
  * tous les métiers, au lieu d'une échelle par grille (STD-P1…P8, TPE-B1…B6,
  * STD-S…, TPE-T…). L'échelle est PARAMÉTRABLE dans le temps : chaque version
  * porte une date d'effet ; la version en vigueur à la date de calcul s'applique

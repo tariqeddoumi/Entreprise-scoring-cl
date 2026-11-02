@@ -42,6 +42,7 @@ function grid(m: ModelConfig) {
       transferTo: c.notApplicableRule?.transferWeightTo ?? null,
       notApplicable: !!c.notApplicableRule && !c.materialityGate,
     })),
+    scaleId: m.gradeScale.scaleId,
     grades: m.gradeScale.bands,
     caps: m.nonCompensatoryRules.map((r) => ({
       code: r.code,

@@ -607,6 +607,24 @@ Diagnostic des représentations du système deux à deux : base de production et
 - l'approbation ligne par ligne des corrections de ratios par le valideur (aujourd'hui : non) ;
 - le format d'import de la liasse fiscale EDI (SIMPL-IS), à obtenir auprès de la DGI.
 
+## D-53 — Échelle de notation 1 à 10 commune, paramétrable par versions datées — **À CONFIRMER**
+
+*Contexte :* demande de la banque (2 novembre 2026) : remplacer les échelles propres aux grilles (STD-P1…P8, TPE-B1…B6, STD-S, TPE-T) par une échelle de 1 à 10, paramétrable car appelée à évoluer.
+
+*Options :* (a) une échelle 1 à 10 par grille ; (b) une échelle maîtresse commune ; sens : 1 = meilleur ou 10 = meilleur ; défaut dans l'échelle (10 = défaut) ou hors échelle.
+
+*Décision (choix de la banque) :* (b), **1 = meilleur risque**, **défaut hors échelle** (DEF1 à DEF3). Version initiale ECH10-2026.1, provisoire : 1 ≥ 90, 2 ≥ 85, 3 ≥ 80, 4 ≥ 75, 5 ≥ 70, 6 ≥ 64, 7 ≥ 57, 8 ≥ 48, 9 ≥ 40, 10 < 40. Moteur 3.2.0, grilles 3.2.0 (challengers 0.2.0).
+
+*Motif des bornes :* reprendre les coupures de l'échelle standard (70, 64, 57, 48) transpose exactement les plafonds (STD-P7 → 8, STD-P6 → 7) et ne déplace aucune note PME entre « fragile », « faible » et « très faible » ; les classes ajoutées séparent le haut de l'échelle (90, 85) et le bas (40).
+
+*Paramétrage :* versions datées, administrées par l'administrateur du groupe ; la version en vigueur à la date de calcul s'applique et est consignée dans chaque notation ; une version en vigueur est figée, une version future se modifie ou se retire ; contrôles de cohérence (bornes, couverture de [0, 100], classes citées par les plafonds). Une version différente de la version embarquée retire la PD synthétique jusqu'à une nouvelle calibration.
+
+*Historique :* les notations antérieures gardent leurs grades ; leur classe équivalente est affichée (transposition par le score ramené dans les bornes du grade d'origine) ; la renotation par lot et les dérogations utilisent l'échelle consignée.
+
+*Ce que la décision change par rapport à C03 :* le constat C03 interdisait d'afficher le même grade pour deux grilles sans correspondance validée sur probabilités de défaut. L'échelle commune est un choix de communication de la banque ; la comparabilité réelle des classes entre grilles reste à établir par la calibration sur défauts observés, et la calibration synthétique, refaite sur dix classes pour chaque grille, est propre à chacune.
+
+*À confirmer par la banque :* les bornes et libellés, le passage du modèle TPE de six à dix classes (pouvoir de séparation plus faible des flux bancaires), le calendrier de renotation du portefeuille dans la nouvelle échelle.
+
 ---
 
 # 3. Ce qui reste à décider par la banque
@@ -616,9 +634,9 @@ Diagnostic des représentations du système deux à deux : base de production et
 3. **Seuils de couverture** — à recaler sur la distribution réelle de complétude, dès les premiers dossiers du pilote.
 4. **Traitement des jeunes entreprises** — grille dédiée ou traitement expert tracé.
 5. **Score de la catégorie « information absente »** — à estimer comme une catégorie de risque à part entière lors de la calibration. Provisoirement fixé à 0, borne basse (D-51) : une information absente ne peut plus améliorer un score.
-6. **Granularité définitive des échelles** — résultat de la calibration, pas choix de présentation.
+6. **Bornes définitives de l'échelle 1 à 10** — résultat de la calibration ; une nouvelle version datée de l'échelle les fixera (D-53).
 7. **Maintien ou suppression des quatre exceptions conservées** — sur tests d'ablation.
-8. **Correspondance entre les deux échelles** — condition de toute master scale commune.
+8. **Correspondance entre grilles sur l'échelle commune 1 à 10** (D-53) — l'échelle maîtresse est adoptée ; que la même classe porte le même risque pour une PME et une TPE reste à établir par la calibration sur défauts observés.
 9. **Sort des notations d'archive** — les instantanés antérieurs restent consultables mais ne sont comparables à rien. Les dix contreparties ont été renotées (D-27) : les deux séries coexistent désormais sur des entrées identiques. Leur rapprochement suppose toujours une table de correspondance validée — treize dossiers de démonstration ne l'établissent pas.
 10. **Ce qui est repris lors d'une bascule de moteur de base** — les vingt-six notations, ou la seule série V3 (D-31). Conserver les deux préserve le point de comparaison du pilote et impose de transporter des instantanés d'un moteur retiré.
 11. **Dialecte cible et niveau de certification exigé** — un schéma validé n'est pas un dialecte certifié, et le durcissement de la base doit être réécrit dans ses termes avant toute mise en service (D-28).

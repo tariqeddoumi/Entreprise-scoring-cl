@@ -2,7 +2,7 @@
 
 ## Contreparties TPE, PME et Grandes Entreprises — contexte bancaire marocain
 
-**Version :** 3.1 · **Date :** 1er novembre 2026 · **Moteur :** 3.1.0
+**Version :** 3.2 · **Date :** 2 novembre 2026 · **Moteur :** 3.2.0
 **Destinataires :** Direction générale, Direction des Risques, Comité modèles, Validation indépendante, Finance et IFRS 9, Conformité et Juridique, Direction des Systèmes d'Information
 **Classification :** usage interne
 
@@ -32,6 +32,7 @@
 11. Justification économique des sept domaines
 12. Qualité des données et niveau de confiance
 12 bis. Bilan, ratios et base financière de la notation
+12 ter. Échelle de notation 1 à 10
 13. Caps, red flags et dérogations
 14. Séparation avec la classification réglementaire, IFRS 9 et le capital
 15. Exemples de calcul complets
@@ -341,6 +342,36 @@ Ce mécanisme évite l'écueil le plus fréquent des dispositifs de notation : p
 
 **Restitution.** À la soumission, la « base financière de la notation » est figée dans l'instantané d'entrée, sans effet sur le calcul : référence du bilan et empreinte SHA-256 de la pièce, postes clés et bilan complet par exercice, tous les indicateurs (y compris hors grille : autonomie financière, marges, rentabilités, délais clients et fournisseurs, BFR, fonds de roulement, CAF), ratios calculés et retenus avec leur motif, résultat des contrôles. La fiche de notation l'affiche : la note se vérifie contre le bilan remis par le client, au renouvellement d'une ligne de court terme comme pour un crédit d'investissement.
 
+## 12 ter. Échelle de notation 1 à 10
+
+**Une échelle maîtresse commune.** Depuis le moteur 3.2.0, toutes les grilles — standard, TPE comportementale et challengers — notent sur une même échelle de dix classes : **1 = meilleur risque**, 10 = risque le plus élevé. Le défaut constaté reste noté **hors échelle** (DEF1 retard, DEF2 improbabilité de paiement ou restructuration, DEF3 procédure), parce qu'il est un état constaté et non une estimation. L'échelle remplace les échelles propres aux grilles (STD-P1 à P8, TPE-B1 à B6) : une seule lecture pour tous les métiers, des notes TPE et PME exprimées dans la même langue.
+
+| Classe | Score brut | Libellé |
+|---|---|---|
+| 1 | 90 et plus | Exceptionnel |
+| 2 | 85 à 90 | Très solide |
+| 3 | 80 à 85 | Solide |
+| 4 | 75 à 80 | Bon |
+| 5 | 70 à 75 | Satisfaisant |
+| 6 | 64 à 70 | Acceptable |
+| 7 | 57 à 64 | Fragile |
+| 8 | 48 à 57 | Faible |
+| 9 | 40 à 48 | Très faible |
+| 10 | moins de 40 | Critique |
+| DEF1 à DEF3 | hors échelle | Défaut constaté : s'impose quel que soit le score |
+
+*Version ECH10-2026.1 (provisoire). Borne basse incluse, borne haute exclue.*
+
+**Des bornes qui transposent l'existant.** Les coupures 70, 64, 57 et 48 de l'ancienne échelle standard sont conservées ; deux classes ont été ajoutées en haut (90, 85) et une en bas (40). Les plafonds en vigueur se transposent donc exactement : « au mieux STD-P7 » (48 à 57) devient « au mieux classe 8 », « au mieux STD-P6 » devient « au mieux classe 7 ». Le support groupe reste limité à deux crans.
+
+**Paramétrable dans le temps, sans perte de traçabilité.** L'échelle se gère par **versions datées** (Administration › Échelle de notation, administrateur du groupe). La version en vigueur à la date de calcul s'applique à toute notation, simulation, prévisualisation et renotation ; son identifiant est consigné dans le résultat, qui se rejoue à l'identique. Une version entrée en vigueur est **figée** : on la remplace par une nouvelle version, qui prend effet au plus tôt le jour même ; une version future peut être modifiée ou retirée. Une version est refusée si ses bornes ne sont pas strictement décroissantes, si elle ne couvre pas tout l'intervalle [0, 100] ou si elle supprime une classe citée par un plafond.
+
+**Effet sur la probabilité de défaut.** La calibration attachée aux grilles est établie sur les classes de la version embarquée (rapports `docs/06`). Une autre version de l'échelle retire la PD synthétique jusqu'à la publication d'une nouvelle calibration : une PD ne se transpose pas d'une borne à l'autre.
+
+**Historique.** Les notations antérieures conservent leurs grades d'origine (STD-P5, TPE-B3…). L'outil affiche à côté leur **classe équivalente** sur l'échelle en vigueur (« ≈ classe 6 »), obtenue en ramenant le score brut dans les bornes du grade d'origine, ce qui conserve l'effet d'un plafond ; la renotation par lot utilise la même transposition pour compter les crans. Une notation archivée n'est jamais réécrite : la renotation la fait entrer dans l'échelle.
+
+**Point de vigilance.** Le modèle TPE comportemental passait de six à dix classes. Il observe des flux bancaires, dont le pouvoir de séparation est plus faible que celui des états financiers : des classes voisines y porteront des risques proches, et la calibration sur défauts observés dira lesquelles fusionner ou rebâtir (décision D-53).
+
 ## 13. Caps, red flags et dérogations
 
 ### 13.1 Caps structurels
@@ -403,7 +434,7 @@ Les autres domaines ressortent à D2 = 60, D3 = 82, D4 = 65, D5 = 70, D6 = 75 et
 
 `Score brut = 61 × 25 % + 60 × 10 % + 82 × 25 % + 65 × 15 % + 70 × 15 % + 75 × 7 % + 50 × 3 % = 68,75`
 
-**Résultat : G6 — Acceptable.** Avec un niveau de confiance de 82, le cap « pas mieux que G4 » est enregistré mais reste sans effet, G6 étant déjà moins favorable. Un retard de paiement de 40 jours déclencherait néanmoins un signal `REFER` et l'analyse réglementaire et IFRS 9 indépendante.
+**Résultat : classe 6 — Acceptable** (64 à 70). Le niveau de confiance de 82 (classe B) décrit la robustesse de l'estimation sans modifier la classe. Un retard de paiement de 40 jours déclencherait néanmoins un signal `REFER` et l'analyse réglementaire et IFRS 9 indépendante.
 
 ### 15.2 PME — effet d'un cap structurel
 
@@ -418,7 +449,7 @@ Les autres domaines ressortent à D2 = 60, D3 = 82, D4 = 65, D5 = 70, D6 = 75 et
 | D7 | 50 | 3 % | 1,50 |
 | **Total** | | **100 %** | **69,10** |
 
-Résultat moteur : **G6**. Si le ratio de couverture du service de la dette est inférieur à 1,0 en scénario de base, le cap structurel limite le résultat à **G9**, alors même que le score brut demeure 69,10. Le score brut et le grade capé sont tous deux conservés : le premier alimente la surveillance du modèle, le second la décision.
+Résultat moteur : **classe 6**. Si le ratio de couverture du service de la dette est inférieur à 1,0 en scénario de base, l'exception non compensatoire NC01 limite le résultat à **la classe 8** (« Faible » au mieux), alors même que le score brut demeure 69,10. Le score brut et le grade capé sont tous deux conservés : le premier alimente la surveillance du modèle, le second la décision.
 
 ### 15.3 Grande entreprise
 
@@ -433,7 +464,7 @@ Résultat moteur : **G6**. Si le ratio de couverture du service de la dette est 
 | D7 | 60 | 5 % | 3,00 |
 | **Total** | | **100 %** | **75,65** |
 
-Résultat moteur : **G4 — Bon**. Un soutien de groupe ne modifie aucun score élémentaire ; un relèvement éventuel est calculé et approuvé séparément, la note autonome étant conservée.
+Résultat moteur : **classe 4 — Bon** (75 à 80). Un soutien de groupe ne modifie aucun score élémentaire ; un relèvement éventuel est calculé et approuvé séparément, la note autonome étant conservée.
 
 ---
 
@@ -721,9 +752,9 @@ Trois enseignements de portée générale en sont ressortis.
 
 **La probabilité doit être calibrée sur le grade, non sur le score.** Le grade final intègre les caps, qui déplacent une contrepartie vers le bas sans toucher à son score brut. Le score moyen n'est donc pas monotone dans l'échelle : sur le portefeuille simulé, le score moyen de G4 dépasse celui de G3, et celui de G7 dépasse celui de G6, parce que ces grades rassemblent des dossiers bien notés mais plafonnés. Le risque, lui, reste monotone. Dériver la probabilité d'une courbe du score réaffecterait à ces dossiers la probabilité de leur score et annulerait l'effet du cap.
 
-**Les caps de confiance créent deux points de masse dans l'échelle.** G4 et G7 rassemblent à eux seuls la moitié du portefeuille, et la majorité des dossiers qui s'y trouvent y ont été **déplacés** par un cap de qualité d'information : 61 % en G4 et 55 % en G7 pour le modèle standard, 65 % et 61 % pour le modèle TPE. Les autres grades ne sont pratiquement pas touchés par les caps. C'est le comportement voulu, mais il a une conséquence opérationnelle : améliorer la collecte d'information déplacerait davantage de dossiers que réviser les pondérations.
+**Les caps de confiance créaient deux points de masse dans l'échelle (constat de la version 2, échelle G1 à G10, à l'origine de leur suppression).** G4 et G7 rassemblent à eux seuls la moitié du portefeuille, et la majorité des dossiers qui s'y trouvent y ont été **déplacés** par un cap de qualité d'information : 61 % en G4 et 55 % en G7 pour le modèle standard, 65 % et 61 % pour le modèle TPE. Les autres grades ne sont pratiquement pas touchés par les caps. C'est le comportement voulu, mais il a une conséquence opérationnelle : améliorer la collecte d'information déplacerait davantage de dossiers que réviser les pondérations.
 
-**Sur le modèle TPE, deux grades ne se distinguent plus.** La régression isotone fusionne G6 et G7 à une même probabilité. Le cap de confiance déverse dans G7 des dossiers dont le score moyen (73,8) dépasse celui de G6 (67,5), au point que les taux de défaut des deux grades ne diffèrent plus de façon détectable — la comparaison des deux proportions donne p = 0,27 en développement et p = 0,59 hors période. Ce n'est pas un défaut de la calibration : c'est le constat qu'une distinction de grade ne porte plus de différence de risque. Deux issues relèvent du comité modèles : revoir ce qui alimente ces grades, ou les fusionner dans l'échelle.
+**Sur le modèle TPE, deux grades ne se distinguaient plus (même version 2).** La régression isotone fusionnait G6 et G7 à une même probabilité. Le cap de confiance déverse dans G7 des dossiers dont le score moyen (73,8) dépasse celui de G6 (67,5), au point que les taux de défaut des deux grades ne diffèrent plus de façon détectable — la comparaison des deux proportions donne p = 0,27 en développement et p = 0,59 hors période. Ce n'est pas un défaut de la calibration : c'est le constat qu'une distinction de grade ne porte plus de différence de risque. Deux issues relèvent du comité modèles : revoir ce qui alimente ces grades, ou les fusionner dans l'échelle.
 
 **Le test d'adéquation usuel est inadapté à un système de notation.** Le test de Hosmer-Lemeshow découpe la population en déciles de probabilité prédite ; or celle-ci ne prend qu'une valeur par grade. Un même grade se retrouve scindé en groupes de probabilité identique dont les taux observés diffèrent par le seul hasard, et le test rejette pour une mauvaise raison. Le test retenu groupe par grade.
 
@@ -774,10 +805,10 @@ Ces vecteurs sont exacts et vérifiables par exécution. Ils constituent le socl
 | # | Objet | Attendu |
 |---|---|---|
 | 1 | Agrégation du domaine D1 sur TPE, scores 75/50/50/75/50/75/50/50 | 61,00 |
-| 2 | Agrégation globale TPE, domaines 61/60/82/65/70/75/50 | 68,75 → G6 |
-| 3 | Cap structurel sur score 69,10 avec couverture de dette insuffisante | brut 69,10 conservé, moteur G6, final G9 |
-| 4 | Confiance sur composantes 75/100/75/100 | 83,75 → niveau moyen → cap G4 |
-| 5 | Agrégation globale GE, domaines 78/75/80/70/75/90/60 | 75,65 → G4 |
+| 2 | Agrégation globale TPE, domaines 61/60/82/65/70/75/50 | 68,75 → classe 6 |
+| 3 | Exception DSCR sur score 69,10 (couverture de dette insuffisante) | brut 69,10 conservé, moteur classe 6, final classe 8 |
+| 4 | Confiance sur composantes 75/100/75/100 | 83,75 → classe de confiance B (informative, sans effet sur la classe) |
+| 5 | Agrégation globale GE, domaines 78/75/80/70/75/90/60 | 75,65 → classe 4 |
 | 6 | Bornes du levier TPE | 1,0 → 100 ; 1,0001 → 75 ; 2,0 → 75 ; 2,0001 → 50 ; 3,5 → 50 ; 3,5001 → 25 ; 5,0 → 25 ; 5,0001 → 0 |
 | 7 | Deux critères non applicables sur quatre, les autres à 50 | score de domaine 50, poids applicable réduit, score global inchangé |
 

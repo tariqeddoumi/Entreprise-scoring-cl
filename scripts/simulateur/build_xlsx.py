@@ -289,12 +289,12 @@ def build_model(md):
         cell(G, rr, 4, com, font=F(size=9, italic=True))
         P[k] = f"{GN}!$C${rr}"
     gr0 = 5 + len(params) + 1
-    section(G, gr0, 2, "Échelle de grades")
-    head(G, gr0 + 1, 2, ["Grade", "Score minimum", "Lecture"])
+    section(G, gr0, 2, f"Échelle de notation 1 à 10 — version {g.get('scaleId', '')} (1 = meilleur risque, défaut hors échelle)")
+    head(G, gr0 + 1, 2, ["Classe", "Score minimum", "Libellé"])
     bands = sorted(g["grades"], key=lambda b: -(b["minScore"] or 0))
     for i, b in enumerate(bands):
         rr = gr0 + 2 + i
-        cell(G, rr, 2, b["grade"], font=F(bold=True, color=BRUN))
+        cell(G, rr, 2, b["grade"], font=F(bold=True, color=BRUN), fmt="@")
         x = G.cell(rr, 3, b["minScore"] or 0); inp(x)
         cell(G, rr, 4, b["labelFr"])
     GF, GL = gr0 + 2, gr0 + 1 + len(bands)
@@ -303,11 +303,11 @@ def build_model(md):
     CAPROW = {}
     if g["caps"]:
         section(G, cap0, 2, "Exceptions non compensatoires (plafonds)")
-        head(G, cap0 + 1, 2, ["Exception", "Grade plafond", "Déclencheur"])
+        head(G, cap0 + 1, 2, ["Exception", "Classe plafond", "Déclencheur"])
         for i, cp in enumerate(g["caps"]):
             rr = cap0 + 2 + i
             cell(G, rr, 2, f"{cp['code']} — {cp['labelFr']}", font=F(bold=True, color=BRUN))
-            x = G.cell(rr, 3, cp["maxGrade"]); inp(x)
+            x = G.cell(rr, 3, cp["maxGrade"]); inp(x); x.number_format = "@"
             d = cp["derivation"]
             cell(G, rr, 4, f"Calculé : {d['criterion']} < {d['threshold']} (la valeur observée fait foi)" if d else "Déclaré par l'analyste")
             CAPROW[cp["code"]] = f"{GN}!$C${rr}"
@@ -685,8 +685,8 @@ def build_model(md):
         R[key] = f"$L${rr}"
 
     crit_missing = f"SUMPRODUCT(({G_RNG}=\"Oui\")*({AA_}=1)*({AB_}=0))"
-    for k, lab, big in [("status", "Statut de la notation", False), ("final", "Grade final", True), ("raw", "Score brut (0 à 100)", True), ("upper", "Score haut possible (données absentes à 100)", False),
-                        ("engine", "Grade issu du score", False), ("cov", f"Couverture observée (minimum {g['coverage']['minGlobalObservedBps'] // 100} %)", False),
+    for k, lab, big in [("status", "Statut de la notation", False), ("final", "Grade final (classe 1 à 10)", True), ("raw", "Score brut (0 à 100)", True), ("upper", "Score haut possible (données absentes à 100)", False),
+                        ("engine", "Classe issue du score", False), ("cov", f"Couverture observée (minimum {g['coverage']['minGlobalObservedBps'] // 100} %)", False),
                         ("domdef", "Domaines sous le seuil de couverture", False), ("conf", "Confiance (score / classe)", False), ("critical", "Données critiques manquantes", False),
                         ("caps", "Exceptions appliquées", False), ("reviews", "Revues risques obligatoires", False), ("standalone", "Note autonome (après exceptions)", False),
                         ("support", "Support groupe", False), ("compliance", "Conformité", False), ("check", "Contrôle : résultat du moteur pour ce cas", False)]:
@@ -791,7 +791,8 @@ howto = [
     ("Donnée absente", "Statut « Manquante » ou valeur vide : borne basse 0 (une absence ne vaut jamais mieux qu'une mauvaise valeur). Une donnée critique manquante empêche la notation. Le score haut possible est affiché à côté."),
     ("Cas particulier", "Liste propre à certains ratios (EBE négatif, fonds propres tangibles négatifs, liquidité excédentaire…) : il prime sur la valeur."),
     ("Matérialité", "Inconnue : le critère est évalué. Non matériel (justifié) : le critère est écarté et son poids passe au critère receveur."),
-    ("Ordre du calcul", "Score par critère → poids du segment → score brut → défaut constaté (grade DEF) → porte de qualité (couverture, domaines, confiance) → grade issu du score → exceptions → support groupe."),
+    ("Échelle 1 à 10", "Une seule échelle pour toutes les grilles : classe 1 = meilleur risque, classe 10 = risque le plus élevé ; le défaut constaté est noté à part (DEF1 à DEF3). Les bornes de score figurent dans chaque onglet « Grille » et peuvent y être modifiées pour tester une nouvelle version (dans l'outil : Administration › Échelle de notation)."),
+    ("Ordre du calcul", "Score par critère → poids du segment → score brut → défaut constaté (grade DEF) → porte de qualité (couverture, domaines, confiance) → classe issue du score → exceptions (plafonds) → support groupe."),
     ("Contrôle", "Chargez un cas exemple : la ligne « Contrôle » affiche « concordant » quand le simulateur retrouve le grade et le score du moteur de l'outil."),
 ]
 for i, (a, b) in enumerate(howto):

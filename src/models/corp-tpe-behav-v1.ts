@@ -501,7 +501,7 @@ export const CORP_TPE_BEHAV_V1: ModelConfig = {
   criteria,
 
   /**
-   * Échelle maîtresse commune 1 à 10 (décision D-52, novembre 2026), au lieu
+   * Échelle maîtresse commune 1 à 10 (décision D-53, novembre 2026), au lieu
    * de l'échelle propre TPE-B1…B6 (constat C03).
    *
    * Point de vigilance consigné : ce modèle observe des flux bancaires, pas des

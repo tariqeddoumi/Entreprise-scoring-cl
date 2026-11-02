@@ -981,7 +981,7 @@ export const CORP_STD_V1: ModelConfig = {
   criteria,
 
   /**
-   * Échelle maîtresse commune 1 à 10 (décision D-52, novembre 2026).
+   * Échelle maîtresse commune 1 à 10 (décision D-53, novembre 2026).
    *
    * Elle remplace l'échelle propre STD-P1…P8 (constat C03) à la demande de la
    * banque : une seule échelle pour toutes les grilles, paramétrable dans le

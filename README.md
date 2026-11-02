@@ -61,6 +61,8 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 |---|---|
 | Notation interne de contrepartie (moteur A, version 3.1.0) | Opérationnel |
 | Quatre grilles publiées : standard, TPE comportementale, deux challengers | Opérationnel |
+| Échelle de notation 1 à 10 commune (1 = meilleur risque, défaut hors échelle), paramétrable par versions datées | Opérationnel |
+| Écran Clients : création, modification, suppression ou désactivation, notation depuis la fiche | Opérationnel |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
 | Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture IA ; ratios calculés, contrôles, correction motivée | Opérationnel |
 | Score de confiance, porte de couverture et caps de qualité | Opérationnel |
@@ -118,7 +120,7 @@ src/middleware.ts  en-têtes de sécurité, politique d'origine croisée
 src/app/api/v1/    interface REST
 prisma/schema.template.prisma  source canonique unique du schéma
 prisma/sql/        durcissement PostgreSQL rejouable
-tests/             310 tests : moteur, bilan, workflow, renotation, sécurité
+tests/             322 tests : moteur, échelle, bilan, workflow, renotation, sécurité
 ```
 
 ---
@@ -136,6 +138,8 @@ tests/             310 tests : moteur, bilan, workflow, renotation, sécurité
 | D5 — Management, gouvernance et groupe | 15 % | 12 % | 15 % |
 | D6 — Transparence et conformité | 7 % | 5 % | 5 % |
 | D7 — ESG et climat | 3 % | 3 % | 5 % |
+
+Le score brut donne la **classe 1 à 10** de l'échelle maîtresse commune (version ECH10-2026.1 : 1 ≥ 90, 2 ≥ 85, 3 ≥ 80, 4 ≥ 75, 5 ≥ 70, 6 ≥ 64, 7 ≥ 57, 8 ≥ 48, 9 ≥ 40, 10 < 40) ; le défaut constaté reste noté à part (DEF1 à DEF3). L'échelle se paramètre par versions datées (Administration › Échelle de notation) et chaque notation consigne sa version.
 
 Agrégation :
 
@@ -294,7 +298,7 @@ npm run build
 | Contrôle | Résultat |
 |---|---|
 | Contrôle de types | 0 erreur |
-| Tests | 310 tests, 310 passés |
+| Tests | 322 tests, 322 passés |
 | Lint | 0 erreur |
 | Alignement back-end / API / écrans | `scripts/check-alignment.mts` : aucune divergence |
 | Schéma sur 4 dialectes | valide |

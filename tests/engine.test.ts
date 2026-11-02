@@ -325,7 +325,7 @@ describe("Séparation des finalités (constat C06)", () => {
   });
 });
 
-describe("Échelle maîtresse commune 1 à 10 (décision D-52)", () => {
+describe("Échelle maîtresse commune 1 à 10 (décision D-53)", () => {
   it("les quatre grilles notent sur la même échelle, 1 = meilleur risque", () => {
     for (const m of [CORP_STD_V1, CORP_TPE_BEHAV_V1, CORP_STD_CHALLENGER_V1, CORP_TPE_CHALLENGER_V1]) {
       expect(m.gradeScale.scaleId).toBe("ECH10-2026.1");
