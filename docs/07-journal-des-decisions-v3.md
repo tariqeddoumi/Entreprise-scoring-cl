@@ -71,7 +71,9 @@
 
 *Conséquence :* les grades des dossiers peu documentés se déplacent vers le haut par rapport à la version 2, ce qui **paraîtra moins prudent**. La prudence est reportée sur la porte de couverture, qui refuse de noter plutôt que de noter mal. Le comité doit assumer ce déplacement.
 
-## D-02 — Score prudent de 25 pour l'information absente — **À CONFIRMER**
+## D-02 — Score prudent de 25 pour l'information absente — **REMPLACÉE par D-51 (borne basse 0)**
+
+> Décision historique, conservée pour la traçabilité : depuis le moteur 3.1, une information absente vaut 0 et le score haut possible est restitué à côté (voir D-32 et D-51).
 
 *Options :* (a) score 0 ; (b) score 25 ; (c) médiane du segment ; (d) blocage généralisé.
 

@@ -8,6 +8,8 @@
 
 ---
 
+> **Mise à jour de novembre 2026.** Trois évolutions depuis la première version de cet argumentaire : (1) le **bilan est obligatoire** avant soumission — chargé par l'IA, par le gabarit Excel ou par saisie, il alimente automatiquement les ratios de la grille, que l'analyste ne peut corriger qu'avec un motif tracé ; (2) une **information absente prend la borne basse** (score 0), le score haut possible étant affiché à côté — un dossier incomplet ne peut plus être mieux noté qu'un dossier complet ; (3) la **méthode et le script de modélisation statistique** sont prêts (`docs/13-modelisation-statistique.md`) et prendront le relais de la calibration experte dès que l'historique de défauts le permettra. La présentation `docs/presentations/Defense_nouveau_modele_notation.pptx` détaille les arbitrages, slide par slide.
+
 > **En une phrase.** Le modèle ne prend aucune décision, ne remplace aucun avis : il impose que la même question soit posée à tous les dossiers, il enregistre votre réponse avec sa preuve, et il refuse de se prononcer quand l'information manque — ce que vous faites déjà, mais que rien ne trace aujourd'hui.
 
 ---

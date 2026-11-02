@@ -59,15 +59,21 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 
 | Capacité | État |
 |---|---|
-| Notation interne de contrepartie (moteur A) | Opérationnel, 81 tests |
+| Notation interne de contrepartie (moteur A, version 3.1.0) | Opérationnel |
+| Quatre grilles publiées : standard, TPE comportementale, deux challengers | Opérationnel |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
-| Score de confiance et caps de qualité | Opérationnel |
-| Caps structurels et red flags | Opérationnel |
-| Dérogations sous double validation | Opérationnel |
+| Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture IA ; ratios calculés, contrôles, correction motivée | Opérationnel |
+| Score de confiance, porte de couverture et caps de qualité | Opérationnel |
+| Caps structurels, revues obligatoires et red flags | Opérationnel |
+| Support groupe (au plus 2 crans, 4 conditions documentées) | Opérationnel |
+| Workflow dossier : saisie, soumission, validation, dérogations sous double validation | Opérationnel |
+| Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
+| Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |
 | Renotation par lot (groupe d'affaires, segment, secteur, entité), ponctuelle ou planifiée | Opérationnel |
 | Interface REST v1 + événements sortants signés | Opérationnel |
 | Persistance multi-dialecte | Schéma validé sur 4 dialectes |
 | Décision de crédit (moteur B) | Spécifié — `docs/02-prompt-maitre-v2.md` §8.2 |
+| Calibration statistique de la PD | Méthode et script prêts (`scripts/modelisation/`), en attente d'historique |
 | Classification réglementaire (moteur C) | Spécifié, subordonné à la validation du corpus |
 | IFRS 9 (moteur D) | Spécifié §8.4 |
 | Capital prudentiel (moteur E) | Spécifié §8.5 |
@@ -95,7 +101,8 @@ src/core/          moteur pur et déterministe
   confidence.ts    score de confiance et caps de qualité
   grades.ts        échelle interne et application des caps
   validate-model.ts validateur de configuration
-src/models/        CORP_STD_V1 (45 critères), CORP_TPE_BEHAV_V1
+src/models/        CORP_STD_V1 (45 critères), CORP_TPE_BEHAV_V1 (24), challengers (16 et 12)
+src/financials/    bilan CGNC : postes, ratios, gabarit Excel
 src/lib/
   auth.ts          vérification des clés, temps constant
   session.ts       session web (cookie HttpOnly), garde de page
@@ -111,7 +118,7 @@ src/middleware.ts  en-têtes de sécurité, politique d'origine croisée
 src/app/api/v1/    interface REST
 prisma/schema.template.prisma  source canonique unique du schéma
 prisma/sql/        durcissement PostgreSQL rejouable
-tests/             81 tests : moteur, validation de modèle, sécurité
+tests/             310 tests : moteur, bilan, workflow, renotation, sécurité
 ```
 
 ---
@@ -138,6 +145,8 @@ Score_brut    = Σ(Score_domaine × Poids_domaine) / Σ(Poids applicables)
 Confiance     = 35 % complétude + 20 % fraîcheur + 30 % fiabilité + 15 % provenance
 ```
 
+Les ratios financiers de la grille (D1.4, D1.5, D1.6, D1.8, D2.1 à D2.3) sont **calculés depuis le bilan** saisi ou importé (CGNC, deux exercices) ; l'analyste ne peut que les corriger, avec un motif tracé.
+
 Un second modèle, `CORP_TPE_BEHAV_V1`, traite les TPE dont les comptes sont insuffisants mais dont les flux bancaires sont exploitables. Il porte ses propres poids et sa propre calibration ; les scores des deux modèles ne sont pas comparables sans table de correspondance validée.
 
 ### Traitement des situations dégradées
@@ -147,12 +156,14 @@ Un second modèle, `CORP_TPE_BEHAV_V1`, traite les TPE dont les comptes sont ins
 | Red flag bloquant | Calcul arrêté avant agrégation, aucun score produit |
 | Segment indéterminable | Scoring bloqué, aucun segment par défaut |
 | Donnée critique manquante | Scoring bloqué, critère nommé dans le motif |
-| Donnée non critique manquante | Critère exclu, avertissement explicite, impact porté par la confiance |
-| Critère non applicable | Poids redistribué à l'intérieur du domaine uniquement |
-| Confiance insuffisante | Aucun grade final, score brut conservé pour la surveillance |
+| Donnée non critique manquante | Borne basse : score 0 sur le critère ; le score haut possible (donnée à 100) est affiché à côté |
+| Couverture observée insuffisante (globale ou par domaine) | Aucun grade : dossier à compléter |
+| Critère non applicable (règle publiée) | Poids transféré au critère receveur désigné par la grille |
+| Critère non matériel (justifié) | Critère écarté, poids transféré |
+| Confiance insuffisante (classe U) | Aucun grade final, score brut conservé pour la surveillance |
 | Défaut avéré | Grade défaut forcé, indépendamment du score |
 
-**Une donnée absente n'est jamais convertie en zéro ni en score neutre.**
+**Une donnée absente ne vaut jamais mieux qu'une mauvaise valeur** : elle prend la borne basse, sans quoi ne pas fournir un document deviendrait avantageux. La qualité du dossier reste mesurée à part (couverture, confiance).
 
 ---
 
@@ -283,8 +294,9 @@ npm run build
 | Contrôle | Résultat |
 |---|---|
 | Contrôle de types | 0 erreur |
-| Tests | 81 tests, 81 passés |
-| Construction | 20 routes compilées |
+| Tests | 310 tests, 310 passés |
+| Lint | 0 erreur |
+| Alignement back-end / API / écrans | `scripts/check-alignment.mts` : aucune divergence |
 | Schéma sur 4 dialectes | valide |
 | Idempotence du générateur de schéma | annotations intégralement restaurées après cycle complet |
 
@@ -302,9 +314,16 @@ Les tests couvrent :
 | [`docs/00-audit-depots.md`](./docs/00-audit-depots.md) | Audit des dépôts d'inspiration, preuves `fichier:ligne`, décisions de réutilisation |
 | [`docs/01-note-methodologique.md`](./docs/01-note-methodologique.md) | Note méthodologique — modèle et outil (corps rédigé) |
 | `docs/01-note-methodologique-complete.md` | Note complète, grilles incluses (générée) |
-| `dist/Note_methodologique_scoring_entreprises_Maroc_V2.docx` | Version Word, page de garde et table des matières |
+| `dist/Note_methodologique_notation_entreprises.docx` | Version Word au design Groupe BCP |
 | [`docs/02-prompt-maitre-v2.md`](./docs/02-prompt-maitre-v2.md) | Prompt maître V2 à remettre à une IA de développement |
-| [`docs/03-deploiement-supabase.md`](./docs/03-deploiement-supabase.md) | Raccordement Supabase, durcissement, migration vers PostgreSQL autonome |
+| [`docs/03-deploiement-supabase.md`](./docs/03-deploiement-supabase.md) | Raccordement Supabase, durcissement, migrations, migration vers PostgreSQL autonome |
+| `docs/04` à `docs/12` | Diagnostics, rapports de calibration synthétique, journal des décisions, workflow multi-entités, diagnostic d'alignement de novembre 2026 |
+| [`docs/13-modelisation-statistique.md`](./docs/13-modelisation-statistique.md) | Méthode de modélisation statistique de la PD ; Word : `docs/modelisation/Guide_modelisation_statistique.docx` |
+| `docs/argumentaires/` | Argumentaires : engagements, direction générale, conseil d'administration, réseau |
+| `docs/guides/` | Guide utilisateur (Word et PowerPoint), expression de besoin DSI |
+| `docs/presentations/` | Présentation de défense du modèle (notes détaillées), synthèse management, passage au statistique |
+| `docs/simulateur/Simulateur_notation_entreprises.xlsx` | Simulateur Excel des quatre grilles, onglet Bilan, listes déroulantes |
+| `scripts/modelisation/` | Script Python de modélisation statistique (démonstration sur données synthétiques) |
 | [`openapi.yaml`](./openapi.yaml) | Contrat d'interface OpenAPI 3.1 |
 
 ### Cohérence documentation / code
@@ -313,11 +332,18 @@ Les grilles détaillées de la note sont **générées depuis la configuration e
 
 ```bash
 node scripts/build-methodology-doc.mjs
-python3 scripts/md-to-docx.py docs/01-note-methodologique-complete.md \
-  dist/Note_methodologique_scoring_entreprises_Maroc_V2.docx \
-  "Modèle et outil de notation interne des entreprises" \
-  "Contreparties TPE, PME et Grandes Entreprises — contexte bancaire marocain"
+node scripts/md-to-docx.mjs docs/01-note-methodologique-complete.md \
+  dist/Note_methodologique_notation_entreprises.docx "Note méthodologique" \
+  "Modèle et outil de notation interne des entreprises — TPE, PME et grandes entreprises" \
+  "Version 3.1 — moteur 3.1.0 — novembre 2026" "Version 3.1" "Note méthodologique — notation des entreprises"
+
+# Simulateur Excel : export du moteur, génération, contrôle des cas exemples
+npx tsx scripts/diagnostics/export-simulateur.mts /tmp/sim
+python3 scripts/simulateur/build_xlsx.py /tmp/sim/simulateur.json docs/simulateur/Simulateur_notation_entreprises.xlsx
+python3 scripts/simulateur/check_xlsx.py docs/simulateur/Simulateur_notation_entreprises.xlsx /tmp/sim-check
 ```
+
+Le simulateur Excel est généré de la même façon depuis le moteur ; `check_xlsx.py` le recalcule et vérifie qu'il retrouve le grade et le score du moteur sur chaque cas exemple.
 
 Toute modification d'un poids ou d'un seuil dans `src/models/` se répercute dans la documentation à la régénération. Le document remis au comité modèles ne peut donc pas décrire des barèmes différents de ceux appliqués en production.
 
@@ -325,13 +351,12 @@ Toute modification d'un poids ou d'un seuil dans `src/models/` se répercute dan
 
 ## Limites assumées
 
-1. La probabilité de défaut n'est **pas** calibrée ; aucune PD n'est produite ni exposée.
+1. La probabilité de défaut n'est **pas** calibrée ; aucune PD n'est produite ni exposée. La méthode et le script de calibration statistique sont prêts (`docs/13-modelisation-statistique.md`) et attendent un historique de défauts suffisant.
 2. Les seuils de segmentation sont des hypothèses à confirmer dans le corpus applicable.
 3. Les moteurs de décision, classification, IFRS 9 et capital sont spécifiés, non implémentés.
 4. Le référentiel sectoriel n'est pas alimenté ; les critères qui s'y réfèrent utilisent des ancrages qualitatifs.
-5. La méthode de support groupe est spécifiée, non implémentée.
-6. Oracle n'est pas certifié.
-7. Les comptes de l'interface sont gérés dans l'outil, et l'API s'authentifie par clé : les deux doivent être raccordés au fournisseur d'identité de la banque (OIDC/SAML, double authentification).
-8. Imports de masse, alerte précoce et multilinguisme arabe restent à construire.
+5. Oracle n'est pas certifié.
+6. Les comptes de l'interface sont gérés dans l'outil, et l'API s'authentifie par clé : les deux doivent être raccordés au fournisseur d'identité de la banque (OIDC/SAML, double authentification).
+7. Alerte précoce et multilinguisme arabe restent à construire ; l'import de masse se limite au fichier de mise à jour de la renotation par lot et au gabarit Excel du bilan.
 
 Le registre complet figure en annexe B de la note méthodologique.

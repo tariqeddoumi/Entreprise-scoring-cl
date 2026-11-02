@@ -699,6 +699,8 @@ Analyser séparément les segments TPE, PME et GE, puis tester si un regroupemen
 9. réaliser la validation indépendante et le passage en comité modèles ;
 10. déployer d'abord en challenger, en mode fantôme.
 
+Ces dix étapes sont outillées par le script `scripts/modelisation/modelisation.py`, décrit pas à pas dans `docs/13-modelisation-statistique.md` (version Word : `docs/modelisation/Guide_modelisation_statistique.docx`). Il produit, outre les mesures de validation (Gini avec intervalle de confiance, KS, tests binomial et de Jeffreys, Hosmer-Lemeshow, PSI), un projet de grille au format même de l'outil — critères, barèmes à paliers de 25 et poids en points de base — et mesure ce que l'arrondi aux paliers coûte en pouvoir discriminant. Son mode démonstration, sur portefeuille synthétique, valide la chaîne ; il ne calibre rien.
+
 ### 25.3 Segment des grandes entreprises
 
 Le segment GE produit structurellement trop peu de défauts pour une estimation classique. Traiter explicitement ce cas par regroupement avec test d'homogénéité, information externe validée avec justification de transposabilité, approche hiérarchique ou bayésienne, estimation par intervalle avec borne haute prudente, et marge de prudence croissante avec l'incertitude.
