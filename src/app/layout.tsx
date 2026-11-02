@@ -10,7 +10,7 @@ import { TableFocus } from "./TableFocus";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Scoring Entreprises Maroc — TPE / PME / GE",
+  title: "Notation des entreprises — Groupe Banque Populaire",
   description:
     "Plateforme de notation interne des clients entreprises non financières au Maroc (BAM, IFRS 9, Bâle II/III).",
 };
@@ -30,6 +30,24 @@ function calibrationFooterFr(models: ReturnType<typeof listModels>): string {
   if (synthetic > 0) parts.push(`${synthetic} calibré(s) sur données simulées uniquement`);
   if (none > 0) parts.push(`${none} non calibré(s)`);
   return `Modèles publiés : ${parts.join(", ")}.`;
+}
+
+/**
+ * Couleur de l'entité (Administration › Banques et filiales). Elle devient la
+ * couleur des boutons et liens si son contraste avec le blanc atteint 4,5:1 ;
+ * sinon (orange vif, couleur claire), elle ne colore que les éléments
+ * décoratifs — bandeau, filets, onglet actif — et la charte garde un orange
+ * assombri lisible.
+ */
+function brandStyle(color: string | null): React.CSSProperties | undefined {
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return undefined;
+  const ch = [1, 3, 5].map((i) => {
+    const c = parseInt(color.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const l = 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+  const contrast = 1.05 / (l + 0.05);
+  return (contrast >= 4.5 ? { "--brand": color, "--accent": color } : { "--accent": color }) as unknown as React.CSSProperties;
 }
 
 export default async function RootLayout({
@@ -54,13 +72,8 @@ export default async function RootLayout({
 
   return (
     <html lang="fr">
-      <body
-        style={
-          branding?.primaryColor
-            ? ({ "--brand": branding.primaryColor } as React.CSSProperties)
-            : undefined
-        }
-      >
+      <body style={brandStyle(branding?.primaryColor ?? null)}>
+        <div className="site-band no-print" aria-hidden="true" />
         <header
           className="no-print"
           style={{
@@ -70,12 +83,14 @@ export default async function RootLayout({
           }}
         >
           <div className="site-header">
-            <Link href="/" className="site-brand" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-              {branding?.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={branding.logoUrl} alt="" style={{ height: 24, width: "auto" }} />
-              )}
-              {branding?.toolName ?? "Scoring Entreprises · Maroc"}
+            <Link href="/" className="site-brand" style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={branding?.logoUrl ?? "/groupe-bcp-logo.png"}
+                alt={branding?.logoUrl ? "" : "Groupe Banque Populaire"}
+                style={{ height: 30, width: "auto" }}
+              />
+              {branding?.toolName ?? "Notation des entreprises"}
               {branding?.entityName && (
                 <span className="muted site-entity" style={{ fontSize: 12, fontWeight: 400 }}>
                   {branding.entityName}

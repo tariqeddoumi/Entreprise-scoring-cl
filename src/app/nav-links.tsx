@@ -32,12 +32,6 @@ export function NavLinks({ role }: { role: string }) {
             key={n.href}
             href={n.href}
             aria-current={active ? "page" : undefined}
-            style={{
-              color: active ? "var(--brand)" : "var(--muted)",
-              fontWeight: active ? 600 : 400,
-              borderBottom: active ? "2px solid var(--brand)" : "2px solid transparent",
-              paddingBottom: 2,
-            }}
           >
             {n.label}
           </Link>
