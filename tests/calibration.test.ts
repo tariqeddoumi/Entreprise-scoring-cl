@@ -130,12 +130,12 @@ describe("calibration du modèle TPE comportemental", () => {
 
 describe("affectation de la PD par grade", () => {
   it("renvoie la PD du grade demandé", () => {
-    const g4 = CAL.gradePd.find((g) => g.grade === "STD-P4")!;
-    expect(pdForGrade(CAL, "STD-P4", false)).toBe(g4.pd);
+    const g4 = CAL.gradePd.find((g) => g.grade === "4")!;
+    expect(pdForGrade(CAL, "4", false)).toBe(g4.pd);
   });
 
   it("renvoie 1 pour un grade de défaut, quel que soit le grade passé", () => {
-    expect(pdForGrade(CAL, "STD-P1", true)).toBe(1);
+    expect(pdForGrade(CAL, "1", true)).toBe(1);
     expect(pdForGrade(CAL, null, true)).toBe(1);
   });
 
@@ -151,7 +151,7 @@ describe("contrôles d'intégrité", () => {
 
   it("refuse une échelle non monotone", () => {
     const c = base();
-    const i = c.gradePd.findIndex((g) => g.grade === "STD-P5");
+    const i = c.gradePd.findIndex((g) => g.grade === "5");
     c.gradePd[i].pd = c.gradePd[i - 1].pd / 2;
     expect(validateCalibration(c).join(" ")).toMatch(/monotonie rompue/);
   });

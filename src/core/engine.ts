@@ -39,7 +39,7 @@ import type {
  * M07) ; le défaut prime sur tout refus de routage (M11) ; l'usage production
  * exige une approbation explicite (M12) ; l'horloge n'est plus implicite (M10).
  */
-export const ENGINE_VERSION = "3.1.0";
+export const ENGINE_VERSION = "3.2.0";
 
 /** Âge minimal, en années, en deçà duquel la contrepartie est routée hors grilles publiées. */
 const YOUNG_COMPANY_YEARS = 2;
@@ -86,7 +86,7 @@ export interface EngineOptions {
  *   05 Qualité et couverture ............ classe de confiance, seuils de couverture
  *   06 Caractéristiques ................. résolution des critères
  *   07 Score brut ....................... agrégation à poids total constant
- *   08 Grade moteur ..................... échelle propre au modèle
+ *   08 Grade moteur ..................... échelle maîtresse 1 à 10 en vigueur
  *   09 Exceptions non compensatoires .... APRÈS le grade moteur
  *   10 Grade risque autonome ............ standalone conservé
  *   11 Support groupe ................... relèvement plafonné et conditionné

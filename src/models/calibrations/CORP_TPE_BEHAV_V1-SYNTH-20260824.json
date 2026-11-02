@@ -1,10 +1,10 @@
 {
   "calibrationId": "CORP_TPE_BEHAV_V1-SYNTH-20260824",
-  "contentHash": "44bc8071f634c56bf02f0a85600b8c1ad248c49404b7250e0ca15db2d00becad",
+  "contentHash": "079b3df551579a402b402b71c7662178fbd8567a4550409db1fc14a62977eebd",
   "modelId": "CORP_TPE_BEHAV_V1",
-  "modelVersion": "3.1.0",
+  "modelVersion": "3.2.0",
   "dataSource": "SYNTHETIC",
-  "createdAt": "2026-11-01T16:11:39.701Z",
+  "createdAt": "2026-11-02T07:02:18.713Z",
   "horizonMonths": 12,
   "methodFr": "PD à 12 mois calibrée par grade : taux de défaut observé avec correction de continuité, rétréci vers une tendance log-linéaire sur le rang du grade proportionnellement au nombre de défauts, monotonie imposée par régression isotone pondérée, marge de prudence relative puis plancher. La calibration porte sur le grade final et non sur le score brut, afin de conserver l'effet des caps.",
   "seed": 20260824,
@@ -17,40 +17,64 @@
   },
   "gradePd": [
     {
-      "grade": "TPE-B1",
-      "pd": 0.0053876176930178115,
-      "count": 1533,
-      "observedRate": 0.001304631441617743
+      "grade": "1",
+      "pd": 0.003403376644804112,
+      "count": 678,
+      "observedRate": 0.0014749262536873156
     },
     {
-      "grade": "TPE-B2",
-      "pd": 0.013779622737417424,
-      "count": 2138,
-      "observedRate": 0.012628624883068288
+      "grade": "2",
+      "pd": 0.005480132097885119,
+      "count": 855,
+      "observedRate": 0.0011695906432748538
     },
     {
-      "grade": "TPE-B3",
-      "pd": 0.02970702619896358,
-      "count": 2049,
-      "observedRate": 0.027330405075646658
+      "grade": "3",
+      "pd": 0.00974166383052387,
+      "count": 1101,
+      "observedRate": 0.008174386920980926
     },
     {
-      "grade": "TPE-B4",
-      "pd": 0.05960326456944991,
-      "count": 1656,
-      "observedRate": 0.05434782608695652
+      "grade": "4",
+      "pd": 0.018892534111375286,
+      "count": 1317,
+      "observedRate": 0.018223234624145785
     },
     {
-      "grade": "TPE-B5",
-      "pd": 0.09804812246694583,
-      "count": 1388,
-      "observedRate": 0.08717579250720461
+      "grade": "5",
+      "pd": 0.028727442059404317,
+      "count": 1264,
+      "observedRate": 0.02610759493670886
     },
     {
-      "grade": "TPE-B6",
-      "pd": 0.2262504230459964,
-      "count": 1029,
-      "observedRate": 0.20602526724975703
+      "grade": "6",
+      "pd": 0.046565199081186635,
+      "count": 1379,
+      "observedRate": 0.04205946337926034
+    },
+    {
+      "grade": "7",
+      "pd": 0.07558300057809056,
+      "count": 1274,
+      "observedRate": 0.06828885400313972
+    },
+    {
+      "grade": "8",
+      "pd": 0.11596432168466882,
+      "count": 1065,
+      "observedRate": 0.10422535211267606
+    },
+    {
+      "grade": "9",
+      "pd": 0.18384958609521382,
+      "count": 503,
+      "observedRate": 0.16500994035785288
+    },
+    {
+      "grade": "10",
+      "pd": 0.30913146114790274,
+      "count": 357,
+      "observedRate": 0.28291316526610644
     }
   ],
   "defaultGradePd": 1,

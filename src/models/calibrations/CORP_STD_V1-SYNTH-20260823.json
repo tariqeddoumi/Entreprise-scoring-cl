@@ -1,10 +1,10 @@
 {
   "calibrationId": "CORP_STD_V1-SYNTH-20260823",
-  "contentHash": "5daa5ac88dade67e7538b144b43bdd8551fc0f1a86140b661e847fdcb635ee11",
+  "contentHash": "e7f982e5fd98636894519753b9588e28ca51ab6bdec72c9a8cb12b3fb3682f56",
   "modelId": "CORP_STD_V1",
-  "modelVersion": "3.1.0",
+  "modelVersion": "3.2.0",
   "dataSource": "SYNTHETIC",
-  "createdAt": "2026-11-01T16:11:59.572Z",
+  "createdAt": "2026-11-02T07:02:01.961Z",
   "horizonMonths": 12,
   "methodFr": "PD à 12 mois calibrée par grade : taux de défaut observé avec correction de continuité, rétréci vers une tendance log-linéaire sur le rang du grade proportionnellement au nombre de défauts, monotonie imposée par régression isotone pondérée, marge de prudence relative puis plancher. La calibration porte sur le grade final et non sur le score brut, afin de conserver l'effet des caps.",
   "seed": 20260823,
@@ -17,52 +17,64 @@
   },
   "gradePd": [
     {
-      "grade": "STD-P1",
-      "pd": 0.0016798859777601418,
-      "count": 1198,
+      "grade": "1",
+      "pd": 0.0014961858255433138,
+      "count": 792,
       "observedRate": 0
     },
     {
-      "grade": "STD-P2",
-      "pd": 0.003489079316594175,
-      "count": 1865,
-      "observedRate": 0.0032171581769436996
+      "grade": "2",
+      "pd": 0.0026376146890160013,
+      "count": 1249,
+      "observedRate": 0.0016012810248198558
     },
     {
-      "grade": "STD-P3",
-      "pd": 0.006736766078134348,
-      "count": 2521,
-      "observedRate": 0.005950019833399445
+      "grade": "3",
+      "pd": 0.004981569708454737,
+      "count": 1802,
+      "observedRate": 0.004439511653718091
     },
     {
-      "grade": "STD-P4",
-      "pd": 0.014987095649840394,
-      "count": 2847,
-      "observedRate": 0.014049877063575694
+      "grade": "4",
+      "pd": 0.008993107822257745,
+      "count": 2218,
+      "observedRate": 0.008115419296663661
     },
     {
-      "grade": "STD-P5",
-      "pd": 0.029732716665275393,
+      "grade": "5",
+      "pd": 0.015616152662900841,
+      "count": 2370,
+      "observedRate": 0.013924050632911392
+    },
+    {
+      "grade": "6",
+      "pd": 0.030042539012163676,
       "count": 2802,
       "observedRate": 0.027480371163454677
     },
     {
-      "grade": "STD-P6",
-      "pd": 0.04782854881183155,
+      "grade": "7",
+      "pd": 0.04764033518487463,
       "count": 2821,
       "observedRate": 0.04289259127968805
     },
     {
-      "grade": "STD-P7",
-      "pd": 0.0861296468417464,
+      "grade": "8",
+      "pd": 0.08533857921185005,
       "count": 2523,
       "observedRate": 0.07728894173602854
     },
     {
-      "grade": "STD-P8",
-      "pd": 0.19308125793722355,
-      "count": 2025,
-      "observedRate": 0.17580246913580247
+      "grade": "9",
+      "pd": 0.15613271856485206,
+      "count": 1096,
+      "observedRate": 0.14233576642335766
+    },
+    {
+      "grade": "10",
+      "pd": 0.23744786427974568,
+      "count": 929,
+      "observedRate": 0.21528525296017223
     }
   ],
   "defaultGradePd": 1,

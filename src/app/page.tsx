@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { getModel, listModels } from "@/models";
+import { listModels } from "@/models";
 import { gradeRank } from "@/core/grades";
+import type { GradeScaleConfig } from "@/core/types";
+import { toGradeScaleConfig } from "@/reference/rating-scale";
+import { effectiveScale } from "@/lib/rating-scale";
 import { isOfficialRun, OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
@@ -16,22 +19,21 @@ import { CodeLabel, GradeBadge, MODEL_STATUS_LABELS, OutcomeLabel } from "./ui-h
  * les défauts en tête, à la place des meilleures notes. Le rang vient
  * désormais de l'échelle publiée du modèle, seule autorité sur l'ordre.
  */
-function rankInModel(modelId: string, grade: string | null): number {
+function rankIn(scale: GradeScaleConfig, grade: string | null): number {
   if (!grade) return Number.MAX_SAFE_INTEGER;
-  const model = getModel(modelId);
-  if (!model) return Number.MAX_SAFE_INTEGER;
   try {
-    return gradeRank(model.gradeScale, grade);
+    return gradeRank(scale, grade);
   } catch {
-    // Grade inconnu de l'échelle courante : notation d'archive, produite par
-    // une version antérieure. Rejetée en fin de liste plutôt que classée à tort.
+    // Grade inconnu de l'échelle en vigueur : notation d'archive, produite par
+    // une échelle antérieure (STD-P…, TPE-B…). Rejetée en fin de liste plutôt
+    // que classée à tort.
     return Number.MAX_SAFE_INTEGER;
   }
 }
 
-/** Un grade appartient-il encore à l'échelle publiée du modèle qui l'a produit ? */
-function isCurrentScale(modelId: string, grade: string | null): boolean {
-  return grade !== null && rankInModel(modelId, grade) !== Number.MAX_SAFE_INTEGER;
+/** Un grade appartient-il à l'échelle maîtresse en vigueur ? */
+function isCurrentScale(scale: GradeScaleConfig, grade: string | null): boolean {
+  return grade !== null && rankIn(scale, grade) !== Number.MAX_SAFE_INTEGER;
 }
 
 export const dynamic = "force-dynamic";
@@ -39,6 +41,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   // Toute page porteuse de données exige une session authentifiée.
   await requireSession();
+  const scale = toGradeScaleConfig(await effectiveScale());
 
   const { data: stats, dbAvailable } = await safeQuery(async (db) => {
       const [counterparties, runs, recent, latest, toValidate] = await Promise.all([
@@ -177,20 +180,19 @@ export default async function DashboardPage() {
       <section className="card" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Distribution des grades finaux</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Note courante de chaque client — sa dernière notation validée. Une
-          distribution par modèle : les échelles ne sont pas comparables entre elles
-          tant qu&apos;aucune correspondance sur probabilités de défaut n&apos;a été
-          validée, et les additionner produirait un histogramme qui ne mesure rien.
+          Note courante de chaque client — sa dernière notation validée — sur l&apos;échelle
+          maîtresse 1 à 10 en vigueur ({scale.scaleId}, 1 = meilleur risque). Une ligne par
+          grille, pour lire chaque portefeuille séparément.
         </p>
         {stats.gradeRows.length === 0 && stats.ungraded === 0 ? (
           <p className="muted">Aucune notation enregistrée.</p>
         ) : (
           (() => {
             const current = stats.gradeRows.filter((g) =>
-              isCurrentScale(g.modelId, g.finalGrade)
+              isCurrentScale(scale, g.finalGrade)
             );
             const archived = stats.gradeRows.filter(
-              (g) => !isCurrentScale(g.modelId, g.finalGrade)
+              (g) => !isCurrentScale(scale, g.finalGrade)
             );
             const byModel = new Map<string, typeof current>();
             for (const row of current) {
@@ -205,11 +207,11 @@ export default async function DashboardPage() {
                 {[...byModel.entries()].map(([modelId, rows]) => {
                   const sorted = [...rows].sort(
                     (a, b) =>
-                      rankInModel(modelId, a.finalGrade) -
-                      rankInModel(modelId, b.finalGrade)
+                      rankIn(scale, a.finalGrade) -
+                      rankIn(scale, b.finalGrade)
                   );
                   const max = Math.max(...sorted.map((g) => g._count._all));
-                  const scaleId = getModel(modelId)?.gradeScale.scaleId ?? "—";
+                  const scaleId = scale.scaleId;
                   return (
                     <div key={modelId}>
                       <h3 style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
@@ -258,21 +260,21 @@ export default async function DashboardPage() {
                   <p className="muted" style={{ fontSize: 12 }}>
                     <strong>{stats.ungraded}</strong> client(s) sans grade à leur
                     dernier arrêté (données insuffisantes, segment indéterminé ou routage
-                    vers un autre traitement) : elles ne figurent pas dans la distribution.
+                    vers un autre traitement) : ils ne figurent pas dans la distribution.
                   </p>
                 )}
 
                 {archivedTotal > 0 && (
                   <p className="muted" style={{ fontSize: 12 }}>
                     <strong>{archivedTotal}</strong> client(s) ont pour dernière
-                    notation un grade qui n&apos;appartient à aucune échelle publiée —{" "}
+                    notation un grade d&apos;une échelle antérieure —{" "}
                     {archived
                       .map((g) => `${g.finalGrade} (${g._count._all})`)
                       .join(", ")}
-                    . Produites par une version antérieure du moteur, ces notations
-                    restent consultables mais ne sont pas classées ici : les ranger dans
-                    l&apos;échelle courante leur donnerait un sens qu&apos;elles
-                    n&apos;ont pas. Une renotation les y fera entrer.
+                    . Produites avant l&apos;échelle en vigueur, ces notations restent
+                    consultables mais ne sont pas classées ici : les ranger dans l&apos;échelle
+                    1 à 10 leur donnerait un sens qu&apos;elles n&apos;ont pas. Une renotation
+                    les y fera entrer.
                   </p>
                 )}
               </div>

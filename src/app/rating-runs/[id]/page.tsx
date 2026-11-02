@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getModel } from "@/models";
+import { scaleById, snapshotScaleId } from "@/lib/rating-scale";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
@@ -78,7 +79,10 @@ export default async function RatingRunPage({
     !run.cappedGrade.startsWith("DEF") &&
     !run.overrides.some((o) => o.status === "PENDING") &&
     !!model;
-  const performingGrades = model ? model.gradeScale.bands.map((b) => b.grade).filter((g) => !g.startsWith("DEF")) : [];
+  // Classes possibles d'une dérogation : celles de l'échelle consignée dans la
+  // notation, même si une autre version de l'échelle est entrée en vigueur depuis.
+  const runScale = await scaleById(snapshotScaleId(run.resultSnapshot), run.cappedGrade);
+  const performingGrades = model ? runScale.bands.map((b) => b.grade) : [];
   const canDecideOverride = hasRole(identity.role, "RISK_MANAGER");
 
   return (

@@ -1,7 +1,7 @@
 import type { CalibrationConfig } from "@/core/calibration";
 import type { CriterionConfig, ModelConfig } from "@/core/types";
 import { anchors, bins5 } from "./helpers";
-import { DEFAULT_GRADES } from "@/reference/default-policy";
+import { MASTER_GRADE_SCALE } from "@/reference/rating-scale";
 import calibrationJson from "./calibrations/CORP_STD_V1-SYNTH-20260823.json";
 
 /**
@@ -935,7 +935,7 @@ const SYNTHETIC_CALIBRATION = calibrationJson as CalibrationConfig;
 
 export const CORP_STD_V1: ModelConfig = {
   modelId: "CORP_STD_V1",
-  version: "3.1.0",
+  version: "3.2.0",
   labelFr:
     "Modèle expert de notation interne — Entreprises non financières Maroc (TPE/PME/GE)",
   status: "DRAFT_EXPERT_SEED",
@@ -981,35 +981,17 @@ export const CORP_STD_V1: ModelConfig = {
   criteria,
 
   /**
-   * Échelle PROPRE au modèle standard (constat C03).
+   * Échelle maîtresse commune 1 à 10 (décision D-52, novembre 2026).
    *
-   * Les libellés G1–G10 partagés avec le modèle comportemental ont été
-   * supprimés : deux grilles qui n'observent pas la même chose ne peuvent pas
-   * afficher le même grade tant qu'aucune correspondance n'a été établie sur
-   * des probabilités de défaut comparables. `comparableWith` reste donc vide.
-   *
-   * Huit grades au lieu de dix (constat H03) : la calibration synthétique
-   * montrait des grades voisins que les données ne distinguaient pas. La
-   * granularité définitive est un RÉSULTAT de calibration sur défauts observés,
-   * pas un choix de présentation — d'où le statut PROVISIONAL.
+   * Elle remplace l'échelle propre STD-P1…P8 (constat C03) à la demande de la
+   * banque : une seule échelle pour toutes les grilles, paramétrable dans le
+   * temps (versions datées, src/reference/rating-scale.ts). Les bornes de la
+   * version initiale reprennent celles de STD-P là où elles existaient, ce qui
+   * transpose exactement les plafonds : STD-P7 devient la classe 8, STD-P6 la 7.
+   * La granularité définitive reste un RÉSULTAT de calibration sur défauts
+   * observés — d'où le statut PROVISIONAL.
    */
-  gradeScale: {
-    scaleId: "STD-P-2026.1",
-    labelFr: "Échelle provisoire du modèle standard",
-    comparableWith: [],
-    status: "PROVISIONAL",
-    bands: [
-      { grade: "STD-P1", minScore: 88, maxScore: null, labelFr: "Très solide" },
-      { grade: "STD-P2", minScore: 82, maxScore: 88, labelFr: "Solide" },
-      { grade: "STD-P3", minScore: 76, maxScore: 82, labelFr: "Bon" },
-      { grade: "STD-P4", minScore: 70, maxScore: 76, labelFr: "Satisfaisant" },
-      { grade: "STD-P5", minScore: 64, maxScore: 70, labelFr: "Acceptable" },
-      { grade: "STD-P6", minScore: 57, maxScore: 64, labelFr: "Fragile" },
-      { grade: "STD-P7", minScore: 48, maxScore: 57, labelFr: "Faible" },
-      { grade: "STD-P8", minScore: null, maxScore: 48, labelFr: "Très faible" },
-    ],
-    defaultGrades: DEFAULT_GRADES,
-  },
+  gradeScale: MASTER_GRADE_SCALE,
 
   /**
    * Exceptions non compensatoires (constat C08).
@@ -1023,7 +1005,7 @@ export const CORP_STD_V1: ModelConfig = {
     {
       code: "NC01",
       labelFr: "Couverture du service de la dette inférieure à 1 en scénario de base",
-      maxGrade: "STD-P7",
+      maxGrade: "8",
       source: "CREDIT_POLICY",
       trigger: "BASE_DSCR_BELOW_1",
       derivation: { criterion: "D2.2", operator: "LT", threshold: 1 },
@@ -1034,7 +1016,7 @@ export const CORP_STD_V1: ModelConfig = {
     {
       code: "NC02",
       labelFr: "Incertitude matérielle sur la continuité d'exploitation",
-      maxGrade: "STD-P7",
+      maxGrade: "8",
       source: "CREDIT_POLICY",
       trigger: "GOING_CONCERN_UNCERTAINTY",
       centralCriterion: "D6.1",
@@ -1044,7 +1026,7 @@ export const CORP_STD_V1: ModelConfig = {
     {
       code: "NC03",
       labelFr: "Excédent brut d'exploitation négatif deux années sur trois",
-      maxGrade: "STD-P7",
+      maxGrade: "8",
       source: "CREDIT_POLICY",
       trigger: "EBITDA_NEGATIVE_2_OF_3",
       centralCriterion: "D1.2",
@@ -1054,7 +1036,7 @@ export const CORP_STD_V1: ModelConfig = {
     {
       code: "NC04",
       labelFr: "Dossier groupe incomplet alors que le groupe est matériel",
-      maxGrade: "STD-P6",
+      maxGrade: "7",
       source: "CREDIT_POLICY",
       trigger: "GROUP_FILE_INCOMPLETE",
       centralCriterion: "D5.4",

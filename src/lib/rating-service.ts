@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { computeRating } from "@/core/engine";
 import type { EngineOptions } from "@/core/engine";
 import type { RatingInput, RatingResult } from "@/core/types";
-import { getModel } from "@/models";
+import { getScoringModel } from "./rating-scale";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { config } from "./env";
@@ -34,9 +34,12 @@ export class RatingServiceError extends Error {
   }
 }
 
-/** Calcule une notation sans persistance (simulation / what-if). */
-export function simulateRating(input: RatingInput): RatingResult {
-  const model = getModel(input.modelId);
+/**
+ * Calcule une notation sans persistance (simulation / what-if), avec l'échelle
+ * maîtresse en vigueur à la date de calcul.
+ */
+export async function simulateRating(input: RatingInput): Promise<RatingResult> {
+  const model = await getScoringModel(input.modelId);
   if (!model) {
     throw new RatingServiceError(404, `Modèle inconnu : ${input.modelId}`);
   }
@@ -78,7 +81,7 @@ export async function executeRatingRun(
   /** API, CASE (dossier) ou BATCH (renotation par lot, jamais officielle seule). */
   origin: RunOrigin = "API"
 ): Promise<PersistedRun> {
-  const model = getModel(input.modelId);
+  const model = await getScoringModel(input.modelId);
   if (!model) {
     throw new RatingServiceError(404, `Modèle inconnu : ${input.modelId}`);
   }

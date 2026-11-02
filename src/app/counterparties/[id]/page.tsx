@@ -9,6 +9,10 @@ import { hasRole } from "@/lib/auth";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
 import { getPerimeter, requireSession } from "@/lib/session";
 import { listModels } from "@/models";
+import { transposeGrade } from "@/core/grades";
+import { effectiveScale } from "@/lib/rating-scale";
+import { legacyScaleForGrade } from "@/reference/legacy-scales";
+import { toGradeScaleConfig } from "@/reference/rating-scale";
 import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 import { NewCaseForm } from "@/app/scoring/NewCaseForm";
 import { ClientActions } from "../ClientActions";
@@ -107,6 +111,12 @@ export default async function CounterpartyPage({
   const hasHistory = runs.length + cases.length + renotations > 0;
   const today = new Date().toISOString().slice(0, 10);
   const opt = (v: string | null) => v ?? "";
+  // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
+  const master = toGradeScaleConfig(await effectiveScale());
+  const equivalentOf = (grade: string | null, rawScore: unknown) => {
+    const legacy = grade ? legacyScaleForGrade(grade) : undefined;
+    return legacy ? transposeGrade(legacy, grade, rawScore === null ? null : Number(rawScore), master) : null;
+  };
 
   // Attribution de l'écart entre les deux dernières notations exploitables.
   // Deux instantanés ne se comparent que s'ils ont la même forme : un
@@ -365,6 +375,11 @@ export default async function CounterpartyPage({
                   <td><GradeBadge grade={r.engineGrade} /></td>
                   <td>
                     <GradeBadge grade={r.finalGrade} />
+                    {equivalentOf(r.finalGrade, r.rawScore) && (
+                      <span className="muted" style={{ fontSize: 11 }} title="Classe équivalente sur l'échelle 1 à 10 en vigueur">
+                        {" "}≈ classe {equivalentOf(r.finalGrade, r.rawScore)}
+                      </span>
+                    )}
                     {r.finalGrade !== r.cappedGrade && r.finalGrade && (
                       <span className="muted" style={{ fontSize: 11 }}> (dérogé)</span>
                     )}

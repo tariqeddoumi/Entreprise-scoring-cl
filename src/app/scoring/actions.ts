@@ -41,5 +41,5 @@ export async function simulateDraftAction(modelId: string, draft: CaseDraft): Pr
     return { ok: false, errorFr: parsed.error.issues.map((i) => `${i.path.join(".")} : ${i.message}`).join(" ; ") };
   }
   const { counterpartyId: _ignored, ...input } = parsed.data;
-  return { ok: true, result: simulateRating(input as RatingInput) };
+  return { ok: true, result: await simulateRating(input as RatingInput) };
 }

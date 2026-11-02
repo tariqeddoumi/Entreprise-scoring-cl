@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { PrismaClient } from "@/generated/prisma";
-import { gradeRank } from "@/core/grades";
+import { gradeRank, notchDeltaAcross } from "@/core/grades";
+import { scaleById, snapshotScaleId } from "./rating-scale";
 import type { ModelConfig, RatingInput, RatingResult } from "@/core/types";
 import { getModel, listModels } from "@/models";
 import type { Identity } from "./auth";
@@ -424,7 +425,7 @@ export function batchIdentity(batch: { createdBy: string; entityId: string | nul
   };
 }
 
-/** Écart en crans (positif : dégradation), ou null si les grades ne se comparent pas. */
+/** Écart en crans (positif : dégradation) sur l'échelle du modèle, ou null si les grades ne s'y trouvent pas. */
 export function notchDelta(model: ModelConfig, previous: string | null, next: string | null): number | null {
   if (!previous || !next) return null;
   try {
@@ -514,7 +515,14 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
     const official = await db.ratingRun.findFirst({
       where: { counterpartyId: counterparty.id, ...OFFICIAL_RUN_WHERE },
       orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
-      select: { id: true, modelId: true, finalGrade: true, ratingCase: { select: { id: true, draftInput: true } } },
+      select: {
+        id: true,
+        modelId: true,
+        finalGrade: true,
+        rawScore: true,
+        resultSnapshot: true,
+        ratingCase: { select: { id: true, draftInput: true } },
+      },
     });
     if (!official) {
       await finish({
@@ -592,7 +600,14 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
       undefined,
       "BATCH"
     );
-    const delta = notchDelta(model, official.finalGrade, result.finalGrade);
+    // La note précédente peut relever d'une autre échelle (STD-P…, version
+    // antérieure de l'échelle 1 à 10) : elle est alors transposée.
+    const previousScale = await scaleById(snapshotScaleId(official.resultSnapshot), official.finalGrade);
+    const nextScale = await scaleById(result.gradeScaleId, result.finalGrade);
+    const delta = notchDeltaAcross(
+      { scale: previousScale, grade: official.finalGrade, rawScore: official.rawScore === null ? null : Number(official.rawScore) },
+      { scale: nextScale, grade: result.finalGrade }
+    );
     const movement = movementOf(result, delta);
 
     const notes: string[] = [];

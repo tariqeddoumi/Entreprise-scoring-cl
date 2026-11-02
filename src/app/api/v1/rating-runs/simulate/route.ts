@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   // counterpartyId est ignoré en simulation : aucune donnée n'est rattachée.
   const { counterpartyId: _unused, ...ratingInput } = body.value;
   try {
-    return ok({ simulation: true, result: simulateRating(ratingInput as RatingInput) });
+    return ok({ simulation: true, result: await simulateRating(ratingInput as RatingInput) });
   } catch (e) {
     if (e instanceof RatingServiceError) return problem(e.status, e.message);
     throw e;

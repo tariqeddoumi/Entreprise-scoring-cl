@@ -254,7 +254,7 @@ export const webhookSubscriptionSchema = z
 export const overrideRequestSchema = z
   .object({
     ratingRunId: z.string().min(1),
-    toGrade: z.string().min(2).max(8),
+    toGrade: z.string().min(1).max(8),
     reasonCode: z.enum([
       "DATA_NOT_CAPTURED",
       "RECENT_EVENT_NEGATIVE",

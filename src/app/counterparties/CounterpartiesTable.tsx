@@ -19,7 +19,7 @@ export interface CounterpartyRow {
   /** Statut du dossier en cours (brouillon ou soumis), s'il y en a un. */
   openCase: string | null;
   /** Dernière notation OFFICIELLE (validée, ou antérieure au workflow). */
-  ratingRuns: Array<{ finalGrade: string | null; rawScore: number | null; asOfDate: string }>;
+  ratingRuns: Array<{ finalGrade: string | null; rawScore: number | null; asOfDate: string; equivalent?: string | null }>;
 }
 
 const SEGMENTS = ["TPE", "PME", "GE"] as const;
@@ -36,7 +36,7 @@ function downloadCsv(rows: CounterpartyRow[]) {
       c.segment ?? "",
       c.sectorCode ?? "",
       last?.rawScore ? Number(last.rawScore).toFixed(2) : "",
-      last?.finalGrade ?? "",
+      last?.equivalent ? `${last.finalGrade} (≈ classe ${last.equivalent})` : (last?.finalGrade ?? ""),
       last?.asOfDate ?? "",
     ]);
   });
@@ -171,6 +171,15 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                   <td>{last?.rawScore != null ? last.rawScore.toFixed(2) : "—"}</td>
                   <td>
                     <GradeBadge grade={last?.finalGrade ?? null} />
+                    {last?.equivalent && (
+                      <span
+                        className="muted"
+                        style={{ fontSize: 11, marginLeft: 6 }}
+                        title="Note produite sur l'échelle antérieure : classe équivalente sur l'échelle 1 à 10 en vigueur (lecture seulement, jusqu'à la prochaine notation)"
+                      >
+                        ≈ classe {last.equivalent}
+                      </span>
+                    )}
                   </td>
                   <td className="muted nowrap">{last?.asOfDate ?? "—"}</td>
                   <td className="nowrap" style={{ display: "flex", gap: 10 }}>

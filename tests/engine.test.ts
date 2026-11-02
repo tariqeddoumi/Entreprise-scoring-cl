@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeRating } from "@/core/engine";
 import { areComparable, gradeRank } from "@/core/grades";
-import { CORP_STD_V1, CORP_TPE_BEHAV_V1 } from "@/models";
+import { CORP_STD_CHALLENGER_V1, CORP_STD_V1, CORP_TPE_BEHAV_V1, CORP_TPE_CHALLENGER_V1 } from "@/models";
 import type { RatingInput } from "@/core/types";
 import { FULL_CONFIDENCE, tpeGoldenInput } from "./fixtures";
 
@@ -14,12 +14,12 @@ describe("Vecteurs de contrôle — agrégation", () => {
     expect(d1.score).toBeCloseTo(61.0, 10);
   });
 
-  it("agrège le score global exactement (64,50 → STD-P5)", () => {
+  it("agrège le score global exactement (64,50 → classe 6)", () => {
     const result = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
     expect(result.ratingStatus).toBe("RATED");
     expect(result.rawScore).toBeCloseTo(64.5, 10);
-    expect(result.engineGrade).toBe("STD-P5");
-    expect(result.finalGrade).toBe("STD-P5");
+    expect(result.engineGrade).toBe("6");
+    expect(result.finalGrade).toBe("6");
   });
 
   it("est reproductible : même snapshot => même résultat", () => {
@@ -185,14 +185,14 @@ describe("Ordre canonique du pipeline (constat H14)", () => {
     // D2.2 à 0 : D2 passe de 50 à 35, soit −1,5 point (poids D2 TPE 10 %).
     expect(r.rawScore).toBeCloseTo(63, 10);
     // Le grade moteur reste celui du score ; seul le grade autonome est ramené.
-    expect(r.engineGrade).toBe("STD-P6");
-    expect(r.standaloneGrade).toBe("STD-P7");
+    expect(r.engineGrade).toBe("7");
+    expect(r.standaloneGrade).toBe("8");
     expect(r.appliedRules.map((x) => x.code)).toContain("NC01");
   });
 
   it("dérive l'exception DSCR du ratio, sans case à cocher (diagnostic M02)", () => {
     // Ratio sous 1, aucune case : l'exception s'applique quand même.
-    expect(computeRating(CORP_STD_V1, dscrBelow1(), AT).standaloneGrade).toBe("STD-P7");
+    expect(computeRating(CORP_STD_V1, dscrBelow1(), AT).standaloneGrade).toBe("8");
     // Case cochée mais ratio de 1,2 : la donnée fait foi, la contradiction est tracée.
     const r = computeRating(CORP_STD_V1, { ...tpeGoldenInput(), structuralFlags: { baseDscrBelow1: true } }, AT);
     expect(r.appliedRules.map((x) => x.code)).not.toContain("NC01");
@@ -212,7 +212,7 @@ describe("Ordre canonique du pipeline (constat H14)", () => {
       { ...dscrBelow1(), structuralFlags: { materialGroupFileIncomplete: true } },
       AT
     );
-    expect(r.standaloneGrade).toBe("STD-P7");
+    expect(r.standaloneGrade).toBe("8");
   });
 
   it("un défaut constaté s'impose quel que soit le score", () => {
@@ -302,7 +302,7 @@ describe("Séparation des finalités (constat C06)", () => {
     );
     expect(r.complianceStatus).toBe("BLOCKED");
     expect(r.ratingStatus).toBe("RATED");
-    expect(r.finalGrade).toBe("STD-P5");
+    expect(r.finalGrade).toBe("6");
     expect(r.usageRights.restrictionsFr.join(" ")).toContain("conformité");
   });
 
@@ -325,20 +325,33 @@ describe("Séparation des finalités (constat C06)", () => {
   });
 });
 
-describe("Échelles propres aux modèles (constat C03)", () => {
-  it("les deux modèles portent des échelles distinctes", () => {
-    expect(CORP_STD_V1.gradeScale.scaleId).not.toBe(CORP_TPE_BEHAV_V1.gradeScale.scaleId);
+describe("Échelle maîtresse commune 1 à 10 (décision D-52)", () => {
+  it("les quatre grilles notent sur la même échelle, 1 = meilleur risque", () => {
+    for (const m of [CORP_STD_V1, CORP_TPE_BEHAV_V1, CORP_STD_CHALLENGER_V1, CORP_TPE_CHALLENGER_V1]) {
+      expect(m.gradeScale.scaleId).toBe("ECH10-2026.1");
+      expect(m.gradeScale.bands.map((b) => b.grade)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+    }
+    expect(areComparable(CORP_STD_V1.gradeScale, CORP_TPE_BEHAV_V1.gradeScale)).toBe(true);
   });
 
-  it("aucune comparabilité n'est déclarée tant que l'échelle est provisoire", () => {
-    expect(areComparable(CORP_STD_V1.gradeScale, CORP_TPE_BEHAV_V1.gradeScale)).toBe(false);
+  it("reste provisoire tant que la granularité n'est pas calibrée sur défauts observés", () => {
     expect(CORP_STD_V1.gradeScale.status).toBe("PROVISIONAL");
   });
 
-  it("les grades produits portent le préfixe de leur modèle", () => {
+  it("les grades produits sont des classes de l'échelle, le défaut reste hors échelle", () => {
     const std = computeRating(CORP_STD_V1, tpeGoldenInput(), AT);
-    expect(std.finalGrade).toMatch(/^STD-P\d$/);
-    expect(std.gradeScaleId).toBe("STD-P-2026.1");
+    expect(std.finalGrade).toMatch(/^([1-9]|10)$/);
+    expect(std.gradeScaleId).toBe("ECH10-2026.1");
+    const def = computeRating(CORP_STD_V1, { ...tpeGoldenInput(), defaultTriggered: true }, AT);
+    expect(def.finalGrade).toMatch(/^DEF[123]$/);
+  });
+
+  it("transpose exactement les plafonds de l'échelle précédente (STD-P7 → 8, STD-P6 → 7)", () => {
+    const caps = Object.fromEntries(CORP_STD_V1.nonCompensatoryRules.map((r) => [r.code, r.maxGrade]));
+    expect(caps).toMatchObject({ NC01: "8", NC04: "7" });
+    const band = (g: string) => CORP_STD_V1.gradeScale.bands.find((b) => b.grade === g)!;
+    expect([band("8").minScore, band("8").maxScore]).toEqual([48, 57]);
+    expect([band("7").minScore, band("7").maxScore]).toEqual([57, 64]);
   });
 });
 
@@ -468,8 +481,8 @@ describe("Support groupe (constat H05)", () => {
     );
     expect(r.groupSupport!.granted).toBe(true);
     expect(r.groupSupport!.notchesApplied).toBe(2); // plafond
-    expect(r.standaloneGrade).toBe("STD-P5");
-    expect(r.finalGrade).toBe("STD-P3");
+    expect(r.standaloneGrade).toBe("6");
+    expect(r.finalGrade).toBe("4");
   });
 
   /**
@@ -499,7 +512,7 @@ describe("Support groupe (constat H05)", () => {
       AT
     );
     const scale = CORP_STD_V1.gradeScale;
-    const target = "STD-P2";
+    const target = "3";
 
     const fromProduced = Math.abs(gradeRank(scale, target) - gradeRank(scale, r.finalGrade!));
     const fromStandalone = Math.abs(
@@ -663,8 +676,8 @@ describe("Modèle TPE comportemental", () => {
     const r = computeRating(CORP_TPE_BEHAV_V1, behavInput(), AT);
     expect(r.ratingStatus).toBe("RATED");
     expect(r.rawScore).toBeCloseTo(75, 10);
-    expect(r.finalGrade).toMatch(/^TPE-B\d$/);
-    expect(r.gradeScaleId).toBe("TPE-B-2026.1");
+    expect(r.finalGrade).toMatch(/^([1-9]|10)$/);
+    expect(r.gradeScaleId).toBe("ECH10-2026.1");
   });
 
   it("n'applique aucune exception non compensatoire", () => {

@@ -217,7 +217,7 @@ export interface DomainConfig {
  * compte de l'exposition, du produit, des garanties et de l'appétence.
  */
 export interface GradeBand {
-  grade: string; // ex. "STD-P3", "TPE-B2"
+  grade: string; // ex. "3" (échelle maîtresse 1 à 10) ; archives : "STD-P3", "TPE-B2"
   minScore: number | null; // inclus
   maxScore: number | null; // exclu (null = +inf)
   labelFr: string;
@@ -247,7 +247,7 @@ export interface DefaultGradeConfig {
  * grade pour deux modèles qui n'observent pas la même chose.
  */
 export interface GradeScaleConfig {
-  scaleId: string; // ex. "STD-P-2026.1"
+  scaleId: string; // ex. "ECH10-2026.1" ; archives : "STD-P-2026.1"
   labelFr: string;
   /** Identifiants d'échelles avec lesquelles une correspondance a été validée. */
   comparableWith: string[];

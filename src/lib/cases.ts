@@ -222,7 +222,7 @@ export async function previewCase(
 ): Promise<{ result: RatingResult; fx: FxConversion | null }> {
   const c = await loadCase(db, caseId);
   const { input, fx } = await buildInput(db, c, draft);
-  return { result: simulateRating(input), fx };
+  return { result: await simulateRating(input), fx };
 }
 
 export async function submitCase(db: PrismaClient, identity: Identity, caseId: string, draft: CaseDraft) {
@@ -248,7 +248,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
       }
     }
   }
-  const check = simulateRating(input);
+  const check = await simulateRating(input);
   if (check.finalGrade === null) {
     throw new CaseError(
       409,

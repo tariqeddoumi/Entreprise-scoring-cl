@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getModel } from "@/models";
+import { effectiveScale } from "@/lib/rating-scale";
 import {
   BATCH_STATUS_LABELS,
   describeFilters,
@@ -83,10 +83,16 @@ export default async function BatchPage({
   const filters = (safeJson(batch.filters) ?? {}) as RenotationFilters;
   const options = safeJson(batch.options) as { notchThreshold?: number; openCases?: boolean } | null;
 
-  // Matrice de migration : grades de l'échelle du modèle, dans l'ordre.
-  const scale = getModel("CORP_STD_V1")?.gradeScale.bands.map((b) => b.grade) ?? [];
+  // Matrice de migration : classes de l'échelle maîtresse en vigueur, dans
+  // l'ordre, puis défauts, puis grades d'échelles antérieures (STD-P…) que
+  // portait la note précédente.
+  const current = (await effectiveScale()).bands.map((b) => b.grade);
+  const scale = [...current, "DEF1", "DEF2", "DEF3"];
   const seen = new Set(matrix.flatMap((m) => [m.previousGrade ?? "—", m.newGrade ?? "—"]));
-  const grades = [...scale.filter((g) => seen.has(g)), ...[...seen].filter((g) => !scale.includes(g)).sort()];
+  const grades = [
+    ...scale.filter((g) => seen.has(g)),
+    ...[...seen].filter((g) => !scale.includes(g)).sort((a, b) => a.localeCompare(b, "fr", { numeric: true })),
+  ];
   const cell = (from: string, to: string) =>
     matrix.find((m) => (m.previousGrade ?? "—") === from && (m.newGrade ?? "—") === to)?._count._all ?? 0;
 

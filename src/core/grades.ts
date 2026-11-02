@@ -86,3 +86,57 @@ export function areComparable(a: GradeScaleConfig, b: GradeScaleConfig): boolean
   if (a.scaleId === b.scaleId) return true;
   return a.comparableWith.includes(b.scaleId) && b.comparableWith.includes(a.scaleId);
 }
+
+/**
+ * Écart en crans entre deux notations (positif : dégradation), y compris
+ * lorsqu'elles relèvent de deux échelles différentes (passage à l'échelle
+ * maîtresse 1 à 10, nouvelle version de l'échelle).
+ *
+ * Même échelle : différence des rangs. Échelles différentes : la note
+ * précédente est TRANSPOSÉE sur l'échelle de la nouvelle — son score brut,
+ * ramené dans les bornes de son grade (pour conserver l'effet d'un plafond ou
+ * d'un support groupe), donne la classe équivalente. Un défaut reste un défaut.
+ * Retourne null quand la transposition est impossible (grade inconnu, score
+ * absent).
+ */
+export function notchDeltaAcross(
+  previous: { scale: GradeScaleConfig; grade: string | null; rawScore: number | null },
+  next: { scale: GradeScaleConfig; grade: string | null }
+): number | null {
+  if (!previous.grade || !next.grade) return null;
+  try {
+    const nextRank = gradeRank(next.scale, next.grade);
+    if (previous.scale.scaleId === next.scale.scaleId) return nextRank - gradeRank(previous.scale, previous.grade);
+    if (DEFAULT_GRADES.some((d) => d.grade === previous.grade)) return nextRank - gradeRank(next.scale, previous.grade);
+    const band = bandForGrade(previous.scale, previous.grade);
+    if (!band || previous.rawScore === null || !Number.isFinite(previous.rawScore)) return null;
+    const lo = band.minScore ?? 0;
+    const hi = band.maxScore === null ? 100 : band.maxScore - 0.0001;
+    const score = Math.min(Math.max(previous.rawScore, lo), hi);
+    return nextRank - gradeRank(next.scale, gradeFromScore(next.scale, score));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Classe équivalente, sur une autre échelle, d'un grade archivé (STD-P5 →
+ * classe de l'échelle 1 à 10) : même transposition que `notchDeltaAcross`.
+ * Pour l'affichage et la lecture du portefeuille seulement ; la note
+ * archivée, elle, n'est jamais réécrite.
+ */
+export function transposeGrade(
+  from: GradeScaleConfig,
+  grade: string | null,
+  rawScore: number | null,
+  to: GradeScaleConfig
+): string | null {
+  if (!grade) return null;
+  if (DEFAULT_GRADES.some((d) => d.grade === grade)) return grade;
+  if (from.scaleId === to.scaleId) return grade;
+  const band = bandForGrade(from, grade);
+  if (!band || rawScore === null || !Number.isFinite(rawScore)) return null;
+  const lo = band.minScore ?? 0;
+  const hi = band.maxScore === null ? 100 : band.maxScore - 0.0001;
+  return gradeFromScore(to, Math.min(Math.max(rawScore, lo), hi));
+}

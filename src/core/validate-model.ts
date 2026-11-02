@@ -10,7 +10,7 @@ import type { ModelConfig, Segment } from "./types";
  *  - somme des poids critères = 10 000 bps (100,00 %) par segment ;
  *  - somme des poids d'un domaine = poids affiché du domaine ;
  *  - barèmes quantitatifs exhaustifs, sans trou ni chevauchement ;
- *  - échelle de grades propre au modèle, exhaustive sur [0, 100] ;
+ *  - échelle de grades (échelle maîtresse en vigueur), exhaustive sur [0, 100] ;
  *  - pondérations de confiance = 100 ; classes de confiance exhaustives ;
  *  - inventaire phénomène-règle respecté (aucune exception non déclarée) ;
  *  - catégorie « information absente » définie pour tout critère non bloquant ;

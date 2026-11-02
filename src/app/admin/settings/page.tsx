@@ -17,7 +17,7 @@ export default async function SettingsPage() {
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Paramétrage de l&apos;outil</h1>
         <p className="muted">
           Règles du workflow, dérogations, pièces et intelligence artificielle. Les grilles de notation
-          (poids, barèmes, échelles) ne se paramètrent pas ici : elles forment la version du modèle,
+          (poids, barèmes) ne se paramètrent pas ici : elles forment la version du modèle,
           validée par le comité modèles et consignée dans chaque notation. Chaque modification est
           journalisée.
         </p>

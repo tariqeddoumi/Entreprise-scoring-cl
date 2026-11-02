@@ -3,6 +3,10 @@ import { aiStatus } from "@/lib/ai";
 import { OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
+import { transposeGrade } from "@/core/grades";
+import { effectiveScale } from "@/lib/rating-scale";
+import { legacyScaleForGrade } from "@/reference/legacy-scales";
+import { toGradeScaleConfig } from "@/reference/rating-scale";
 import { getPerimeter, getSessionIdentity, requireSession } from "@/lib/session";
 import { CounterpartiesTable, type CounterpartyRow } from "./CounterpartiesTable";
 import { NewCounterpartyForm, type WritableEntity } from "./NewCounterpartyForm";
@@ -18,6 +22,7 @@ export default async function CounterpartiesPage() {
   const canRateHere = canCreate;
   const perimeter = await getPerimeter();
 
+  const master = toGradeScaleConfig(await effectiveScale());
   const { data, dbAvailable } = await safeQuery(
     async (db) => {
       // Liste d'abord, sans jointure : la fiche des clients s'affiche même si
@@ -59,9 +64,12 @@ export default async function CounterpartiesPage() {
         ]);
         for (const r of runs) {
           if (!lastRun.has(r.counterpartyId)) {
-            lastRun.set(r.counterpartyId, [
-              { finalGrade: r.finalGrade, rawScore: r.rawScore === null ? null : Number(r.rawScore), asOfDate: r.asOfDate },
-            ]);
+            const rawScore = r.rawScore === null ? null : Number(r.rawScore);
+            // Note d'une échelle antérieure (STD-P…) : classe équivalente sur
+            // l'échelle 1 à 10 en vigueur, affichée à côté, jamais enregistrée.
+            const legacy = r.finalGrade ? legacyScaleForGrade(r.finalGrade) : undefined;
+            const equivalent = legacy ? transposeGrade(legacy, r.finalGrade, rawScore, master) : null;
+            lastRun.set(r.counterpartyId, [{ finalGrade: r.finalGrade, rawScore, asOfDate: r.asOfDate, equivalent }]);
           }
         }
         for (const c of cases) openCase.set(c.counterpartyId, c.status);

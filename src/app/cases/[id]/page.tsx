@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getModel } from "@/models";
+import { getScoringModel } from "@/lib/rating-scale";
 import { aiStatus } from "@/lib/ai";
 import { hasRole } from "@/lib/auth";
 import { parseDraft, proposableFields } from "@/lib/case-input";
@@ -108,7 +108,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   }
   if (!data) notFound();
   const { c, entity, events, blocker, contributors } = data;
-  const model = getModel(c.modelId);
+  const model = await getScoringModel(c.modelId);
   if (!model) {
     return (
       <div className="card" style={{ padding: 16 }}>
