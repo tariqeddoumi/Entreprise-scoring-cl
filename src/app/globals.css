@@ -250,6 +250,10 @@ main li a {
 .card {
   min-width: 0;
 }
+/* Les enfants d'une carte en grille ne s'élargissent pas au tableau qu'ils contiennent. */
+.card > * {
+  min-width: 0;
+}
 
 /* Écran moyen : neuf entrées ne tiennent plus sur la ligne de la marque ; la
    navigation passe sur sa propre ligne au lieu de pousser la page en largeur. */
@@ -390,6 +394,20 @@ main li a {
   padding: 7px 14px;
   color: var(--bad);
   font-size: 13px;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bad) 8%, transparent);
+}
+
+/* Conteneur défilant d'un tableau large : le tableau défile dans sa carte. */
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 /* Statut d'un dossier de notation. */
