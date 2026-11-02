@@ -117,7 +117,7 @@ export function BatchForm({ choices, defaultAsOf, defaults }: { choices: Selecti
       <div>
         <h2 style={{ fontWeight: 600 }}>Lancer une renotation</h2>
         <p className="muted" style={{ fontSize: 13 }}>
-          Chaque contrepartie retenue est renotée à partir de la saisie de sa dernière notation validée, à la date d&apos;arrêté
+          Chaque client retenu est renoté à partir de la saisie de sa dernière notation validée, à la date d&apos;arrêté
           choisie et avec la version courante du modèle. Le résultat est une notation de surveillance : la note officielle ne
           change qu&apos;après instruction et validation d&apos;un dossier.
         </p>

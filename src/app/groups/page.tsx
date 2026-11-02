@@ -33,7 +33,7 @@ export default async function GroupsPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Groupes d&apos;affaires</h1>
         <p className="muted">
-          Contreparties liées par le contrôle (actionnaire commun, maison mère). Le groupe sert à lire les notes de ses membres et à
+          Clients liés par le contrôle (actionnaire commun, maison mère). Le groupe sert à lire les notes de ses membres et à
           les renoter ensemble. Appartenir à un groupe ne relève jamais une note : le support groupe d&apos;une notation reste soumis
           aux quatre conditions documentées du modèle.
         </p>

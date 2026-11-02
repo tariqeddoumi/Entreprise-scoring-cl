@@ -18,7 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     include: { counterparty: { select: { name: true, ice: true, segment: true, sectorCode: true, economicGroup: { select: { code: true } } } } },
   });
   const lines = [
-    csvLine(["Contrepartie", "ICE", "Segment", "Secteur", "Groupe d'affaires", "Note avant", "Note après", "Crans", "Mouvement", "Statut", "Dossier de revue", "Motif"]),
+    csvLine(["Client", "ICE", "Segment", "Secteur", "Groupe d'affaires", "Note avant", "Note après", "Crans", "Mouvement", "Statut", "Dossier de revue", "Motif"]),
     ...items.map((it) =>
       csvLine([
         it.counterparty.name,

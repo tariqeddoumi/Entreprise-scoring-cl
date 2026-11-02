@@ -35,7 +35,7 @@ export default async function MethodologyPage() {
           <tbody>
             <tr>
               <td>Note emprunteur / PD (moteur A — implémenté)</td>
-              <td>Risque intrinsèque de défaut de la contrepartie</td>
+              <td>Risque intrinsèque de défaut du client</td>
               <td>Aucun effet direct sur la PD, sauf support de tiers démontré</td>
             </tr>
             <tr>

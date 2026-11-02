@@ -86,7 +86,7 @@ export default async function RatingRunPage({
       <div>
         <p className="muted" style={{ fontSize: 13 }}>
           <Link href="/counterparties" style={{ color: "var(--brand)" }}>
-            Contreparties
+            Clients
           </Link>{" "}
           ›{" "}
           <Link
@@ -123,7 +123,7 @@ export default async function RatingRunPage({
           <CaseStatusBadge status={run.ratingCase.status} />
           <span style={{ fontSize: 13 }}>
             {official
-              ? `Notation validée${run.ratingCase.decidedBy ? ` par ${run.ratingCase.decidedBy}` : ""} : c'est la note de la contrepartie.`
+              ? `Notation validée${run.ratingCase.decidedBy ? ` par ${run.ratingCase.decidedBy}` : ""} : c'est la note du client.`
               : run.ratingCase.status === "REJECTED"
                 ? "Notation rejetée : elle ne fait pas foi."
                 : "Notation proposée, en attente de validation : elle ne fait pas encore foi."}

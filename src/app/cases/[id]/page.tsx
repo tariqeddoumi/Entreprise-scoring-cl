@@ -179,7 +179,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       {c.status === "VALIDATED" && (
         <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--good)" }}>
           <strong>Validé par {c.decidedBy}</strong> le {c.decidedAt?.toISOString().slice(0, 16).replace("T", " ")} : cette
-          notation est la note officielle de la contrepartie.
+          notation est la note officielle du client.
           {c.decisionComment && <span className="muted"> Commentaire : {c.decisionComment}</span>}
         </div>
       )}
@@ -239,7 +239,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
               run {c.run.id}
             </Link>{" "}
             · grade <GradeBadge grade={c.run.finalGrade} />{" "}
-            {c.status === "VALIDATED" ? "— note officielle de la contrepartie" : c.status === "SUBMITTED" ? "— proposée, non validée" : "— rejetée"}
+            {c.status === "VALIDATED" ? "— note officielle du client" : c.status === "SUBMITTED" ? "— proposée, non validée" : "— rejetée"}
           </p>
           {(() => {
             // Le valideur voit le bilan sur lequel la note a été calculée.

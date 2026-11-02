@@ -88,7 +88,7 @@ export async function executeRatingRun(
     where: { id: counterpartyId },
   });
   if (!counterparty) {
-    throw new RatingServiceError(404, `Contrepartie inconnue : ${counterpartyId}`);
+    throw new RatingServiceError(404, `Client inconnu : ${counterpartyId}`);
   }
 
   // Idempotence liée au CONTENU (constat M01) : une même clé présentée avec un

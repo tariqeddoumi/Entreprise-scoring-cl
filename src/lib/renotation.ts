@@ -123,7 +123,7 @@ export function describeFilters(
   if (f.segment) parts.push(`segment ${f.segment}`);
   if (f.sectorPrefix) parts.push(`secteur ${f.sectorPrefix}*`);
   if (f.validatedBeforeMonths) parts.push(`validées depuis plus de ${f.validatedBeforeMonths} mois`);
-  if (f.counterpartyIds) parts.push(`${f.counterpartyIds.length} contrepartie(s) désignée(s)`);
+  if (f.counterpartyIds) parts.push(`${f.counterpartyIds.length} client(s) désigné(s)`);
   return parts.length ? parts.join(", ") : "tout le périmètre";
 }
 
@@ -202,7 +202,7 @@ export function refreshFieldsFor(model: ModelConfig): ProposableField[] {
     // Un fichier de rafraîchissement peut porter un ratio du bilan : il est
     // appliqué comme correction motivée (le lot en est le motif).
     ...proposableFields(model, { includeBalanceSheetRatios: true }),
-    { key: "amounts.globalBankExposure", kind: "number", labelFr: "Engagement global banque/groupe", guideFr: "Devise de la contrepartie." },
+    { key: "amounts.globalBankExposure", kind: "number", labelFr: "Engagement global banque/groupe", guideFr: "Devise du client." },
   ];
 }
 
@@ -335,7 +335,7 @@ export async function createBatch(db: PrismaClient, perimeter: Perimeter, identi
   const options = renotationOptionsSchema.parse({ ...DEFAULT_OPTIONS, ...(input.options ?? {}) });
 
   const ids = await selectCounterparties(db, perimeter, filters);
-  if (ids.length === 0) throw new RenotationError(409, "Aucune contrepartie ne correspond à la sélection.");
+  if (ids.length === 0) throw new RenotationError(409, "Aucun client ne correspond à la sélection.");
 
   // Données rafraîchies : rattachées par ICE ou par identifiant.
   const updatesById = new Map<string, Record<string, string>>();
@@ -508,7 +508,7 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
       select: { id: true, entityId: true, currency: true, isActive: true },
     });
     if (!counterparty || !counterparty.isActive) {
-      await finish({ status: "SKIPPED", messageFr: "Contrepartie désactivée ou hors périmètre." });
+      await finish({ status: "SKIPPED", messageFr: "Client désactivé ou hors périmètre." });
       return;
     }
     const official = await db.ratingRun.findFirst({
@@ -519,7 +519,7 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
     if (!official) {
       await finish({
         status: "SKIPPED",
-        messageFr: "Aucune notation validée : nouvelle relation ou contrepartie jamais notée, à traiter par un dossier.",
+        messageFr: "Aucune notation validée : nouvelle relation ou client jamais noté, à traiter par un dossier.",
       });
       return;
     }

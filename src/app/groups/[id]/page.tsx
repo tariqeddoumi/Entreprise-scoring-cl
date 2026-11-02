@@ -68,12 +68,12 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
       </div>
       <section className="card" style={{ padding: 16 }}>
         {members.length === 0 ? (
-          <p className="muted">Aucune contrepartie rattachée.</p>
+          <p className="muted">Aucun client rattaché.</p>
         ) : (
           <table className="data">
             <thead>
               <tr>
-                <th>Contrepartie</th>
+                <th>Client</th>
                 <th>ICE</th>
                 <th>Segment</th>
                 <th>Secteur</th>
@@ -106,12 +106,12 @@ export default async function GroupPage({ params }: { params: Promise<{ id: stri
       {canEdit && (
         <section className="card" style={{ padding: 16, display: "grid", gap: 16 }}>
           <div>
-            <h2 style={{ fontWeight: 600, marginBottom: 6 }}>Rattacher des contreparties</h2>
+            <h2 style={{ fontWeight: 600, marginBottom: 6 }}>Rattacher des clients</h2>
             <AssignForm groupId={data.id} />
           </div>
           {members.length > 0 && (
             <div>
-              <h2 style={{ fontWeight: 600, marginBottom: 6 }}>Détacher des contreparties</h2>
+              <h2 style={{ fontWeight: 600, marginBottom: 6 }}>Détacher des clients</h2>
               <AssignForm groupId={null} detach />
             </div>
           )}

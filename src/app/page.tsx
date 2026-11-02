@@ -135,7 +135,7 @@ export default async function DashboardPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Tableau de bord</h1>
         <p className="muted">
-          Notation interne des contreparties entreprises non financières — segments TPE,
+          Notation interne des clients entreprises non financières — segments TPE,
           PME et Grandes Entreprises.
         </p>
       </div>
@@ -156,7 +156,7 @@ export default async function DashboardPage() {
       )}
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-        <StatCard label="Contreparties" value={stats.counterparties} />
+        <StatCard label="Clients" value={stats.counterparties} />
         <StatCard label="Notations validées" value={stats.runs} />
         <StatCard label="Dossiers à valider" value={stats.toValidate} hint="Soumis, en attente d'une seconde personne" />
         <StatCard label="Modèles disponibles" value={models.length} />
@@ -177,7 +177,7 @@ export default async function DashboardPage() {
       <section className="card" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Distribution des grades finaux</h2>
         <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Note courante de chaque contrepartie — sa dernière notation validée. Une
+          Note courante de chaque client — sa dernière notation validée. Une
           distribution par modèle : les échelles ne sont pas comparables entre elles
           tant qu&apos;aucune correspondance sur probabilités de défaut n&apos;a été
           validée, et les additionner produirait un histogramme qui ne mesure rien.
@@ -256,7 +256,7 @@ export default async function DashboardPage() {
 
                 {stats.ungraded > 0 && (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    <strong>{stats.ungraded}</strong> contrepartie(s) sans grade à leur
+                    <strong>{stats.ungraded}</strong> client(s) sans grade à leur
                     dernier arrêté (données insuffisantes, segment indéterminé ou routage
                     vers un autre traitement) : elles ne figurent pas dans la distribution.
                   </p>
@@ -264,7 +264,7 @@ export default async function DashboardPage() {
 
                 {archivedTotal > 0 && (
                   <p className="muted" style={{ fontSize: 12 }}>
-                    <strong>{archivedTotal}</strong> contrepartie(s) ont pour dernière
+                    <strong>{archivedTotal}</strong> client(s) ont pour dernière
                     notation un grade qui n&apos;appartient à aucune échelle publiée —{" "}
                     {archived
                       .map((g) => `${g.finalGrade} (${g._count._all})`)
@@ -297,7 +297,7 @@ export default async function DashboardPage() {
           <table className="data">
             <thead>
               <tr>
-                <th>Contrepartie</th>
+                <th>Client</th>
                 <th>Date d&apos;arrêté</th>
                 <th>Segment</th>
                 <th>Score brut</th>

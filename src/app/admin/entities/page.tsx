@@ -24,9 +24,9 @@ export default async function EntitiesPage() {
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Banques et filiales</h1>
         <p className="muted">
-          Organisation du groupe. Chaque utilisateur, contrepartie et dossier appartient à une
+          Organisation du groupe. Chaque utilisateur, client et dossier appartient à une
           entité : une entité voit sa descendance, jamais sa maison mère ni ses entités sœurs.
-          La devise de l&apos;entité est celle de ses contreparties par défaut ; l&apos;habillage
+          La devise de l&apos;entité est celle de ses clients par défaut ; l&apos;habillage
           vide est hérité de l&apos;entité mère.
         </p>
       </div>

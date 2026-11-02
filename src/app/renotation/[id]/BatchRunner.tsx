@@ -59,7 +59,7 @@ export function BatchRunner({
     <div className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <strong>
-          {progress.processed} / {progress.total} contrepartie(s) traitée(s) — {pct} %
+          {progress.processed} / {progress.total} client(s) traité(s) — {pct} %
         </strong>
         {open && canRun && (
           <div style={{ display: "flex", gap: 8 }}>
@@ -101,7 +101,7 @@ function CancelBatch({ batchId }: { batchId: string }) {
     <form
       action={action}
       onSubmit={(e) => {
-        if (!window.confirm("Annuler le lot ? Les contreparties déjà renotées le restent ; les autres ne le seront pas.")) e.preventDefault();
+        if (!window.confirm("Annuler le lot ? Les clients déjà renotés le restent ; les autres ne le seront pas.")) e.preventDefault();
       }}
     >
       <input type="hidden" name="batchId" value={batchId} />

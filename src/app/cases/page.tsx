@@ -92,7 +92,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700 }}>Dossiers de notation</h1>
           <p className="muted">
-            Brouillon → soumission → validation par une seconde personne. Seule une notation validée devient la note de la contrepartie.
+            Brouillon → soumission → validation par une seconde personne. Seule une notation validée devient la note du client.
           </p>
         </div>
         {hasRole(identity.role, "ANALYST") && (
@@ -130,7 +130,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
           <table className="data">
             <thead>
               <tr>
-                <th>Contrepartie</th>
+                <th>Client</th>
                 <th>Dernier arrêté validé</th>
                 <th>Grade</th>
               </tr>
@@ -163,7 +163,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
           <table className="data">
             <thead>
               <tr>
-                <th>Contrepartie</th>
+                <th>Client</th>
                 <th>Entité</th>
                 <th>Arrêté</th>
                 <th>Statut</th>

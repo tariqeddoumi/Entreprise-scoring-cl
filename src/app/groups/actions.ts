@@ -53,7 +53,7 @@ export async function assignGroupAction(_prev: GroupActionResult, fd: FormData):
     ].filter(Boolean);
     return {
       ok: r.assigned > 0 || extra.length === 0,
-      okFr: `${r.assigned} contrepartie(s) ${groupId ? "rattachée(s)" : "détachée(s)"}.${extra.length ? ` ${extra.join(" ; ")}.` : ""}`,
+      okFr: `${r.assigned} client(s) ${groupId ? "rattaché(s)" : "détaché(s)"}.${extra.length ? ` ${extra.join(" ; ")}.` : ""}`,
       ...(r.assigned === 0 && extra.length ? { errorFr: `Aucune modification : ${extra.join(" ; ")}.` } : {}),
     };
   } catch (e) {

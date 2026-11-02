@@ -210,9 +210,23 @@ export const counterpartySchema = z
   })
   .strict();
 
-export const counterpartyPatchSchema = counterpartySchema.partial().extend({
-  isActive: z.boolean().optional(),
-});
+/**
+ * Modification partielle : seuls les champs présents changent ; `null` efface
+ * un champ facultatif (la raison sociale, l'entité et la devise ne s'effacent pas).
+ */
+export const counterpartyPatchSchema = counterpartySchema
+  .partial()
+  .extend({
+    country: countryCodeSchema.nullable().optional(),
+    ice: z.string().max(20).nullable().optional(),
+    rc: z.string().max(30).nullable().optional(),
+    fiscalId: z.string().max(30).nullable().optional(),
+    legalForm: z.string().max(60).nullable().optional(),
+    sectorCode: z.string().max(30).nullable().optional(),
+    city: z.string().max(80).nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
 
 export const webhookSubscriptionSchema = z
   .object({

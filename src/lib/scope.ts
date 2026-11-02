@@ -278,7 +278,7 @@ function ref(data: Record<string, unknown>, field: string, relation: string): st
  */
 async function checkCreate(model: string, data: Record<string, unknown>, p: Perimeter): Promise<void> {
   const writableCounterparty = async (id: string | null) => {
-    if (!id) throw new OutOfScopeError("Contrepartie absente.");
+    if (!id) throw new OutOfScopeError("Client absent.");
     const c = await basePrisma.counterparty.findUnique({ where: { id }, select: { entityId: true } });
     if (!c || !canWrite(p, c.entityId)) throw new OutOfScopeError();
   };

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { ok, problem } from "@/lib/api-utils";
-import { auditWithin } from "@/lib/audit";
+import { CounterpartyError, deleteCounterparty, updateCounterparty } from "@/lib/counterparties";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { counterpartyPatchSchema } from "@/lib/schemas";
 import { publishEvent } from "@/lib/webhooks";
@@ -17,7 +17,7 @@ export async function GET(
 
   const { id } = await params;
   const counterparty = await g.ctx.db.counterparty.findUnique({ where: { id } });
-  if (!counterparty) return problem(404, "Contrepartie inconnue.");
+  if (!counterparty) return problem(404, "Client inconnu.");
   return ok(counterparty);
 }
 
@@ -32,31 +32,13 @@ export async function PATCH(
   const body = await readJsonBody(req, counterpartyPatchSchema);
   if (!body.ok) return body.response;
 
-  const existing = await g.ctx.db.counterparty.findUnique({ where: { id } });
-  if (!existing) return problem(404, "Contrepartie inconnue.");
-
   try {
-    // Modification et audit dans une seule transaction, comme à la création :
-    // hors transaction, un échec de l'audit laissait la fiche modifiée sans
-    // trace de son auteur.
-    const updated = await g.ctx.db.$transaction(async (tx) => {
-      const row = await tx.counterparty.update({ where: { id }, data: body.value });
-      await auditWithin(tx, {
-        actor: g.ctx.identity.name,
-        actorRole: g.ctx.identity.role,
-        action: "COUNTERPARTY_UPDATED",
-        resourceType: "Counterparty",
-        resourceId: id,
-        entityId: row.entityId,
-        detail: { before: existing, after: row },
-        correlationId: g.ctx.correlationId,
-      });
-      return row;
-    });
+    // Même chemin que l'écran : contrôle du périmètre, modification et audit
+    // dans une seule transaction.
+    const updated = await updateCounterparty(g.ctx.db, g.ctx.perimeter, g.ctx.identity, id, body.value, g.ctx.correlationId);
 
-    // L'événement « counterparty.updated » était proposé à la souscription
-    // (contrat OpenAPI, validation) sans jamais être émis (D-43). Il passe par
-    // l'outbox et n'est livré qu'aux souscriptions du périmètre de l'entité.
+    // L'événement « counterparty.updated » passe par l'outbox et n'est livré
+    // qu'aux souscriptions du périmètre de l'entité (D-43).
     void publishEvent(
       {
         type: "counterparty.updated",
@@ -71,10 +53,30 @@ export async function PATCH(
 
     return ok(updated);
   } catch (e) {
-    if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-      return problem(409, "Conflit : cet ICE est déjà enregistré dans cette entité.");
-    }
-    if (isOutOfScope(e)) return problem(403, "Entité hors de votre périmètre d'écriture.");
+    if (e instanceof CounterpartyError) return problem(e.status, e.message);
+    if (isOutOfScope(e)) return problem(403, "Client ou entité hors de votre périmètre d'écriture.");
+    throw e;
+  }
+}
+
+/**
+ * Suppression : définitive pour un client sans historique ; désactivation
+ * (historique conservé) dès qu'une notation, un dossier ou un lot le concerne.
+ */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const g = await guard(req, "RISK_MANAGER");
+  if (!g.ok) return g.response;
+
+  const { id } = await params;
+  try {
+    const outcome = await deleteCounterparty(g.ctx.db, g.ctx.perimeter, g.ctx.identity, id, g.ctx.correlationId);
+    return ok({ id, ...outcome });
+  } catch (e) {
+    if (e instanceof CounterpartyError) return problem(e.status, e.message);
+    if (isOutOfScope(e)) return problem(403, "Client hors de votre périmètre d'écriture.");
     throw e;
   }
 }

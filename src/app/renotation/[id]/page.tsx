@@ -179,12 +179,12 @@ export default async function BatchPage({
 
       <section className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <h2 style={{ fontWeight: 600 }}>Contreparties</h2>
+          <h2 style={{ fontWeight: 600 }}>Clients</h2>
           <a href={`/renotation/${batch.id}/export`} className="btn-ghost" style={{ fontSize: 13 }}>
             Exporter le lot (CSV)
           </a>
         </div>
-        <nav className="tabs" aria-label="Filtre des contreparties">
+        <nav className="tabs" aria-label="Filtre des clients">
           {FILTERS.map((x) => (
             <Link key={x.key} href={`/renotation/${batch.id}?f=${x.key}`} aria-current={x.key === f ? "page" : undefined}>
               {x.label}
@@ -192,13 +192,13 @@ export default async function BatchPage({
           ))}
         </nav>
         {items.length === 0 ? (
-          <p className="muted">Aucune contrepartie dans ce filtre.</p>
+          <p className="muted">Aucun client dans ce filtre.</p>
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table className="data">
               <thead>
                 <tr>
-                  <th>Contrepartie</th>
+                  <th>Client</th>
                   <th>Segment</th>
                   <th>Secteur</th>
                   <th>Avant</th>

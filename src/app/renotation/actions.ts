@@ -68,7 +68,7 @@ export async function previewSelectionAction(fd: FormData): Promise<RenotationAc
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   try {
     const ids = await selectCounterparties(await getDb(), await getPerimeter(), readFilters(fd));
-    return { ok: true, count: ids.length, okFr: `${ids.length} contrepartie(s) sélectionnée(s).` };
+    return { ok: true, count: ids.length, okFr: `${ids.length} client(s) sélectionné(s).` };
   } catch (e) {
     return failure(e);
   }
@@ -129,7 +129,7 @@ export async function cancelBatchAction(_prev: RenotationActionResult, fd: FormD
   }
   revalidatePath(`/renotation/${batchId}`);
   revalidatePath("/renotation");
-  return { ok: true, okFr: "Lot annulé : les contreparties déjà renotées le restent." };
+  return { ok: true, okFr: "Lot annulé : les clients déjà renotés le restent." };
 }
 
 export async function createScheduleAction(_prev: RenotationActionResult, fd: FormData): Promise<RenotationActionResult> {

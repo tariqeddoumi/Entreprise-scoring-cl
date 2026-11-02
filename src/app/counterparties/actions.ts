@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { AiError } from "@/lib/ai";
 import { extractCounterparty, type CounterpartyExtraction } from "@/lib/ai-assist";
-import { CounterpartyError, createCounterparty } from "@/lib/counterparties";
+import { CounterpartyError, createCounterparty, deleteCounterparty, updateCounterparty } from "@/lib/counterparties";
 import { isOutOfScope } from "@/lib/scope";
-import { counterpartySchema } from "@/lib/schemas";
+import { counterpartyPatchSchema, counterpartySchema } from "@/lib/schemas";
 import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 
 export interface CreateCounterpartyResult {
@@ -48,6 +48,7 @@ export async function createCounterpartyAction(
       parsed.data
     );
     revalidatePath("/counterparties");
+    revalidatePath("/scoring");
     return { ok: true, id: created.id };
   } catch (e) {
     if (e instanceof CounterpartyError) return { ok: false, errorFr: e.message };
@@ -95,3 +96,71 @@ export async function extractCounterpartyAction(
   }
 }
 
+
+function issuesFr(error: { issues: Array<{ path: PropertyKey[]; message: string }> }): string {
+  return error.issues.map((i) => `${i.path.join(".") || "(racine)"} : ${i.message}`).join(" ; ");
+}
+
+function failure(e: unknown): CreateCounterpartyResult {
+  if (e instanceof CounterpartyError) return { ok: false, errorFr: e.message };
+  if (isOutOfScope(e)) return { ok: false, errorFr: e instanceof Error ? e.message : "Hors de votre périmètre d'écriture." };
+  console.error("[client]", e instanceof Error ? e.message : e);
+  return { ok: false, errorFr: "Échec de l'enregistrement (base indisponible)." };
+}
+
+/** Modification d'une fiche client (même chemin que `PATCH /api/v1/counterparties/{id}`). */
+export async function updateCounterpartyAction(id: string, payload: unknown): Promise<CreateCounterpartyResult> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  const parsed = counterpartyPatchSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, errorFr: issuesFr(parsed.error) };
+  try {
+    await updateCounterparty(await getDb(), await getPerimeter(), session.identity, id, parsed.data);
+    revalidatePath("/counterparties");
+    revalidatePath(`/counterparties/${id}`);
+    revalidatePath("/scoring");
+    return { ok: true, id };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+export interface DeleteCounterpartyResult {
+  ok: boolean;
+  mode?: "DELETED" | "DEACTIVATED";
+  messageFr?: string;
+  errorFr?: string;
+}
+
+/**
+ * Suppression d'un client (gestionnaire des risques) : définitive sans
+ * historique, désactivation sinon (`DELETE /api/v1/counterparties/{id}`).
+ */
+export async function deleteCounterpartyAction(id: string): Promise<DeleteCounterpartyResult> {
+  const session = await getSessionIdentity("RISK_MANAGER");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    const outcome = await deleteCounterparty(await getDb(), await getPerimeter(), session.identity, id);
+    revalidatePath("/counterparties");
+    revalidatePath("/scoring");
+    return { ok: true, ...outcome };
+  } catch (e) {
+    const f = failure(e);
+    return { ok: false, errorFr: f.errorFr };
+  }
+}
+
+/** Réactivation d'un client désactivé (gestionnaire des risques). */
+export async function reactivateCounterpartyAction(id: string): Promise<CreateCounterpartyResult> {
+  const session = await getSessionIdentity("RISK_MANAGER");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    await updateCounterparty(await getDb(), await getPerimeter(), session.identity, id, { isActive: true });
+    revalidatePath("/counterparties");
+    revalidatePath(`/counterparties/${id}`);
+    revalidatePath("/scoring");
+    return { ok: true, id };
+  } catch (e) {
+    return failure(e);
+  }
+}
