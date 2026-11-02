@@ -62,6 +62,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Notation interne de contrepartie (moteur A, version 3.1.0) | Opérationnel |
 | Quatre grilles publiées : standard, TPE comportementale, deux challengers | Opérationnel |
 | Échelle de notation 1 à 10 commune (1 = meilleur risque, défaut hors échelle), paramétrable par versions datées | Opérationnel |
+| Paramétrage des grilles à l'écran (poids, barèmes, repères, critères, exceptions, revues, couverture, confiance) par versions datées | Opérationnel |
 | Écran Clients : création, modification, suppression ou désactivation, notation depuis la fiche | Opérationnel |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
 | Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture IA ; ratios calculés, contrôles, correction motivée | Opérationnel |
@@ -139,7 +140,7 @@ tests/             322 tests : moteur, échelle, bilan, workflow, renotation, s�
 | D6 — Transparence et conformité | 7 % | 5 % | 5 % |
 | D7 — ESG et climat | 3 % | 3 % | 5 % |
 
-Le score brut donne la **classe 1 à 10** de l'échelle maîtresse commune (version ECH10-2026.1 : 1 ≥ 90, 2 ≥ 85, 3 ≥ 80, 4 ≥ 75, 5 ≥ 70, 6 ≥ 64, 7 ≥ 57, 8 ≥ 48, 9 ≥ 40, 10 < 40) ; le défaut constaté reste noté à part (DEF1 à DEF3). L'échelle se paramètre par versions datées (Administration › Échelle de notation) et chaque notation consigne sa version.
+Le score brut donne la **classe 1 à 10** de l'échelle maîtresse commune (version ECH10-2026.1 : 1 ≥ 90, 2 ≥ 85, 3 ≥ 80, 4 ≥ 75, 5 ≥ 70, 6 ≥ 64, 7 ≥ 57, 8 ≥ 48, 9 ≥ 40, 10 < 40) ; le défaut constaté reste noté à part (DEF1 à DEF3). L'échelle se paramètre par versions datées (Administration › Échelle de notation) et chaque notation consigne sa version. Les paramètres des grilles se gèrent de même (Administration › Paramétrage des grilles, D-54) : poids par segment, seuils des barèmes, repères, ajout et retrait de critères, exceptions, revues, couverture, confiance et support groupe.
 
 Agrégation :
 

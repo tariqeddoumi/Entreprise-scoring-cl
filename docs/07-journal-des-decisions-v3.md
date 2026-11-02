@@ -627,6 +627,20 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-54 — Paramétrage des grilles à l'écran, par versions datées — **À CONFIRMER**
+
+*Contexte :* demande de la banque (2 novembre 2026) : un outil aussi paramétrable que l'outil de notation Project Finance, où l'administration modifie critères, poids, barèmes et règles sans livraison de code.
+
+*Décision :* Administration › Paramétrage des grilles. Pour chacune des quatre grilles, une **version datée de paramètres** porte : les poids par segment ; les seuils des barèmes à cinq paliers (par segment) ; les cinq repères des critères qualitatifs ; le libellé, le caractère critique et le score d'une donnée absente (0, 25 ou 50) ; l'ajout d'un critère (qualitatif à cinq repères ou ratio à cinq paliers) et le retrait d'un critère ; la classe plafond et le seuil de déclenchement des exceptions ; les seuils des revues obligatoires ; la couverture observée minimale ; les poids et classes de confiance ; le nombre maximal de crans de support groupe.
+
+*Règles :* mêmes règles que l'échelle (D-53) : version en vigueur à la date de calcul, consignée dans la notation (version de grille « 3.2.0+<version> ») ; une version en vigueur est figée, une version future se modifie ou se retire ; date d'effet au plus tôt le jour même. À l'enregistrement s'appliquent les contrôles du démarrage : poids à 100 % par segment, plafond de concentration d'un critère (6 % ; 8 % pour la grille comportementale), barèmes exhaustifs, classes plafond présentes dans l'échelle, poids de confiance à 100 %, classes A > B > C. Un critère auquel se rattache une exception, une revue ou un transfert ne peut pas être retiré. Une version de paramètres retire la PD synthétique jusqu'à une nouvelle calibration. Écriture réservée à l'administrateur du groupe ; chaque création, modification ou retrait est journalisé.
+
+*Ce qui reste hors paramétrage :* la structure des domaines, la formule du moteur (agrégation, confiance, plafonds dans l'ordre fixé), les barèmes non standard (autres que cinq paliers) et les grilles nouvelles : ils restent versionnés dans le code, avec revue et tests, parce qu'ils changent la nature du modèle et non son calibrage.
+
+*À confirmer par la banque :* l'instance qui approuve une version de paramètres (comité modèles) et son enregistrement dans le motif de la version.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.
