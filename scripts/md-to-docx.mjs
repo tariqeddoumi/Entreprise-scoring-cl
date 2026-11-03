@@ -191,6 +191,21 @@ function longestWord(s) {
     .reduce((m, w) => Math.max(m, w.length), 0);
 }
 
+/** Dimensions d'un JPEG, lues dans le premier segment SOF. */
+function jpegSize(buf) {
+  let o = 2;
+  while (o < buf.length) {
+    if (buf[o] !== 0xff) { o += 1; continue; }
+    const marker = buf[o + 1];
+    const len = buf.readUInt16BE(o + 2);
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+      return [buf.readUInt16BE(o + 7), buf.readUInt16BE(o + 5)];
+    }
+    o += 2 + len;
+  }
+  throw new Error("JPEG sans segment SOF");
+}
+
 /**
  * Largeurs de colonnes.
  *
@@ -374,20 +389,21 @@ while (i < lines.length) {
   flushBlockquote();
 
   // Figure : « ![légende](chemin.png) », chemin relatif au document source.
-  const figure = /^!\[([^\]]*)\]\(([^)]+\.png)\)\s*$/.exec(line.trim());
+  const figure = /^!\[([^\]]*)\]\(([^)]+\.(png|jpe?g))\)\s*$/i.exec(line.trim());
   if (figure) {
     const file = path.resolve(path.dirname(SRC), figure[2]);
     const data = fs.readFileSync(file);
-    // Dimensions lues dans l'en-tête PNG ; largeur ramenée à 16 cm au plus.
-    const w = data.readUInt32BE(16);
-    const h = data.readUInt32BE(20);
+    const isPng = figure[3].toLowerCase() === "png";
+    // Dimensions lues dans l'en-tête (PNG : IHDR ; JPEG : segment SOF) ;
+    // largeur ramenée à 16 cm au plus.
+    const [w, h] = isPng ? [data.readUInt32BE(16), data.readUInt32BE(20)] : jpegSize(data);
     const width = Math.min(w / h < 1.4 ? 400 : 580, w);
     body.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 120, after: 60 },
         keepNext: true,
-        children: [new ImageRun({ type: "png", data, transformation: { width, height: Math.round((h * width) / w) }, altText: { title: figure[1], description: figure[1], name: path.basename(file) } })],
+        children: [new ImageRun({ type: isPng ? "png" : "jpg", data, transformation: { width, height: Math.round((h * width) / w) }, altText: { title: figure[1], description: figure[1], name: path.basename(file) } })],
       })
     );
     if (figure[1]) {
