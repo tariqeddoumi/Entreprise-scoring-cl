@@ -327,7 +327,7 @@ Les tests couvrent :
 | [`docs/13-modelisation-statistique.md`](./docs/13-modelisation-statistique.md) | Méthode de modélisation statistique de la PD ; Word : `docs/modelisation/Guide_modelisation_statistique.docx` |
 | `docs/argumentaires/` | Argumentaires : engagements, direction générale, conseil d'administration, réseau |
 | `docs/guides/` | Guide utilisateur (Word et PowerPoint), expression de besoin DSI |
-| `docs/presentations/` | De l'ancien modèle (cahier des charges 2007) au nouveau modèle, notes détaillées ; synthèse management |
+| `docs/presentations/` | Présentation de l'outil au top management (captures, données fictives) ; de l'ancien modèle (cahier des charges 2007) au nouveau modèle ; synthèse management |
 | `docs/simulateur/Simulateur_notation_entreprises.xlsx` | Simulateur Excel des quatre grilles, onglet Bilan, listes déroulantes |
 | `scripts/modelisation/` | Script Python de modélisation statistique (démonstration sur données synthétiques) |
 | [`openapi.yaml`](./openapi.yaml) | Contrat d'interface OpenAPI 3.1 |
