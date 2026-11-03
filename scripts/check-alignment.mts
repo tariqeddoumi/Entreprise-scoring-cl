@@ -541,6 +541,7 @@ console.log("\n7. Contrats de données : validation, OpenAPI, moteur, écrans\n"
   // l'administrateur du groupe, qui le vérifient explicitement.
   const RAW_ALLOWED: Record<string, string> = {
     "src/app/admin/settings/actions.ts": "paramétrage global, administrateur du groupe uniquement",
+    "src/app/admin/settings/circuit-actions.ts": "circuit de validation, paramétrage global, administrateur du groupe uniquement",
     "src/app/admin/scale/actions.ts": "échelle maîtresse de notation, paramétrage global, administrateur du groupe uniquement",
     "src/app/admin/grilles/actions.ts": "paramétrage des grilles, global, administrateur du groupe uniquement",
     "src/app/admin/currencies/actions.ts": "cours de change du groupe, administrateur du groupe uniquement",

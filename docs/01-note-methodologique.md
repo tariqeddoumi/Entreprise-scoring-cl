@@ -34,6 +34,7 @@
 12 bis. Bilan, ratios et base financière de la notation
 12 ter. Échelle de notation 1 à 10
 13. Caps, red flags et dérogations
+13 bis. Circuit de validation de la note
 14. Séparation avec la classification réglementaire, IFRS 9 et le capital
 15. Exemples de calcul complets
 
@@ -391,6 +392,14 @@ Chaque red flag porte sa **source** — réglementaire, IFRS 9, politique de cr�
 ### 13.3 Dérogations
 
 Le résultat moteur n'est jamais écrasé. L'outil conserve le score brut, le grade moteur, le grade après caps et le grade final. Une dérogation ordinaire est limitée à deux crans, exige un motif codifié, un commentaire, une preuve, un auteur et un valideur distinct, et porte une date d'expiration. L'amélioration d'un grade défaut est refusée hors processus formel de guérison. Les taux, sens, motifs et performance des dérogations font l'objet d'un suivi trimestriel.
+
+## 13 bis. Circuit de validation de la note
+
+**Processus.** L'analyste ou le chargé d'affaires instruit le dossier et le soumet ; le **directeur du centre d'affaires** le valide ; la **contre-étude** (fonction Risques) prononce la **validation finale**, qui fait de la notation la note officielle du client. Un rejet, à n'importe quelle étape, renvoie le dossier à l'instruction avec un motif obligatoire.
+
+**Paramétrable.** Le circuit est une suite ordonnée d'étapes (Administration › Paramétrage) : libellé, fonctions habilitées, rôle minimal et, au besoin, seuil d'exposition au-delà duquel l'étape s'ajoute (un comité de crédit pour les grands engagements, par exemple). Les fonctions (chargé d'affaires, analyste crédit, directeur du centre d'affaires, contre-étude, comité de crédit…) forment un référentiel modifiable ; chaque compte porte sa fonction (Administration › Utilisateurs), distincte de son niveau de droits. Le circuit d'un dossier est **figé à sa soumission** : une modification du paramétrage s'applique aux dossiers soumis ensuite, jamais à un dossier en cours.
+
+**Règles invariantes.** Un contributeur du dossier (saisie, pièces, décisions sur les propositions de l'IA, soumission) ne décide d'aucune étape ; une même personne ne décide que d'une étape ; une exposition inconnue applique toutes les étapes, y compris celles à seuil ; la délégation par montant relève le rôle minimal de la dernière étape. Chaque décision est journalisée avec l'étape, la fonction et l'avis ; elle est restituée sur le dossier.
 
 ## 14. Séparation avec la classification réglementaire, IFRS 9 et le capital
 

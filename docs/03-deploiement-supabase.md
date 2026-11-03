@@ -148,6 +148,14 @@ renotation ; le second rattache les webhooks à une entité, crée l'outbox des
 événements sortants et l'index unique partiel `overrides_one_pending_per_run`
 (une seule dérogation en attente par notation).
 
+### Circuit de validation (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/07-circuit-validation.sql
+```
+
+Ajoute la fonction des comptes (`users.jobFunction`) et le circuit figé des dossiers (`rating_cases.workflow`). Idempotent et transactionnel. **Après la migration**, renseigner la fonction de chaque valideur (Administration › Utilisateurs) : le circuit par défaut exige un directeur du centre d'affaires puis la contre-étude, et un dossier soumis reste en attente tant que personne ne porte la fonction de l'étape. Le circuit se modifie dans Administration › Paramétrage ; il est enregistré dans `app_settings` (clé `WORKFLOW_CIRCUIT`). Les dossiers soumis avant la migration gardent une validation en une étape.
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son

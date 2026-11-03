@@ -23,6 +23,7 @@ const SCOPE_LABELS: Record<string, string> = {
 interface UserRow {
   entityId: string | null;
   writeScope: string;
+  jobFunction: string | null;
   id: string;
   username: string;
   displayName: string;
@@ -98,6 +99,24 @@ function ScopeSelect({ defaultValue, ariaLabel }: { defaultValue?: string; ariaL
   );
 }
 
+export interface FunctionOption {
+  code: string;
+  labelFr: string;
+}
+
+function FunctionSelect({ functions, defaultValue, ariaLabel }: { functions: FunctionOption[]; defaultValue?: string | null; ariaLabel?: string }) {
+  return (
+    <select name="jobFunction" defaultValue={defaultValue ?? ""} aria-label={ariaLabel} style={{ minWidth: 190 }}>
+      <option value="">— Aucune fonction —</option>
+      {functions.map((f) => (
+        <option key={f.code} value={f.code}>
+          {f.labelFr}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function statusOf(u: UserRow): { label: string; color: string } {
   if (!u.isActive) return { label: "Désactivé", color: "var(--muted)" };
   if (u.locked) return { label: "Verrouillé", color: "var(--bad)" };
@@ -110,10 +129,13 @@ export function UsersAdmin({
   users,
   entities,
   groupAdmin,
+  functions,
 }: {
   me: string;
   users: UserRow[];
   entities: EntityOption[];
+  /** Fonctions du circuit de validation (Paramétrage). */
+  functions: FunctionOption[];
   /** Administrateur du groupe : attribue le rôle Administrateur et le rattachement au groupe. */
   groupAdmin: boolean;
 }) {
@@ -211,6 +233,12 @@ export function UsersAdmin({
             </div>
             <ScopeSelect />
           </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Fonction (circuit de validation)
+            </div>
+            <FunctionSelect functions={functions} />
+          </label>
           <button
             type="submit"
             disabled={pending}
@@ -234,6 +262,7 @@ export function UsersAdmin({
         {users.length === 0 ? (
           <p className="muted">Aucun compte.</p>
         ) : (
+          <div className="table-scroll">
           <table className="data">
             <thead>
               <tr>
@@ -241,6 +270,7 @@ export function UsersAdmin({
                 <th>Nom</th>
                 <th>Rôle</th>
                 <th>Entité et portée</th>
+                <th>Fonction</th>
                 <th>État</th>
                 <th>Dernière connexion</th>
                 <th>Actions</th>
@@ -297,6 +327,20 @@ export function UsersAdmin({
                         </form>
                       )}
                     </td>
+                    <td>
+                      {self ? (
+                        <span style={{ fontSize: 13 }}>{functions.find((f) => f.code === u.jobFunction)?.labelFr ?? u.jobFunction ?? "—"}</span>
+                      ) : (
+                        <form action={formAction} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <input type="hidden" name="op" value="function" />
+                          <input type="hidden" name="userId" value={u.id} />
+                          <FunctionSelect functions={functions} defaultValue={u.jobFunction} ariaLabel={`Fonction de ${u.displayName}`} />
+                          <button type="submit" disabled={pending} style={smallButton}>
+                            Appliquer
+                          </button>
+                        </form>
+                      )}
+                    </td>
                     <td style={{ color: status.color, fontSize: 13 }}>{status.label}</td>
                     <td className="muted" style={{ fontSize: 12 }}>
                       {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString("fr-FR") : "—"}
@@ -332,6 +376,7 @@ export function UsersAdmin({
               })}
             </tbody>
           </table>
+          </div>
         )}
       </section>
     </>

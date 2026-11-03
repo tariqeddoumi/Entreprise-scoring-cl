@@ -231,7 +231,7 @@ describe("Workflow : séparation des fonctions et note officielle", () => {
   it("refuse la validation à un contributeur, à un rôle insuffisant, et hors statut soumis", async () => {
     const c2 = { id: "c2", status: "SUBMITTED", fxDetail: null, draftInput: "{}" };
     expect(await validationBlocker(db, { name: "relecteur", role: "RISK_MANAGER" }, c2)).toMatch(/séparation des fonctions/);
-    expect(await validationBlocker(db, { name: "tiers", role: "ANALYST" }, c2)).toMatch(/rôle RISK_MANAGER requis/);
+    expect(await validationBlocker(db, { name: "tiers", role: "ANALYST" }, c2)).toMatch(/Gestionnaire des risques au moins requis/);
     expect(await validationBlocker(db, { name: "tiers", role: "RISK_MANAGER" }, c2)).toBeNull();
     expect(await validationBlocker(db, { name: "tiers", role: "ADMIN" }, { ...c2, status: "DRAFT" })).toMatch(/pas en attente/);
   });

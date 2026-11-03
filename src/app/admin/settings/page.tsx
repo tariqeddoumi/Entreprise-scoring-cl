@@ -1,6 +1,9 @@
 import { aiStatus } from "@/lib/ai";
 import { loadSettings, SETTINGS } from "@/lib/settings";
+import { safeQuery } from "@/lib/safe-db";
 import { getPerimeter, requireSession } from "@/lib/session";
+import { loadCircuit } from "@/lib/workflow";
+import { CircuitEditor } from "./CircuitEditor";
 import { SettingsForm } from "./SettingsForm";
 
 export const dynamic = "force-dynamic";
@@ -10,21 +13,26 @@ export default async function SettingsPage() {
   const perimeter = await getPerimeter();
   const values = await loadSettings();
   const ai = await aiStatus();
+  const { circuit, stored } = await loadCircuit({ fresh: true });
+  const { data: holders } = await safeQuery(async (db) => {
+    const rows = await db.user.groupBy({ by: ["jobFunction"], where: { isActive: true, jobFunction: { not: null } }, _count: { _all: true } });
+    return Object.fromEntries(rows.map((r) => [r.jobFunction ?? "", r._count._all]));
+  }, {} as Record<string, number>);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Paramétrage de l&apos;outil</h1>
         <p className="muted">
-          Règles du workflow, dérogations, pièces et intelligence artificielle. Les grilles de notation
-          (poids, barèmes) ne se paramètrent pas ici : elles forment la version du modèle,
-          validée par le comité modèles et consignée dans chaque notation. Chaque modification est
+          Circuit de validation, règles du workflow, dérogations, pièces et intelligence artificielle. Les grilles
+          de notation et l&apos;échelle se paramètrent dans leurs écrans dédiés, par versions datées. Chaque modification est
           journalisée.
         </p>
       </div>
       <div className="card" role="status" style={{ padding: "12px 16px", fontSize: 13 }}>
         <strong>État de l&apos;IA :</strong> {ai.enabled ? (ai.missing ? `activée, mais ${ai.missing}` : `active (${ai.provider}, ${ai.model})`) : "désactivée"}.
       </div>
+      <CircuitEditor circuit={circuit} stored={stored} readOnly={!perimeter.all} holders={holders} />
       <SettingsForm
         readOnly={!perimeter.all}
         values={values}

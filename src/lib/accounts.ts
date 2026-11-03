@@ -11,6 +11,7 @@ import {
   verifyPassword,
 } from "./password";
 import { prisma } from "./prisma";
+import { loadCircuit } from "./workflow";
 import { checkRateLimit } from "./rate-limit";
 import { canRead, loadTree, WRITE_SCOPES, type Perimeter } from "./scope";
 
@@ -209,6 +210,7 @@ export async function resolveSession(token: string | undefined): Promise<Session
       role: user.role,
       entityId: user.entityId,
       writeScope: user.writeScope,
+      jobFunction: user.jobFunction ?? null,
     },
     displayName: user.displayName,
     userId: user.id,
@@ -328,6 +330,7 @@ export async function listUsers(db: { user: typeof prisma.user }) {
     select: {
       entityId: true,
       writeScope: true,
+      jobFunction: true,
       id: true,
       username: true,
       displayName: true,
@@ -344,7 +347,7 @@ export async function listUsers(db: { user: typeof prisma.user }) {
 export async function createUser(
   actor: Identity,
   scope: Perimeter,
-  input: { username: string; displayName: string; role: string; entityId: string | null; writeScope: string }
+  input: { username: string; displayName: string; role: string; entityId: string | null; writeScope: string; jobFunction?: string | null }
 ): Promise<{ username: string; temporaryPassword: string }> {
   const username = normalizeUsername(input.username);
   if (!username) {
@@ -358,6 +361,7 @@ export async function createUser(
   }
   if (!isRole(input.role)) throw new AccountError(`Rôle inconnu : ${input.role}`);
   await assertAssignable(scope, input);
+  const jobFunction = await checkedFunction(input.jobFunction);
   if (await prisma.user.findUnique({ where: { username } })) {
     throw new AccountError(`L'identifiant « ${username} » est déjà utilisé.`);
   }
@@ -375,6 +379,7 @@ export async function createUser(
         createdBy: actor.name,
         entityId: input.entityId,
         writeScope: input.writeScope,
+        jobFunction,
       },
     });
     await auditWithin(tx, {
@@ -384,7 +389,7 @@ export async function createUser(
       resourceType: "User",
       resourceId: user.id,
       entityId: input.entityId,
-      detail: { username, displayName, role: input.role, entityId: input.entityId, writeScope: input.writeScope },
+      detail: { username, displayName, role: input.role, entityId: input.entityId, writeScope: input.writeScope, fonction: jobFunction },
     });
   });
   return { username, temporaryPassword };
@@ -558,6 +563,40 @@ export async function setUserEntity(
         avant: { entityId: user.entityId, writeScope: user.writeScope },
         apres: { entityId, writeScope },
       },
+    });
+  });
+}
+
+/** Fonction du circuit de validation : code connu du circuit, ou aucune. */
+async function checkedFunction(raw: string | null | undefined): Promise<string | null> {
+  const code = (raw ?? "").trim();
+  if (!code) return null;
+  const { circuit } = await loadCircuit({ fresh: true });
+  if (!circuit.functions.some((f) => f.code === code)) throw new AccountError(`Fonction inconnue : ${code}.`);
+  return code;
+}
+
+/**
+ * Fonction métier d'un compte dans le circuit de validation. Un administrateur
+ * ne modifie pas la sienne : il ne s'attribue pas une étape de validation.
+ */
+export async function setUserFunction(actor: Identity, scope: Perimeter, userId: string, raw: string | null): Promise<void> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AccountError("Compte introuvable.");
+  assertManageable(scope, user);
+  if (user.username === actor.name) throw new AccountError("Un administrateur ne modifie pas sa propre fonction.");
+  const jobFunction = await checkedFunction(raw);
+  if ((user.jobFunction ?? null) === jobFunction) return;
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { jobFunction } });
+    await auditWithin(tx, {
+      actor: actor.name,
+      actorRole: actor.role,
+      action: "USER_FUNCTION_CHANGED",
+      resourceType: "User",
+      resourceId: user.id,
+      entityId: user.entityId,
+      detail: { username: user.username, avant: user.jobFunction ?? null, apres: jobFunction },
     });
   });
 }

@@ -56,7 +56,8 @@ Brouillon ──abandon──▶ Abandonné
   - après soumission, le résultat figé ;
   - le panneau de validation ;
   - l'historique complet du dossier, tiré du journal d'audit.
-- **Liste des dossiers.** Onglets par statut et onglet « À traiter » : ses brouillons et rejets ; pour un valideur, les dossiers soumis par d'autres.
+- **Liste des dossiers.** Onglets par statut et onglet « À traiter » : ses brouillons et rejets, et les dossiers dont l'étape en attente du circuit lui revient (fonction et rôle).
+- **Circuit de validation (D-55).** Étapes paramétrables, par défaut directeur du centre d'affaires puis contre-étude (validation finale) ; circuit figé à la soumission ; une personne par étape.
 - **Séparation des fonctions.** Un contributeur ne valide pas. Le panneau indique pourquoi, ainsi que le rôle requis et la règle de délégation qui l'impose.
 - **Note officielle.** Le tableau de bord, la liste des contreparties et l'évolution entre deux notations ne retiennent que les notations validées. Les autres portent la mention « proposée, non validée » ou « rejetée ».
 - **Dérogations.** Elles se demandent depuis une notation validée et se décident à l'écran par une seconde personne (RISK_MANAGER).

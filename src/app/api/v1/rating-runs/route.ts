@@ -5,6 +5,7 @@ import { executeRatingRun, RatingServiceError } from "@/lib/rating-service";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { ratingRequestSchema } from "@/lib/schemas";
 import { auditWithin } from "@/lib/audit";
+import { initialWorkflow } from "@/lib/cases";
 import { isOutOfScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +40,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Circuit de validation figé comme pour un dossier soumis à l'écran : même
+    // exposition, mêmes étapes (un montant absent applique toutes les étapes).
+    const exposure = ratingInput.segmentationData?.globalBankExposure;
+    const workflow = await initialWorkflow(typeof exposure === "number" && Number.isFinite(exposure) ? exposure : null);
     const { runId, result, replayed } = await executeRatingRun(
       g.ctx.db,
       g.ctx.identity,
@@ -58,6 +63,7 @@ export async function POST(req: NextRequest) {
             createdBy: g.ctx.identity.name,
             submittedBy: g.ctx.identity.name,
             submittedAt: new Date(),
+            workflow: JSON.stringify(workflow),
           },
           include: { counterparty: { select: { entityId: true } } },
         });

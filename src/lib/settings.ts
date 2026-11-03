@@ -46,9 +46,9 @@ export const SETTINGS: readonly SettingDef[] = [
   {
     key: "WORKFLOW_VALIDATOR_ROLE",
     group: "Workflow",
-    labelFr: "Rôle minimal du valideur",
+    labelFr: "Rôle minimal du valideur — dossiers soumis avant le circuit à étapes",
     helpFr:
-      "Rôle requis pour valider ou rejeter un dossier soumis. Le valideur est toujours distinct de l'auteur et de tout contributeur du dossier.",
+      "Ne concerne que les dossiers soumis avant la mise en place du circuit de validation (une seule étape). Les nouveaux dossiers suivent le circuit ci-dessus.",
     kind: "enum",
     default: "RISK_MANAGER",
     options: ["RISK_MANAGER", "ADMIN"],
@@ -59,7 +59,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Workflow",
     labelFr: "Seuil de délégation (devise de base)",
     helpFr:
-      "Au-delà de cette exposition, exprimée dans la devise de base du groupe, la validation est réservée au rôle ci-dessous. 0 : pas de seuil.",
+      "Au-delà de cette exposition, exprimée dans la devise de base du groupe, la dernière étape du circuit exige au moins le rôle ci-dessous. 0 : pas de seuil.",
     kind: "integer",
     default: "0",
     min: 0,

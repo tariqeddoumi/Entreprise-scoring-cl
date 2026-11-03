@@ -4,7 +4,8 @@ import { getScoringModel } from "@/lib/rating-scale";
 import { aiStatus } from "@/lib/ai";
 import { hasRole } from "@/lib/auth";
 import { parseDraft, proposableFields } from "@/lib/case-input";
-import { CASE_STATUS_LABELS, contributorsOf, requiredValidatorRole, validationBlocker } from "@/lib/cases";
+import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, validationBlocker } from "@/lib/cases";
+import { pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
 import { safeQuery } from "@/lib/safe-db";
 import { settingInt } from "@/lib/settings";
@@ -13,7 +14,7 @@ import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
 import { GradeBadge } from "@/app/ui-helpers";
 import { CaseStatusBadge } from "../CaseStatusBadge";
-import { CaseActions, DecisionPanel } from "./CaseActions";
+import { CaseActions, CircuitProgress, DecisionPanel, type CircuitStepView } from "./CaseActions";
 import { CaseWorkspace } from "./CaseWorkspace";
 import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
@@ -27,7 +28,8 @@ const ACTION_LABELS: Record<string, string> = {
   AI_PROPOSALS_GENERATED: "Analyse par l'IA",
   AI_PROPOSAL_DECIDED: "Proposition de l'IA traitée",
   CASE_SUBMITTED: "Soumis à validation",
-  CASE_VALIDATED: "Validé",
+  CASE_STEP_APPROVED: "Étape de validation franchie",
+  CASE_VALIDATED: "Validation finale",
   CASE_REJECTED: "Rejeté",
   CASE_CANCELLED: "Abandonné",
 };
@@ -43,6 +45,10 @@ function describe(action: string, detail: string | null): string {
         return `${d.propositions ?? 0} proposition(s), ${d.ecartees ?? 0} écartée(s) · ${d.modele ?? ""}`;
       case "AI_PROPOSAL_DECIDED":
         return `${d.champ} = ${d.valeur} · ${d.decision === "ACCEPTED" ? "acceptée" : "refusée"}`;
+      case "CASE_STEP_APPROVED":
+      case "CASE_VALIDATED":
+      case "CASE_REJECTED":
+        return [d.libelleEtape ? `${d.libelleEtape}${d.rang ? ` (étape ${d.rang}/${d.etapes})` : ""}` : "", d.motif ? `motif : ${d.motif}` : ""].filter(Boolean).join(" · ");
       case "CASE_SUBMITTED":
         return d.devise && d.devise !== "MAD" ? `montants en ${d.devise}, cours ${d.cours}` : "";
       case "CASE_REJECTED":
@@ -123,8 +129,9 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const editable = c.status === "DRAFT" && canRate;
   const ai = await aiStatus();
   const maxMb = await settingInt("DOCUMENT_MAX_MB");
-  const exposure = fx?.amounts.globalBankExposure?.base ?? null;
-  const validator = await requiredValidatorRole(exposure);
+  const workflow = c.status === "SUBMITTED" || c.status === "VALIDATED" || c.status === "REJECTED" ? await caseWorkflow(c) : null;
+  const circuit = workflow ? stepsView(workflow, c) : [];
+  const pendingIdx = workflow ? pendingStepIndex(workflow) : null;
 
   const labels = new Map(proposableFields(model).map((f) => [f.key, f]));
   const proposals = c.proposals.map((p) => ({
@@ -190,14 +197,22 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {c.status === "SUBMITTED" && (
+      {c.status === "SUBMITTED" && workflow && pendingIdx !== null && (
         <DecisionPanel
           caseId={c.id}
           blocker={blocker}
-          requiredRole={validator.role}
-          reasonFr={validator.reasonFr}
+          steps={circuit}
+          pendingLabelFr={workflow.steps[pendingIdx].labelFr}
+          isFinal={pendingIdx === workflow.steps.length - 1}
           contributors={contributors}
         />
+      )}
+
+      {(c.status === "VALIDATED" || c.status === "REJECTED") && circuit.length > 0 && (
+        <section className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
+          <h2 style={{ fontWeight: 600 }}>Circuit de validation</h2>
+          <CircuitProgress steps={circuit} />
+        </section>
       )}
 
       {(c.status === "DRAFT" || c.status === "REJECTED") && canRate && <CaseActions caseId={c.id} status={c.status} />}
@@ -299,4 +314,32 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       </section>
     </div>
   );
+}
+
+/** Vue des étapes du circuit : décision, attente ou à venir. */
+function stepsView(
+  w: CaseWorkflow,
+  c: { status: string; workflow: string | null; decidedBy: string | null; decidedAt: Date | null; decisionComment: string | null }
+): CircuitStepView[] {
+  const pending = pendingStepIndex(w);
+  const legacyDone = !c.workflow && (c.status === "VALIDATED" || c.status === "REJECTED");
+  return w.steps.map((st, i) => {
+    const d = w.decisions.find((x) => x.step === st.code);
+    const whoFr = `${st.functionLabels.length > 0 ? st.functionLabels.join(", ") : "Toute fonction"} · rôle ${WORKFLOW_ROLE_LABELS[st.minRole] ?? st.minRole} au moins`;
+    if (d) {
+      return { code: st.code, labelFr: st.labelFr, whoFr, state: d.decision === "APPROVED" ? "DONE" : "REJECTED", decidedBy: d.by, decidedAt: d.at.slice(0, 16).replace("T", " "), comment: d.comment };
+    }
+    if (legacyDone && i === 0) {
+      return {
+        code: st.code,
+        labelFr: st.labelFr,
+        whoFr,
+        state: c.status === "VALIDATED" ? "DONE" : "REJECTED",
+        decidedBy: c.decidedBy ?? undefined,
+        decidedAt: c.decidedAt?.toISOString().slice(0, 16).replace("T", " "),
+        comment: c.decisionComment,
+      };
+    }
+    return { code: st.code, labelFr: st.labelFr, whoFr, state: c.status === "SUBMITTED" && i === pending ? "PENDING" : "TODO" };
+  });
 }

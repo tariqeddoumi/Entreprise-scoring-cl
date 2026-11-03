@@ -54,42 +54,93 @@ export function CaseActions({ caseId, status }: { caseId: string; status: string
   );
 }
 
-/** Validation par une seconde personne : valider, ou rejeter avec un motif. */
+export interface CircuitStepView {
+  code: string;
+  labelFr: string;
+  whoFr: string;
+  state: "DONE" | "PENDING" | "TODO" | "REJECTED";
+  decidedBy?: string;
+  decidedAt?: string;
+  comment?: string | null;
+}
+
+/** Progression du circuit de validation, étape par étape. */
+export function CircuitProgress({ steps }: { steps: CircuitStepView[] }) {
+  const mark: Record<CircuitStepView["state"], { sym: string; color: string; label: string }> = {
+    DONE: { sym: "✓", color: "var(--good)", label: "validée" },
+    PENDING: { sym: "●", color: "var(--warn)", label: "en attente" },
+    TODO: { sym: "○", color: "var(--muted)", label: "à venir" },
+    REJECTED: { sym: "✕", color: "var(--bad)", label: "rejet" },
+  };
+  return (
+    <ol aria-label="Circuit de validation" style={{ display: "grid", gap: 8, listStyle: "none", padding: 0, margin: 0 }}>
+      {steps.map((s, i) => {
+        const m = mark[s.state];
+        return (
+          <li key={s.code} style={{ display: "grid", gridTemplateColumns: "28px 1fr", gap: 8, alignItems: "start" }}>
+            <span
+              aria-hidden
+              style={{ width: 24, height: 24, borderRadius: 999, display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, color: "#fff", background: m.color }}
+            >
+              {s.state === "TODO" || s.state === "PENDING" ? i + 1 : m.sym}
+            </span>
+            <div style={{ fontSize: 13 }}>
+              <strong>{s.labelFr}</strong> <span style={{ color: m.color, fontWeight: 600 }}>— {m.label}</span>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {s.decidedBy ? `${s.state === "REJECTED" ? "Rejeté" : "Validé"} par ${s.decidedBy} le ${s.decidedAt}` : s.whoFr}
+                {s.comment ? ` · « ${s.comment} »` : ""}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Décision sur l'étape en attente : valider l'étape, ou rejeter avec un motif. */
 export function DecisionPanel({
   caseId,
   blocker,
-  requiredRole,
-  reasonFr,
+  steps,
+  pendingLabelFr,
+  isFinal,
   contributors,
 }: {
   caseId: string;
   blocker: string | null;
-  requiredRole: string;
-  reasonFr: string;
+  steps: CircuitStepView[];
+  pendingLabelFr: string;
+  isFinal: boolean;
   contributors: string[];
 }) {
   const [state, action, pending] = useActionState(decideCaseAction, { ok: false });
   const [comment, setComment] = useState("");
   return (
-    <section className="card" style={{ padding: 16, borderLeft: "4px solid var(--warn)" }}>
-      <h2 style={{ fontWeight: 600, marginBottom: 6 }}>Validation</h2>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-        Rôle requis : {requiredRole} ({reasonFr}). Exclus de la validation (contributeurs) : {contributors.join(", ") || "—"}.
+    <section className="card" style={{ padding: 16, borderLeft: "4px solid var(--warn)", display: "grid", gap: 12 }}>
+      <h2 style={{ fontWeight: 600 }}>Circuit de validation</h2>
+      <CircuitProgress steps={steps} />
+      <p className="muted" style={{ fontSize: 12 }}>
+        Exclus de la validation (contributeurs du dossier) : {contributors.join(", ") || "—"}. Une même personne ne décide que d&apos;une
+        étape.
       </p>
       {blocker ? (
-        <p style={{ fontSize: 13 }}>Vous ne pouvez pas décider de ce dossier : {blocker}.</p>
+        <>
+          <Feedback state={state} />
+          <p style={{ fontSize: 13 }}>Vous ne pouvez pas décider de l&apos;étape « {pendingLabelFr} » : {blocker}.</p>
+        </>
       ) : (
         <form action={action} style={{ display: "grid", gap: 10 }}>
           <input type="hidden" name="caseId" value={caseId} />
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-              Commentaire (obligatoire en cas de rejet, 10 caractères au moins)
+              Avis ou commentaire (obligatoire en cas de rejet, 10 caractères au moins)
             </div>
             <textarea name="comment" rows={3} maxLength={4000} value={comment} onChange={(e) => setComment(e.target.value)} />
           </label>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button type="submit" name="decision" value="VALIDATED" className="btn-primary" disabled={pending}>
-              Valider la notation
+              {isFinal ? "Validation finale" : `Valider : ${pendingLabelFr}`}
             </button>
             <button
               type="submit"
