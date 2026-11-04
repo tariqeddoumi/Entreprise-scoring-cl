@@ -6,6 +6,9 @@
  * notations, dérogations, lots et planifications de renotation, cours de
  * change, webhooks et outbox, paramétrage (retour aux valeurs par défaut).
  *
+ * Les paramètres de l'IA (clés AI_*) sont conservés avec le reste de leur
+ * configuration : activation, fournisseur, modèle, adresse.
+ *
  * Conservé : comptes utilisateurs et leurs sessions, entités (le seed les
  * recrée ou les met à jour), journal d'audit (en ajout seul : jamais purgé).
  *
@@ -39,7 +42,7 @@ async function counts() {
     prisma.economicGroup.count(),
     prisma.renotationBatch.count(),
     prisma.exchangeRate.count(),
-    prisma.appSetting.count(),
+    prisma.appSetting.count({ where: { NOT: { key: { startsWith: "AI_" } } } }),
     prisma.user.count(),
     prisma.entity.count(),
   ]);
@@ -52,9 +55,9 @@ async function main() {
   console.log("À supprimer :");
   console.log(
     `  ${before.counterparties} client(s), ${before.runs} notation(s), ${before.cases} dossier(s), ${before.overrides} dérogation(s), ` +
-      `${before.groups} groupe(s), ${before.batches} lot(s), ${before.rates} cours, ${before.settings} paramètre(s)`
+      `${before.groups} groupe(s), ${before.batches} lot(s), ${before.rates} cours, ${before.settings} paramètre(s) hors IA`
   );
-  console.log(`À conserver : ${before.users} compte(s), ${before.entities} entité(s), journal d'audit\n`);
+  console.log(`À conserver : ${before.users} compte(s), ${before.entities} entité(s), paramètres de l'IA, journal d'audit\n`);
   if (!confirm) {
     console.log("Aucune suppression : relancer avec --confirm pour exécuter.");
     return;
@@ -76,7 +79,7 @@ async function main() {
       await tx.webhookSubscription.deleteMany();
       await tx.outboxEvent.deleteMany();
       await tx.exchangeRate.deleteMany();
-      await tx.appSetting.deleteMany();
+      await tx.appSetting.deleteMany({ where: { NOT: { key: { startsWith: "AI_" } } } });
     },
     { timeout: 120_000 }
   );
