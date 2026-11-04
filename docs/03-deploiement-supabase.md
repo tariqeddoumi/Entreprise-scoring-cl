@@ -148,6 +148,10 @@ renotation ; le second rattache les webhooks à une entité, crée l'outbox des
 événements sortants et l'index unique partiel `overrides_one_pending_per_run`
 (une seule dérogation en attente par notation).
 
+### Remise à zéro et nouveau jeu de démonstration
+
+`npm run db:reset-seed` supprime toutes les données métier (clients, groupes, dossiers, notations, dérogations, lots, cours de change, webhooks, paramétrage) puis recharge le jeu de démonstration, calculé par le moteur sur l'échelle 1 à 10 en vigueur. Les comptes, leurs sessions, les entités et le journal d'audit (en ajout seul) sont conservés. Sans option, le script affiche la base visée et ce qu'il supprimerait ; `-- --confirm` exécute. La suppression se fait en une seule transaction. Contre Supabase, utiliser l'adresse **directe** (`DIRECT_URL`) comme `DATABASE_URL` pour cette exécution : une transaction interactive ne passe pas par le pooler. Le jeu contient une notation de démonstration antérieure à l'échelle (STD-P2), qui illustre l'affichage de la classe équivalente.
+
 ### Circuit de validation (novembre 2026)
 
 ```bash
