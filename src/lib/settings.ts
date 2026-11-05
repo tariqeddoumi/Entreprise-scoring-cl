@@ -122,7 +122,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Intelligence artificielle",
     labelFr: "Fournisseur",
     helpFr:
-      "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (Mistral, modèle hébergé par la banque). La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou IA_CLE_API pour les autres.",
+      "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (DeepSeek, Mistral, modèle hébergé par la banque). La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou IA_CLE_API pour les autres.",
     kind: "enum",
     default: "anthropic",
     options: AI_PROVIDERS,
