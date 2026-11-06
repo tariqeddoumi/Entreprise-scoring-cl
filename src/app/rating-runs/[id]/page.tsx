@@ -21,6 +21,7 @@ import { isOfficialRun } from "@/lib/cases";
 import { effectiveGrade } from "@/lib/overrides";
 import { settingInt } from "@/lib/settings";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
+import { ClassificationBasisPanel, readClassificationBasis } from "@/app/scoring/ClassificationBasisPanel";
 import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
 export const dynamic = "force-dynamic";
@@ -222,6 +223,11 @@ export default async function RatingRunPage({
           })()}
         </section>
       )}
+
+      {(() => {
+        const cb = readClassificationBasis(run.inputSnapshot);
+        return cb ? <ClassificationBasisPanel basis={cb} /> : null;
+      })()}
 
       {financialBasis ? (
         <FinancialBasisPanel basis={financialBasis} model={model} />

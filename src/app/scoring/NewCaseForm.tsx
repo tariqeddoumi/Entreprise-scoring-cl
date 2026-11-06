@@ -25,6 +25,8 @@ interface Props {
   }>;
   /** Motifs actifs (paramétrage). */
   purposes: CasePurpose[];
+  /** Types de crédit actifs (paramétrage). */
+  creditTypes?: Array<{ code: string; labelFr: string }>;
   today: string;
   canRate: boolean;
   /** Ouverture depuis la fiche client : le client est imposé. */
@@ -39,15 +41,17 @@ const nextYear = (l: LastRating) => (/^\d{4}$/.test(l.fiscalYear) ? String(Numbe
  * exercice), soit décalé d'un an (N devient N−1) et seul le nouveau bilan est
  * à charger.
  */
-export function NewCaseForm({ models, defaultModelId, counterparties, purposes, today, canRate, fixedCounterpartyId }: Props) {
+export function NewCaseForm({ models, defaultModelId, counterparties, purposes, creditTypes = [], today, canRate, fixedCounterpartyId }: Props) {
   const [state, action, pending] = useActionState(createCaseAction, { ok: false });
   const [counterpartyId, setCounterpartyId] = useState(fixedCounterpartyId ?? "");
   const [purposeCode, setPurposeCode] = useState("");
   const [asOfDate, setAsOfDate] = useState(today);
   const [chosen, setChosen] = useState<ExerciseChoice | null>(null);
+  const [creditType, setCreditType] = useState<string | null>(null);
   const last = counterparties.find((c) => c.id === counterpartyId)?.last;
   const purpose = purposes.find((p) => p.code === purposeCode);
   const exercise: ExerciseChoice = chosen ?? suggestedExercise(last?.closingDate, asOfDate, purpose);
+  const credit = creditType ?? purpose?.defaultCreditType ?? "";
 
   return (
     <form action={action} className="card" style={{ padding: 16, display: "grid", gap: 12 }}>
@@ -103,6 +107,23 @@ export function NewCaseForm({ models, defaultModelId, counterparties, purposes, 
               ))}
             </select>
           </label>
+          {creditTypes.length > 0 && (
+            <label>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+                Type de crédit
+              </div>
+              <select name="creditType" required value={credit} onChange={(e) => setCreditType(e.target.value)}>
+                <option value="" disabled>
+                  — Choisir —
+                </option>
+                {creditTypes.map((t) => (
+                  <option key={t.code} value={t.code}>
+                    {t.labelFr}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
               Modèle

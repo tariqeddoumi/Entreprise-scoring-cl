@@ -73,6 +73,7 @@ async function main() {
       await tx.ratingCase.deleteMany();
       await tx.override.deleteMany();
       await tx.ratingRun.deleteMany();
+      await tx.committeeDecision.deleteMany();
       await tx.financialStatement.deleteMany();
       await tx.counterparty.deleteMany();
       await tx.economicGroup.deleteMany();

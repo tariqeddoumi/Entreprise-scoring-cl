@@ -18,6 +18,8 @@ export interface CounterpartyRow {
   canRate: boolean;
   /** Statut du dossier en cours (brouillon ou soumis), s'il y en a un. */
   openCase: string | null;
+  /** En watch list (décision de comité en vigueur). */
+  watchlist?: boolean;
   /** Dernière notation OFFICIELLE (validée, ou antérieure au workflow). */
   ratingRuns: Array<{ finalGrade: string | null; rawScore: number | null; asOfDate: string; equivalent?: string | null }>;
 }
@@ -155,6 +157,11 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     {!c.isActive && (
                       <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
                         · désactivé
+                      </span>
+                    )}
+                    {c.watchlist && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "var(--bad)", borderRadius: 999, padding: "1px 6px", marginLeft: 6 }} title="Client en watch list (décision de comité)">
+                        Watch list
                       </span>
                     )}
                     {c.openCase && (

@@ -2,16 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getScoringModel, today } from "@/lib/rating-scale";
 import { effectiveFormat, formatByVersion } from "@/lib/statement-format";
-import { loadPurposes } from "@/lib/financial-statements";
-import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
+import { loadCreditTypes, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_CREDIT_TYPES, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { aiStatus } from "@/lib/ai";
 import { hasRole } from "@/lib/auth";
-import { parseDraft, proposableFields } from "@/lib/case-input";
+import { draftClassification, draftFinancials, parseDraft, proposableFields } from "@/lib/case-input";
 import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, validationBlocker } from "@/lib/cases";
-import { pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
+import { actorStepIndex, hasPermission, holdersOf, pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
+import { caseLifts, counterpartyLifts, loadClassification, watchlistState } from "@/lib/committee";
+import { DEFAULT_CLASSIFICATION } from "@/reference/classification";
+import { LiftPanel } from "@/app/committee/CommitteePanels";
+import { loadCircuit } from "@/lib/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
 import { safeQuery } from "@/lib/safe-db";
-import { settingInt } from "@/lib/settings";
+import { settingBool, settingInt } from "@/lib/settings";
 import { requireSession } from "@/lib/session";
 import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
@@ -134,7 +138,50 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const frozenBasis = c.run ? readFinancialBasis(c.run.inputSnapshot) : null;
   const format = c.status === "DRAFT" ? await effectiveFormat(today()) : await formatByVersion(frozenBasis?.formatVersion, today());
   const ai = await aiStatus();
-  const purposeLabel = c.purpose ? ((await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES)).data.find((p) => p.code === c.purpose)?.labelFr ?? c.purpose) : null;
+  // Critères de classement BAM, levées de comité (ce dossier, rappel des précédents), watch list.
+  const committee = (
+    await safeQuery(
+      async (db) => {
+        const [classification, lifts, all, wl] = await Promise.all([
+          loadClassification(db),
+          caseLifts(db, c.id),
+          counterpartyLifts(db, c.counterparty.id),
+          watchlistState(db, c.counterparty.id),
+        ]);
+        const otherIds = [...new Set(all.filter((d) => d.caseId && d.caseId !== c.id && d.status === "EFFECTIVE").map((d) => d.caseId!))];
+        const others = otherIds.length ? await db.ratingCase.findMany({ where: { id: { in: otherIds } }, select: { id: true, asOfDate: true, status: true, decidedAt: true }, orderBy: { decidedAt: "desc" } }) : [];
+        const lastOther = others.find((o) => o.status === "VALIDATED");
+        return { classification, lifts, all, wl, lastOtherId: lastOther?.id ?? null, lastOtherAsOf: lastOther?.asOfDate ?? null };
+      },
+      { classification: DEFAULT_CLASSIFICATION, lifts: [], all: [], wl: { inWatchlist: false, since: null, lastExit: null, history: [] }, lastOtherId: null, lastOtherAsOf: null }
+    )
+  ).data;
+  const { circuit: circuitDef } = await loadCircuit();
+  const liftDouble = await settingBool("COMMITTEE_LIFT_DOUBLE_VALIDATION");
+  const activeCriteria = (() => {
+    const cl = draftClassification(draft, draftFinancials(draft, model, format), committee.classification, committee.lifts);
+    return cl.items.filter((i) => i.state === "COCHE").map((i) => ({ code: i.code, labelFr: i.labelFr }));
+  })();
+  const toRow = (d: (typeof committee.all)[number]) => ({
+    id: d.id,
+    kind: d.kind,
+    codes: d.codes,
+    effectiveDate: d.effectiveDate,
+    committeeDate: d.committeeDate,
+    reference: d.reference,
+    motif: d.motif,
+    status: d.status,
+    recordedBy: d.recordedBy,
+    confirmedBy: d.confirmedBy,
+    cancelReason: d.cancelReason,
+  });
+  const refs = (await safeQuery(async (db) => ({ purposes: await loadPurposes(db), creditTypes: await loadCreditTypes(db) }), { purposes: DEFAULT_PURPOSES, creditTypes: DEFAULT_CREDIT_TYPES })).data;
+  const purposeLabel = [
+    c.purpose ? (refs.purposes.find((p) => p.code === c.purpose)?.labelFr ?? c.purpose) : null,
+    c.creditType ? (refs.creditTypes.find((t) => t.code === c.creditType)?.labelFr ?? c.creditType) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || null;
   const maxMb = await settingInt("DOCUMENT_MAX_MB");
   const workflow = c.status === "SUBMITTED" || c.status === "VALIDATED" || c.status === "REJECTED" ? await caseWorkflow(c) : null;
   const circuit = workflow ? stepsView(workflow, c) : [];
@@ -205,16 +252,21 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {c.status === "SUBMITTED" && workflow && pendingIdx !== null && (
-        <DecisionPanel
-          caseId={c.id}
-          blocker={blocker}
-          steps={circuit}
-          pendingLabelFr={workflow.steps[pendingIdx].labelFr}
-          isFinal={pendingIdx === workflow.steps.length - 1}
-          contributors={contributors}
-        />
-      )}
+      {c.status === "SUBMITTED" && workflow && pendingIdx !== null && (() => {
+        // Étape que la personne connectée peut traiter (un avis ouvert ou l'étape en attente).
+        const mineIdx = actorStepIndex(workflow, { name: identity.name, role: identity.role, jobFunction: identity.jobFunction ?? null });
+        const target = workflow.steps[mineIdx ?? pendingIdx];
+        return (
+          <DecisionPanel
+            caseId={c.id}
+            blocker={blocker}
+            steps={circuit}
+            pendingLabelFr={target.labelFr}
+            kind={target.kind === "AVIS" ? "AVIS" : target.kind === "DECISION" ? "DECISION" : mineIdx === workflow.steps.length - 1 || pendingIdx === workflow.steps.length - 1 ? "FINAL" : "VALIDATION"}
+            contributors={contributors}
+          />
+        );
+      })()}
 
       {(c.status === "VALIDATED" || c.status === "REJECTED") && circuit.length > 0 && (
         <section className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
@@ -273,6 +325,29 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </section>
       )}
 
+      {committee.wl.inWatchlist && (
+        <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--bad)", fontSize: 14 }}>
+          <strong>Client en watch list</strong> depuis le {committee.wl.since} (décision de comité) —{" "}
+          <Link href={`/counterparties/${c.counterparty.id}#watchlist`} style={{ color: "var(--brand)" }}>
+            voir l&apos;historique
+          </Link>
+          .
+        </div>
+      )}
+
+      <LiftPanel
+        caseId={c.id}
+        today={today()}
+        activeCriteria={activeCriteria}
+        decisions={committee.all.filter((d) => d.caseId === c.id).map(toRow)}
+        previous={committee.lastOtherId ? committee.all.filter((d) => d.caseId === committee.lastOtherId && d.status === "EFFECTIVE").map((d) => ({ ...toRow(d), caseAsOf: committee.lastOtherAsOf })) : []}
+        canRecord={hasPermission(circuitDef, identity.jobFunction, "LEVER_CRITERE")}
+        canConfirm={hasPermission(circuitDef, identity.jobFunction, "CONFIRMER_LEVEE")}
+        holdersFr={holdersOf(circuitDef, "LEVER_CRITERE").map((f) => f.labelFr).join(", ") || "aucun profil"}
+        open={c.status === "DRAFT" || c.status === "SUBMITTED"}
+        doubleValidation={liftDouble}
+      />
+
       <CaseWorkspace
         caseId={c.id}
         model={model}
@@ -284,6 +359,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         ai={{ enabled: ai.enabled, missing: ai.missing, provider: ai.provider, model: ai.model }}
         maxMb={maxMb}
         format={format}
+        classification={committee.classification}
+        lifts={committee.lifts}
       />
 
       <section className="card" style={{ padding: 16 }}>
@@ -332,11 +409,21 @@ function stepsView(
 ): CircuitStepView[] {
   const pending = pendingStepIndex(w);
   const legacyDone = !c.workflow && (c.status === "VALIDATED" || c.status === "REJECTED");
-  return w.steps.map((st, i) => {
+  return w.steps.map((rawStep, i) => {
+    // Niveau de décision inférieur devenu instruction pour ce dossier.
+    const st = rawStep.instruction ? { ...rawStep, labelFr: `${rawStep.labelFr.replace(/\s*:\s*décision$/i, "")} : instruction` } : rawStep;
     const d = w.decisions.find((x) => x.step === st.code);
-    const whoFr = `${st.functionLabels.length > 0 ? st.functionLabels.join(", ") : "Toute fonction"} · rôle ${WORKFLOW_ROLE_LABELS[st.minRole] ?? st.minRole} au moins`;
+    const nature = st.kind === "AVIS" ? (st.instruction ? "instruction, avis bloquant" : st.blocking ? "avis bloquant" : "avis non bloquant") : st.kind === "DECISION" ? "décision" : null;
+    const whoFr = `${nature ? `${nature[0].toUpperCase()}${nature.slice(1)} · ` : ""}${st.functionLabels.length > 0 ? st.functionLabels.join(", ") : "Toute fonction"} · rôle ${WORKFLOW_ROLE_LABELS[st.minRole] ?? st.minRole} au moins`;
     if (d) {
-      return { code: st.code, labelFr: st.labelFr, whoFr, state: d.decision === "APPROVED" ? "DONE" : "REJECTED", decidedBy: d.by, decidedAt: d.at.slice(0, 16).replace("T", " "), comment: d.comment };
+      const state = d.decision === "APPROVED" ? "DONE" : d.decision === "REJECTED" ? "REJECTED" : d.decision === "FAVORABLE" ? "FAVORABLE" : "DEFAVORABLE";
+      return { code: st.code, labelFr: st.labelFr, whoFr, state, decidedBy: d.by, decidedAt: d.at.slice(0, 16).replace("T", " "), comment: d.comment };
+    }
+    if (st.kind === "AVIS" && !st.blocking && c.status !== "SUBMITTED") {
+      return { code: st.code, labelFr: st.labelFr, whoFr, state: "SKIPPED" };
+    }
+    if (st.kind === "AVIS" && !st.blocking && c.status === "SUBMITTED") {
+      return { code: st.code, labelFr: st.labelFr, whoFr, state: "OPEN" };
     }
     if (legacyDone && i === 0) {
       return {

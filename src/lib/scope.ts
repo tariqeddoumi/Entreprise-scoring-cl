@@ -39,15 +39,17 @@ export interface EntityNode {
   toolName: string | null;
   logoUrl: string | null;
   primaryColor: string | null;
+  riskTier?: string | null;
 }
 
-export const ENTITY_TYPES = ["GROUP", "BANK", "REGIONAL_BANK", "SUBSIDIARY_GROUP", "SUBSIDIARY"] as const;
+export const ENTITY_TYPES = ["GROUP", "BANK", "REGIONAL_BANK", "BUSINESS_CENTER", "SUBSIDIARY_GROUP", "SUBSIDIARY"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
   GROUP: "Groupe",
   BANK: "Banque",
   REGIONAL_BANK: "Banque régionale",
+  BUSINESS_CENTER: "Centre d'affaires",
   SUBSIDIARY_GROUP: "Groupe de filiales",
   SUBSIDIARY: "Filiale",
 };
@@ -183,11 +185,21 @@ export async function loadTree(): Promise<EntityNode[]> {
     orderBy: [{ level: "asc" }, { name: "asc" }],
     select: {
       id: true, code: true, name: true, type: true, parentId: true, path: true, level: true,
-      country: true, currency: true, isActive: true, toolName: true, logoUrl: true, primaryColor: true,
+      country: true, currency: true, isActive: true, toolName: true, logoUrl: true, primaryColor: true, riskTier: true,
     },
   });
   treeCache = { tree, expires: Date.now() + TREE_TTL_MS };
   return tree;
+}
+
+/** Catégorie de délégation d'une entité : la sienne, sinon celle de l'entité mère la plus proche. */
+export function tierOf(tree: EntityNode[], entityId: string | null | undefined): string | null {
+  let cur = entityId ? tree.find((e) => e.id === entityId) : undefined;
+  while (cur) {
+    if (cur.riskTier) return cur.riskTier;
+    cur = cur.parentId ? tree.find((e) => e.id === cur!.parentId) : undefined;
+  }
+  return null;
 }
 
 /** À appeler après toute modification de l'arbre. */
@@ -228,6 +240,7 @@ export const SCOPED_MODELS: Record<string, Filter> = {
   RenotationItem: byCounterparty,
   // Référentiel des bilans : ceux des clients du périmètre.
   FinancialStatement: byCounterparty,
+  CommitteeDecision: byCounterparty,
   // Souscriptions et événements : une filiale ne voit ni ne reçoit ceux d'une
   // autre (diagnostic S01) ; ceux du groupe entier (entité nulle) ne sont
   // visibles que du périmètre groupe.
@@ -328,6 +341,7 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
     }
     case "RenotationItem":
     case "FinancialStatement":
+    case "CommitteeDecision":
       return writableCounterparty(ref(data, "counterpartyId", "counterparty"));
     case "WebhookDelivery": {
       const subId = ref(data, "subscriptionId", "subscription");

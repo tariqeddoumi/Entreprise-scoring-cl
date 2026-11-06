@@ -55,6 +55,7 @@ export async function createCaseAction(_prev: ActionResult, fd: FormData): Promi
       modelId: String(fd.get("modelId") ?? ""),
       asOfDate: String(fd.get("asOfDate") ?? ""),
       purpose: String(fd.get("purpose") ?? "") || undefined,
+      creditType: String(fd.get("creditType") ?? "") || undefined,
       exercise: fd.get("exercise") === "SUIVANT" ? "SUIVANT" : fd.get("exercise") === "CONSERVE" ? "CONSERVE" : undefined,
     });
     id = created.id;
@@ -121,7 +122,9 @@ export async function decideCaseAction(_prev: ActionResult, fd: FormData): Promi
       ? "Validation finale : la notation devient la note du client."
       : outcome.status === "REJECTED"
         ? "Dossier rejeté."
-        : `Étape « ${outcome.stepFr} » validée. Étape suivante : ${outcome.nextStepFr}.`;
+        : outcome.opinion
+          ? `Avis ${outcome.opinion === "FAVORABLE" ? "favorable" : "défavorable"} enregistré (« ${outcome.stepFr} »).${outcome.nextStepFr ? ` En attente : ${outcome.nextStepFr}.` : ""}`
+          : `Étape « ${outcome.stepFr} » validée. Étape suivante : ${outcome.nextStepFr}.`;
   return { ok: true, okFr };
 }
 

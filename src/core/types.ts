@@ -578,6 +578,23 @@ export interface RatingInput {
   defaultTriggered?: boolean;
   /** Grade de défaut constaté (DEF1/DEF2/DEF3) ; DEF1 par défaut. */
   defaultGrade?: "DEF1" | "DEF2" | "DEF3";
+  /**
+   * Plafond issu des critères de classement BAM (créance sensible,
+   * pré-douteuse) : appliqué après le grade moteur, comme une exception non
+   * compensatoire (D-57). Un critère levé par un comité n'y figure plus.
+   */
+  regulatoryCap?: { maxGrade: string; family: string; codes: string[]; labelFr: string };
+  /**
+   * Critères de classement du dossier (cochés, levés), conservés dans
+   * l'instantané pour la fiche ; SANS effet sur le calcul au-delà du plafond
+   * ou du défaut transmis.
+   */
+  classificationBasis?: {
+    family: string | null;
+    effect: string | null;
+    items: Array<{ code: string; family: string; labelFr: string; article: string; state: "COCHE" | "LEVE"; by?: "BILAN" | "ANALYSTE"; date?: string; comment?: string }>;
+    lifts: Array<{ codes: string[]; committeeDate: string; reference: string; recordedBy: string; confirmedBy?: string | null }>;
+  };
   asOfDate: string; // ISO date — date d'arrêté
 }
 

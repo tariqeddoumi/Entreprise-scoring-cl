@@ -40,7 +40,7 @@ model Entity {
   id           String   @id @default(cuid())
   code         String   @unique // code court, ex. BCP, BP-CASA, BA-CI
   name         String
-  type         String // GROUP | BANK | REGIONAL_BANK | SUBSIDIARY_GROUP | SUBSIDIARY
+  type         String // GROUP | BANK | REGIONAL_BANK | BUSINESS_CENTER | SUBSIDIARY_GROUP | SUBSIDIARY
   parentId     String?
   parent       Entity?  @relation("EntityTree", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   children     Entity[] @relation("EntityTree")
@@ -53,6 +53,9 @@ model Entity {
   toolName     String?
   logoUrl      String?
   primaryColor String?
+  // Catégorie de délégation (normale, encadrée, restreinte…) : héritée de
+  // l'entité mère la plus proche si vide ; condition du circuit de validation.
+  riskTier     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -121,6 +124,7 @@ model Counterparty {
   ratingCases      RatingCase[]
   renotationItems  RenotationItem[]
   statements       FinancialStatement[]
+  committeeDecisions CommitteeDecision[]
 
   @@unique([entityId, ice])
   @@index([name])
@@ -397,6 +401,8 @@ model RatingCase {
   workflow        String?      @db.Text
   // Motif du dossier (renouvellement annuel, investissement…), liste paramétrable.
   purpose         String?
+  // Type de crédit (fonctionnement, investissement…) : condition du circuit.
+  creditType      String?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -565,4 +571,38 @@ model FinancialStatement {
   @@unique([counterpartyId, closingDate])
   @@index([counterpartyId])
   @@map("financial_statements")
+}
+
+// Décisions de comité enregistrées dans l'outil : levée de critères de
+// classement (créance sensible, pré-douteuse…) sur un dossier, entrée et
+// sortie de watch list. Enregistrées par un profil habilité, confirmées par
+// une seconde personne si le paramétrage l'exige. Jamais supprimées : une
+// décision erronée est annulée, avec motif.
+model CommitteeDecision {
+  id               String       @id @default(cuid())
+  counterpartyId   String
+  counterparty     Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  caseId           String?
+  // LEVEE_CRITERES | WL_ENTREE | WL_SORTIE
+  kind             String
+  // Levée : codes des critères levés (JSON).
+  criteria         String?      @db.Text
+  committeeDate    String // AAAA-MM-JJ
+  reference        String // numéro du procès-verbal
+  motif            String       @db.Text
+  // Date d'effet : entrée ou sortie de watch list (peut être passée : reprise de l'historique).
+  effectiveDate    String
+  // EN_ATTENTE (confirmation) | EFFECTIVE | ANNULEE
+  status           String
+  recordedBy       String
+  recordedFunction String?
+  confirmedBy      String?
+  confirmedAt      DateTime?
+  cancelledBy      String?
+  cancelReason     String?      @db.Text
+  createdAt        DateTime     @default(now())
+
+  @@index([counterpartyId, kind])
+  @@index([caseId])
+  @@map("committee_decisions")
 }

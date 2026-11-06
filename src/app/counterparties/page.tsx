@@ -2,6 +2,7 @@ import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
 import { OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
+import { watchlistedIds } from "@/lib/committee";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
 import { transposeGrade } from "@/core/grades";
 import { effectiveScale } from "@/lib/rating-scale";
@@ -47,6 +48,7 @@ export default async function CounterpartiesPage() {
       const ids = rows.map((r) => r.id);
       const lastRun = new Map<string, CounterpartyRow["ratingRuns"]>();
       const openCase = new Map<string, string>();
+      let wl = new Set<string>();
       try {
         const [runs, cases] = await Promise.all([
           // Note courante : la dernière notation qui fait foi (validée, ou
@@ -73,6 +75,7 @@ export default async function CounterpartiesPage() {
           }
         }
         for (const c of cases) openCase.set(c.counterpartyId, c.status);
+        wl = await watchlistedIds(db, ids);
       } catch (e) {
         console.error("[clients] lecture des notations impossible :", e instanceof Error ? e.message : e);
       }
@@ -88,6 +91,7 @@ export default async function CounterpartiesPage() {
         isActive: r.isActive,
         canRate: canRateHere && r.isActive && canWrite(perimeter, r.entityId),
         openCase: openCase.get(r.id) ?? null,
+        watchlist: wl.has(r.id),
         ratingRuns: lastRun.get(r.id) ?? [],
       }));
       const writable: WritableEntity[] = sortTree(writableEntities(tree, perimeter)).map((e) => ({

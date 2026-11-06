@@ -6,7 +6,9 @@ import { hasRole, type Identity, type Role } from "./auth";
 import { auditWithin } from "./audit";
 import { draftAmounts, draftFinancials, draftToRequest, parseDraft, type CaseDraft, type CaseReprise } from "./case-input";
 import { emptyFinancials, gridLinks, parseFinancials, type FinancialsDraft } from "@/financials/compute";
-import { carryFinancials, loadPurposes, recordStatements, suggestedExercise, type ExerciseChoice } from "./financial-statements";
+import { carryFinancials, loadCreditTypes, loadEntityTiers, loadPurposes, recordStatements, suggestedExercise, type ExerciseChoice } from "./financial-statements";
+import { loadTree, tierOf } from "./scope";
+import { caseLifts, loadClassification } from "./classification-store";
 import { BASE_CURRENCY, convertToBase, FxError, type FxConversion } from "./fx";
 import { executeRatingRun, RatingServiceError, simulateRating } from "./rating-service";
 import { ratingRequestSchema } from "./schemas";
@@ -19,6 +21,7 @@ import {
   startWorkflow,
   stepBlocker,
   type CaseWorkflow,
+  type WorkflowContext,
   type WorkflowRole,
 } from "@/reference/workflow";
 
@@ -121,7 +124,7 @@ export async function contributorsOf(db: PrismaClient, caseId: string): Promise<
 export async function createCase(
   db: PrismaClient,
   identity: Identity,
-  input: { counterpartyId: string; modelId: string; asOfDate: string; purpose?: string; exercise?: ExerciseChoice }
+  input: { counterpartyId: string; modelId: string; asOfDate: string; purpose?: string; exercise?: ExerciseChoice; creditType?: string }
 ) {
   const model = await getScoringModel(input.modelId);
   if (!model) throw new CaseError(404, `Modèle inconnu : ${input.modelId}`);
@@ -132,6 +135,10 @@ export async function createCase(
   const purposes = await loadPurposes(db);
   const purpose = input.purpose ? purposes.find((p) => p.code === input.purpose && p.active) : undefined;
   if (input.purpose && !purpose) throw new CaseError(400, `Motif de dossier inconnu ou inactif : ${input.purpose}.`);
+  const creditTypeCode = input.creditType || purpose?.defaultCreditType || undefined;
+  if (creditTypeCode && !(await loadCreditTypes(db)).some((t) => t.code === creditTypeCode && t.active)) {
+    throw new CaseError(400, `Type de crédit inconnu ou inactif : ${creditTypeCode}.`);
+  }
   if (input.exercise && input.exercise !== "CONSERVE" && input.exercise !== "SUIVANT") throw new CaseError(400, "Exercice : CONSERVE ou SUIVANT.");
   const open = await db.ratingCase.findFirst({
     where: { counterpartyId: counterparty.id, status: { in: ["DRAFT", "SUBMITTED"] } },
@@ -190,6 +197,7 @@ export async function createCase(
         draftInput: JSON.stringify(draft),
         createdBy: identity.name,
         purpose: purpose?.code ?? null,
+        creditType: creditTypeCode ?? null,
       },
     });
     await auditWithin(tx, {
@@ -204,6 +212,7 @@ export async function createCase(
         modelId: model.modelId,
         asOfDate: input.asOfDate,
         purpose: purpose?.code ?? null,
+        creditType: creditTypeCode ?? null,
         reprise: !!previous,
         ...(reprise ? { exercise: reprise.exercise, carriedYears: reprise.carriedYears, toLoad: reprise.toLoad, fromCaseId: reprise.fromCaseId } : {}),
       },
@@ -262,12 +271,16 @@ async function convertAmounts(
  * Partagée par la soumission d'un dossier et la renotation par lot : un lot
  * calcule exactement ce qu'aurait calculé le dossier.
  */
-export async function buildInput(db: PrismaClient, c: { modelId: string; counterparty: { currency: string } }, draft: CaseDraft) {
+export async function buildInput(db: PrismaClient, c: { id?: string; modelId: string; counterparty: { currency: string } }, draft: CaseDraft) {
   const model = await getScoringModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const { base, fx } = await convertAmounts(db, draft, c.counterparty.currency);
   const format = await effectiveFormat(today());
-  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency, format }));
+  // Critères de classement BAM et levées décidées en comité pour CE dossier
+  // (une levée d'un dossier antérieur a expiré avec lui).
+  const classification = await loadClassification(db);
+  const lifts = c.id ? await caseLifts(db, c.id) : [];
+  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency, format, classification, lifts }));
   if (!parsed.success) {
     throw new CaseError(
       400,
@@ -328,7 +341,12 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
     }
   }
   const check = await simulateRating(input);
-  const workflow = await initialWorkflow(fx?.amounts.globalBankExposure?.base ?? input.segmentationData?.globalBankExposure ?? null);
+  const workflow = await initialWorkflow({
+    exposureBase: fx?.amounts.globalBankExposure?.base ?? input.segmentationData?.globalBankExposure ?? null,
+    grade: check.finalGrade,
+    creditType: c.creditType ?? null,
+    tier: await caseTier(db, c.counterparty.entityId),
+  });
   if (check.finalGrade === null) {
     throw new CaseError(
       409,
@@ -374,6 +392,18 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
 }
 
 /**
+ * Catégorie de délégation du centre d'un client : la sienne ou celle d'une
+ * entité mère ; à défaut, la première catégorie active du paramétrage
+ * (« délégation normale ») — une catégorie s'attribue explicitement pour
+ * durcir le circuit d'un centre.
+ */
+export async function caseTier(db: PrismaClient, entityId: string): Promise<string | null> {
+  const own = tierOf(await loadTree(), entityId);
+  if (own) return own;
+  return (await loadEntityTiers(db)).find((t) => t.active)?.code ?? null;
+}
+
+/**
  * Rôle exigé pour valider un dossier soumis AVANT le circuit à étapes
  * (validation en une étape) : paramétrage et délégation par montant.
  */
@@ -390,12 +420,16 @@ export async function requiredValidatorRole(exposureBase: number | null): Promis
   return { role: base, reasonFr: "paramétrage du workflow" };
 }
 
-/** Circuit figé d'un nouveau dossier soumis : étapes applicables à son exposition. */
-export async function initialWorkflow(exposureBase: number | null): Promise<CaseWorkflow> {
+/**
+ * Circuit figé d'un nouveau dossier soumis : étapes applicables selon
+ * l'exposition, la note calculée, le type de crédit et la catégorie de
+ * délégation du centre (une donnée inconnue applique l'étape).
+ */
+export async function initialWorkflow(context: number | null | WorkflowContext): Promise<CaseWorkflow> {
   const { circuit } = await loadCircuit();
   const threshold = await settingInt("WORKFLOW_DELEGATION_THRESHOLD");
   const role = (await settingText("WORKFLOW_DELEGATION_ROLE")) as WorkflowRole;
-  return startWorkflow(circuit, exposureBase, { threshold, role });
+  return startWorkflow(circuit, context, { threshold, role });
 }
 
 /**
@@ -455,7 +489,7 @@ export async function decideCase(
   caseId: string,
   decision: "VALIDATED" | "REJECTED",
   comment: string | undefined
-): Promise<{ status: "SUBMITTED" | "VALIDATED" | "REJECTED"; stepFr: string; nextStepFr: string | null }> {
+): Promise<{ status: "SUBMITTED" | "VALIDATED" | "REJECTED"; stepFr: string; nextStepFr: string | null; opinion?: "FAVORABLE" | "DEFAVORABLE" }> {
   const c = await loadCase(db, caseId);
   const blocker = await validationBlocker(db, identity, c);
   if (blocker) throw new CaseError(403, `Décision impossible : ${blocker}.`);
@@ -487,7 +521,14 @@ export async function decideCase(
     await auditWithin(tx, {
       actor: identity.name,
       actorRole: identity.role,
-      action: applied.status === "VALIDATED" ? "CASE_VALIDATED" : applied.status === "REJECTED" ? "CASE_REJECTED" : "CASE_STEP_APPROVED",
+      action:
+        applied.status === "VALIDATED"
+          ? "CASE_VALIDATED"
+          : applied.status === "REJECTED"
+            ? "CASE_REJECTED"
+            : applied.step.kind === "AVIS"
+              ? "CASE_STEP_OPINION"
+              : "CASE_STEP_APPROVED",
       resourceType: "RatingCase",
       resourceId: caseId,
       entityId: c.counterparty.entityId,
@@ -495,6 +536,8 @@ export async function decideCase(
         runId: c.runId,
         etape: applied.step.code,
         libelleEtape: applied.step.labelFr,
+        nature: applied.step.kind ?? "VALIDATION",
+        avis: applied.step.kind === "AVIS" ? (decision === "VALIDATED" ? "FAVORABLE" : "DEFAVORABLE") : undefined,
         rang: (before ?? 0) + 1,
         etapes: w.steps.length,
         fonction: identity.jobFunction ?? undefined,
@@ -526,6 +569,7 @@ export async function decideCase(
     status: applied.status,
     stepFr: applied.step.labelFr,
     nextStepFr: nextIndex !== null ? applied.workflow.steps[nextIndex].labelFr : null,
+    ...(applied.step.kind === "AVIS" ? { opinion: decision === "VALIDATED" ? ("FAVORABLE" as const) : ("DEFAVORABLE" as const) } : {}),
   };
 }
 

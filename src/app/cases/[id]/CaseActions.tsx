@@ -58,7 +58,7 @@ export interface CircuitStepView {
   code: string;
   labelFr: string;
   whoFr: string;
-  state: "DONE" | "PENDING" | "TODO" | "REJECTED";
+  state: "DONE" | "PENDING" | "TODO" | "REJECTED" | "FAVORABLE" | "DEFAVORABLE" | "OPEN" | "SKIPPED";
   decidedBy?: string;
   decidedAt?: string;
   comment?: string | null;
@@ -71,6 +71,10 @@ export function CircuitProgress({ steps }: { steps: CircuitStepView[] }) {
     PENDING: { sym: "●", color: "var(--warn)", label: "en attente" },
     TODO: { sym: "○", color: "var(--muted)", label: "à venir" },
     REJECTED: { sym: "✕", color: "var(--bad)", label: "rejet" },
+    FAVORABLE: { sym: "✓", color: "var(--good)", label: "avis favorable" },
+    DEFAVORABLE: { sym: "!", color: "var(--bcp-orange)", label: "avis défavorable" },
+    OPEN: { sym: "○", color: "var(--warn)", label: "avis attendu, non bloquant" },
+    SKIPPED: { sym: "–", color: "var(--muted)", label: "avis non rendu" },
   };
   return (
     <ol aria-label="Circuit de validation" style={{ display: "grid", gap: 8, listStyle: "none", padding: 0, margin: 0 }}>
@@ -82,12 +86,14 @@ export function CircuitProgress({ steps }: { steps: CircuitStepView[] }) {
               aria-hidden
               style={{ width: 24, height: 24, borderRadius: 999, display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13, color: "#fff", background: m.color }}
             >
-              {s.state === "TODO" || s.state === "PENDING" ? i + 1 : m.sym}
+              {s.state === "TODO" || s.state === "PENDING" || s.state === "OPEN" ? i + 1 : m.sym}
             </span>
             <div style={{ fontSize: 13 }}>
               <strong>{s.labelFr}</strong> <span style={{ color: m.color, fontWeight: 600 }}>— {m.label}</span>
               <div className="muted" style={{ fontSize: 12 }}>
-                {s.decidedBy ? `${s.state === "REJECTED" ? "Rejeté" : "Validé"} par ${s.decidedBy} le ${s.decidedAt}` : s.whoFr}
+                {s.decidedBy
+                  ? `${s.state === "REJECTED" ? "Rejeté" : s.state === "FAVORABLE" ? "Avis favorable de" : s.state === "DEFAVORABLE" ? "Avis défavorable de" : "Validé par"}${s.state === "FAVORABLE" || s.state === "DEFAVORABLE" ? "" : ""} ${s.decidedBy} le ${s.decidedAt}`
+                  : s.whoFr}
                 {s.comment ? ` · « ${s.comment} »` : ""}
               </div>
             </div>
@@ -104,14 +110,15 @@ export function DecisionPanel({
   blocker,
   steps,
   pendingLabelFr,
-  isFinal,
+  kind,
   contributors,
 }: {
   caseId: string;
   blocker: string | null;
   steps: CircuitStepView[];
   pendingLabelFr: string;
-  isFinal: boolean;
+  /** Nature de l'étape à traiter : avis, décision de la contre-étude, validation (dernière : FINAL). */
+  kind: "AVIS" | "DECISION" | "VALIDATION" | "FINAL";
   contributors: string[];
 }) {
   const [state, action, pending] = useActionState(decideCaseAction, { ok: false });
@@ -127,20 +134,22 @@ export function DecisionPanel({
       {blocker ? (
         <>
           <Feedback state={state} />
-          <p style={{ fontSize: 13 }}>Vous ne pouvez pas décider de l&apos;étape « {pendingLabelFr} » : {blocker}.</p>
+          <p style={{ fontSize: 13 }}>Vous ne pouvez pas traiter l&apos;étape « {pendingLabelFr} » : {blocker}.</p>
         </>
       ) : (
         <form action={action} style={{ display: "grid", gap: 10 }}>
           <input type="hidden" name="caseId" value={caseId} />
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-              Avis ou commentaire (obligatoire en cas de rejet, 10 caractères au moins)
+              {kind === "AVIS"
+                ? `Avis — ${pendingLabelFr} (motif obligatoire pour un avis défavorable, 10 caractères au moins)`
+                : "Avis ou commentaire (obligatoire en cas de rejet, 10 caractères au moins)"}
             </div>
             <textarea name="comment" rows={3} maxLength={4000} value={comment} onChange={(e) => setComment(e.target.value)} />
           </label>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button type="submit" name="decision" value="VALIDATED" className="btn-primary" disabled={pending}>
-              {isFinal ? "Validation finale" : `Valider : ${pendingLabelFr}`}
+              {kind === "AVIS" ? "Avis favorable" : kind === "DECISION" ? "Décision : valider la notation" : kind === "FINAL" ? "Validation finale" : `Valider : ${pendingLabelFr}`}
             </button>
             <button
               type="submit"
@@ -150,7 +159,7 @@ export function DecisionPanel({
               disabled={pending || comment.trim().length < 10}
               title={comment.trim().length < 10 ? "Motif de 10 caractères au moins" : undefined}
             >
-              Rejeter
+              {kind === "AVIS" ? "Avis défavorable" : "Rejeter"}
             </button>
           </div>
           <Feedback state={state} />

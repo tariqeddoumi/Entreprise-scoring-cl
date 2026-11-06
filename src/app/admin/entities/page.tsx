@@ -2,6 +2,8 @@ import { loadTree, readableEntities, sortTree } from "@/lib/scope";
 import { safeQuery } from "@/lib/safe-db";
 import { getPerimeter, requireSession } from "@/lib/session";
 import { EntitiesAdmin } from "./EntitiesAdmin";
+import { loadEntityTiers } from "@/lib/financial-statements";
+import { DEFAULT_ENTITY_TIERS } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +14,8 @@ export default async function EntitiesPage() {
     const tree = await loadTree();
     const counts = await db.counterparty.groupBy({ by: ["entityId"], _count: { _all: true } });
     const users = await db.user.groupBy({ by: ["entityId"], _count: { _all: true } });
-    return { tree, counts, users };
-  }, { tree: [], counts: [], users: [] });
+    return { tree, counts, users, tiers: await loadEntityTiers(db) };
+  }, { tree: [], counts: [], users: [], tiers: DEFAULT_ENTITY_TIERS });
 
   const visible = readableEntities(sortTree(data.tree), perimeter);
   const count = (list: Array<{ entityId: string | null; _count: { _all: number } }>, id: string) =>
@@ -27,7 +29,10 @@ export default async function EntitiesPage() {
           Organisation du groupe. Chaque utilisateur, client et dossier appartient à une
           entité : une entité voit sa descendance, jamais sa maison mère ni ses entités sœurs.
           La devise de l&apos;entité est celle de ses clients par défaut ; l&apos;habillage
-          vide est hérité de l&apos;entité mère.
+          vide est hérité de l&apos;entité mère. La catégorie de délégation (normale, encadrée,
+          restreinte) se fixe d&apos;après la taille du portefeuille, sa sinistralité et les
+          constats d&apos;audit ; elle rend bloquant l&apos;avis du directeur du centre ou ajoute un
+          niveau de décision selon le circuit. Vide, elle est héritée de l&apos;entité mère.
         </p>
       </div>
       {!dbAvailable ? (
@@ -37,6 +42,7 @@ export default async function EntitiesPage() {
       ) : (
         <EntitiesAdmin
           groupAdmin={perimeter.all}
+          tiers={data.tiers.filter((t) => t.active)}
           entities={visible.map((e) => ({
             ...e,
             counterparties: count(data.counts, e.id),

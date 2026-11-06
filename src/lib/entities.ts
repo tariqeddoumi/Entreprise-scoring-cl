@@ -38,6 +38,7 @@ export const entityInputSchema = z.object({
   toolName: z.string().trim().max(80).nullable(),
   logoUrl: logoSchema.nullable(),
   primaryColor: colorSchema.nullable(),
+  riskTier: z.string().trim().regex(/^[A-Z][A-Z0-9_]{1,39}$/, "Catégorie de délégation : code").nullable().optional(),
 });
 
 export type EntityInput = z.infer<typeof entityInputSchema>;

@@ -1,5 +1,6 @@
 -- ---------------------------------------------------------------------------
--- Référentiel des bilans du client et motif des dossiers — migration d'une
+-- Référentiel des bilans, motif et type de crédit des dossiers, catégorie de
+-- délégation des centres, décisions de comité — migration d'une
 -- base existante. À appliquer APRÈS 07-circuit-validation.sql et AVANT de
 -- déployer la version correspondante. Une base neuve n'en a pas besoin :
 -- « prisma db push » crée la table et la colonne.
@@ -9,6 +10,11 @@
 -- Contenu :
 --   - rating_cases."purpose" : motif du dossier (renouvellement annuel des
 --     crédits de fonctionnement, demande de crédit d'investissement…) ;
+--   - rating_cases."creditType" : type de crédit (condition du circuit) ;
+--   - entities."riskTier" : catégorie de délégation du centre (normale,
+--     encadrée, restreinte), condition du circuit ;
+--   - committee_decisions : décisions de comité (levée de critères de
+--     classement, entrée et sortie de watch list) ;
 --   - financial_statements : bilans du client par exercice, alimentés à la
 --     validation d'une note et par la reprise du stock. À l'ouverture d'un
 --     dossier sur l'exercice suivant, N−1 et N−2 en sont repris.
@@ -24,6 +30,30 @@
 BEGIN;
 
 ALTER TABLE corp_scoring."rating_cases" ADD COLUMN IF NOT EXISTS "purpose" TEXT;
+ALTER TABLE corp_scoring."rating_cases" ADD COLUMN IF NOT EXISTS "creditType" TEXT;
+ALTER TABLE corp_scoring."entities" ADD COLUMN IF NOT EXISTS "riskTier" TEXT;
+
+CREATE TABLE IF NOT EXISTS corp_scoring."committee_decisions" (
+  "id"               TEXT PRIMARY KEY,
+  "counterpartyId"   TEXT NOT NULL REFERENCES corp_scoring."counterparties"("id") ON DELETE NO ACTION ON UPDATE NO ACTION,
+  "caseId"           TEXT,
+  "kind"             TEXT NOT NULL,
+  "criteria"         TEXT,
+  "committeeDate"    TEXT NOT NULL,
+  "reference"        TEXT NOT NULL,
+  "motif"            TEXT NOT NULL,
+  "effectiveDate"    TEXT NOT NULL,
+  "status"           TEXT NOT NULL,
+  "recordedBy"       TEXT NOT NULL,
+  "recordedFunction" TEXT,
+  "confirmedBy"      TEXT,
+  "confirmedAt"      TIMESTAMP(3),
+  "cancelledBy"      TEXT,
+  "cancelReason"     TEXT,
+  "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "committee_decisions_counterpartyId_kind_idx" ON corp_scoring."committee_decisions" ("counterpartyId", "kind");
+CREATE INDEX IF NOT EXISTS "committee_decisions_caseId_idx" ON corp_scoring."committee_decisions" ("caseId");
 
 CREATE TABLE IF NOT EXISTS corp_scoring."financial_statements" (
   "id"             TEXT PRIMARY KEY,
@@ -50,13 +80,16 @@ CREATE INDEX IF NOT EXISTS "financial_statements_counterpartyId_idx"
 -- Mêmes protections que les autres tables (01-postgresql-hardening.sql) :
 -- aucun accès des rôles exposés par l'API Supabase.
 REVOKE ALL ON corp_scoring."financial_statements" FROM PUBLIC;
+REVOKE ALL ON corp_scoring."committee_decisions" FROM PUBLIC;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     EXECUTE 'REVOKE ALL ON corp_scoring."financial_statements" FROM anon';
+    EXECUTE 'REVOKE ALL ON corp_scoring."committee_decisions" FROM anon';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
     EXECUTE 'REVOKE ALL ON corp_scoring."financial_statements" FROM authenticated';
+    EXECUTE 'REVOKE ALL ON corp_scoring."committee_decisions" FROM authenticated';
   END IF;
 END $$;
 

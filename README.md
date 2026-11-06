@@ -74,6 +74,9 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Support groupe (au plus 2 crans, 4 conditions documentées) | Opérationnel |
 | Workflow dossier : saisie, soumission, circuit de validation paramétrable (directeur du centre d'affaires puis contre-étude par défaut), dérogations sous double validation | Opérationnel |
 | Couverture des critères BAM 1/W/2025 et 19/G/2002 vérifiée critère par critère (docs/14) | Diagnostic livré |
+| Profils métier et droits paramétrables ; circuit avis / décision unique de la contre-étude, niveaux selon montant, note, type de crédit et catégorie du centre | Opérationnel |
+| Critères de classement BAM dans le dossier (plafond 8 sensible, 10 pré-douteux, défaut douteux / compromis), levée par décision de comité tracée | Opérationnel |
+| Watch list par décision de comité : entrée, sortie, historique | Opérationnel |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
 | Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |
 | Renotation par lot (groupe d'affaires, segment, secteur, entité), ponctuelle ou planifiée | Opérationnel |

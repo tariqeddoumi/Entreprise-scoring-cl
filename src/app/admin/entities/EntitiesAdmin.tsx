@@ -7,6 +7,7 @@ const TYPE_LABELS: Record<string, string> = {
   GROUP: "Groupe",
   BANK: "Banque",
   REGIONAL_BANK: "Banque régionale",
+  BUSINESS_CENTER: "Centre d'affaires",
   SUBSIDIARY_GROUP: "Groupe de filiales",
   SUBSIDIARY: "Filiale",
 };
@@ -24,6 +25,7 @@ interface EntityRow {
   toolName: string | null;
   logoUrl: string | null;
   primaryColor: string | null;
+  riskTier?: string | null;
   counterparties: number;
   users: number;
 }
@@ -49,7 +51,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function EntityFields({ entity, entities, create }: { entity?: EntityRow; entities: EntityRow[]; create: boolean }) {
+function EntityFields({ entity, entities, create, tiers }: { entity?: EntityRow; entities: EntityRow[]; create: boolean; tiers: TierItem[] }) {
   return (
     <div className="grid-fields">
       {create && (
@@ -97,11 +99,27 @@ function EntityFields({ entity, entities, create }: { entity?: EntityRow; entiti
       <Field label="Couleur principale (#RRGGBB)">
         <input name="primaryColor" maxLength={7} defaultValue={entity?.primaryColor ?? ""} placeholder="hérité" />
       </Field>
+      <Field label="Catégorie de délégation">
+        <select name="riskTier" defaultValue={entity?.riskTier ?? ""} title={tiers.map((t) => `${t.labelFr} : ${t.helpFr ?? ""}`).join("\n")}>
+          <option value="">Héritée de l&apos;entité mère</option>
+          {tiers.map((t) => (
+            <option key={t.code} value={t.code}>
+              {t.labelFr}
+            </option>
+          ))}
+        </select>
+      </Field>
     </div>
   );
 }
 
-export function EntitiesAdmin({ entities, groupAdmin }: { entities: EntityRow[]; groupAdmin: boolean }) {
+interface TierItem {
+  code: string;
+  labelFr: string;
+  helpFr?: string;
+}
+
+export function EntitiesAdmin({ entities, groupAdmin, tiers = [] }: { entities: EntityRow[]; groupAdmin: boolean; tiers?: TierItem[] }) {
   const [state, formAction, pending] = useActionState<EntityActionState, FormData>(entitiesAction, {});
   const [editing, setEditing] = useState<string | null>(null);
 
@@ -125,7 +143,7 @@ export function EntitiesAdmin({ entities, groupAdmin }: { entities: EntityRow[];
         ) : (
           <form action={formAction} style={{ display: "grid", gap: 12 }}>
             <input type="hidden" name="op" value="create" />
-            <EntityFields entities={entities} create />
+            <EntityFields tiers={tiers} entities={entities} create />
             <div>
               <button
                 type="submit"
@@ -180,7 +198,7 @@ export function EntitiesAdmin({ entities, groupAdmin }: { entities: EntityRow[];
                     >
                       <input type="hidden" name="op" value="update" />
                       <input type="hidden" name="id" value={e.id} />
-                      <EntityFields entity={e} entities={entities} create={false} />
+                      <EntityFields tiers={tiers} entity={e} entities={entities} create={false} />
                       <div style={{ display: "flex", gap: 8 }}>
                         <button type="submit" disabled={pending} style={smallButton}>
                           Enregistrer
@@ -195,7 +213,10 @@ export function EntitiesAdmin({ entities, groupAdmin }: { entities: EntityRow[];
                 <td>
                   <code>{e.code}</code>
                 </td>
-                <td className="muted">{TYPE_LABELS[e.type] ?? e.type}</td>
+                <td className="muted">
+                  {TYPE_LABELS[e.type] ?? e.type}
+                  {e.riskTier ? <div style={{ fontSize: 11 }}>{tiers.find((t) => t.code === e.riskTier)?.labelFr ?? e.riskTier}</div> : null}
+                </td>
                 <td>{e.country ?? "—"}</td>
                 <td>{e.currency}</td>
                 <td>{e.counterparties}</td>

@@ -31,6 +31,7 @@ function readInput(formData: FormData) {
     toolName: nullable(formData.get("toolName")),
     logoUrl: nullable(formData.get("logoUrl")),
     primaryColor: nullable(formData.get("primaryColor")),
+    riskTier: nullable(formData.get("riskTier")),
   });
 }
 

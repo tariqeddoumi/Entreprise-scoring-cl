@@ -8,7 +8,10 @@ import { ResultPanel } from "@/app/scoring/ResultPanel";
 import { ScoringForm } from "@/app/scoring/ScoringForm";
 import { FinancialsSection } from "@/app/scoring/FinancialsSection";
 import type { StatementFormat } from "@/financials/statement-format";
+import { ClassificationPanel } from "@/app/scoring/ClassificationPanel";
+import type { ClassificationSettings } from "@/reference/classification";
 import { DATA_STATUS_LABELS } from "@/app/ui-helpers";
+import type { CaseLift } from "@/lib/case-input";
 import {
   decideProposalAction,
   generateProposalsAction,
@@ -51,6 +54,9 @@ interface Props {
   proposals: ProposalRow[];
   ai: { enabled: boolean; missing: string | null; provider: string; model: string };
   maxMb: number;
+  /** Critères de classement BAM (paramétrage) et levées en vigueur sur le dossier. */
+  classification: ClassificationSettings;
+  lifts: CaseLift[];
 }
 
 type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<string, { original: number; base: number }> } | null;
@@ -59,7 +65,7 @@ type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<st
  * Espace de travail d'un dossier : la grille (brouillon), l'aperçu du calcul,
  * l'enregistrement, la soumission, et le panneau d'assistance de l'IA.
  */
-export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format }: Props) {
+export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<CaseDraft>(initialDraft);
   const [dirty, setDirty] = useState(false);
@@ -122,6 +128,8 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
 
   if (!editable) {
     return (
+      <>
+      <ClassificationPanel model={model} draft={draft} readOnly format={format} settings={classification} lifts={lifts} />
       <details className="card" style={{ padding: 16 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Saisie du dossier (lecture seule)</summary>
         <div style={{ marginTop: 14, display: "grid", gap: 18 }}>
@@ -129,6 +137,7 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
           <ScoringForm model={model} draft={draft} onChange={() => undefined} readOnly currency={currency} aiFields={aiFields} format={format} />
         </div>
       </details>
+      </>
     );
   }
 
@@ -146,6 +155,7 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
           format={format}
         />
         <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} format={format} />
+        <ClassificationPanel model={model} draft={draft} onChange={change} format={format} settings={classification} lifts={lifts} />
         <div className="card no-print action-bar">
           <button type="button" className="btn-ghost" onClick={() => run("save")} disabled={busy !== null}>
             {busy === "save" ? "Enregistrement…" : "Enregistrer le brouillon"}

@@ -5,8 +5,13 @@ import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { isOfficialRun } from "@/lib/cases";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
 import { safeQuery } from "@/lib/safe-db";
-import { lastRatingInfo, loadPurposes } from "@/lib/financial-statements";
-import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
+import { watchlistState, type WatchlistState } from "@/lib/committee";
+import { WatchlistPanel } from "@/app/committee/CommitteePanels";
+import { hasPermission, holdersOf } from "@/reference/workflow";
+import { loadCircuit } from "@/lib/workflow";
+import { settingBool } from "@/lib/settings";
+import { lastRatingInfo, loadCreditTypes, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_CREDIT_TYPES, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { hasRole } from "@/lib/auth";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
 import { getPerimeter, requireSession } from "@/lib/session";
@@ -113,9 +118,14 @@ export default async function CounterpartyPage({
   const hasHistory = runs.length + cases.length + renotations > 0;
   const today = new Date().toISOString().slice(0, 10);
   const { data: openInfo } = await safeQuery(
-    async (db) => ({ last: (await lastRatingInfo(db, [counterparty.id])).get(counterparty.id), purposes: await loadPurposes(db) }),
-    { last: undefined, purposes: DEFAULT_PURPOSES }
+    async (db) => ({ last: (await lastRatingInfo(db, [counterparty.id])).get(counterparty.id), purposes: await loadPurposes(db), creditTypes: await loadCreditTypes(db) }),
+    { last: undefined, purposes: DEFAULT_PURPOSES, creditTypes: DEFAULT_CREDIT_TYPES }
   );
+  const wlInfo = {
+    state: (await safeQuery((db) => watchlistState(db, counterparty.id), { inWatchlist: false, since: null, lastExit: null, history: [] } as WatchlistState)).data,
+    circuit: (await loadCircuit()).circuit,
+    double: await settingBool("COMMITTEE_WL_DOUBLE_VALIDATION"),
+  };
   const opt = (v: string | null) => v ?? "";
   // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
   const master = toGradeScaleConfig(await effectiveScale());
@@ -227,6 +237,18 @@ export default async function CounterpartyPage({
         </section>
       )}
 
+      <WatchlistPanel
+        counterpartyId={counterparty.id}
+        today={today}
+        inWatchlist={wlInfo.state.inWatchlist}
+        since={wlInfo.state.since}
+        history={wlInfo.state.history}
+        canRecord={writableHere && hasPermission(wlInfo.circuit, identity.jobFunction, "DECIDER_WL")}
+        canConfirm={writableHere && hasPermission(wlInfo.circuit, identity.jobFunction, "CONFIRMER_WL")}
+        holdersFr={holdersOf(wlInfo.circuit, "DECIDER_WL").map((f) => f.labelFr).join(", ") || "aucun profil"}
+        doubleValidation={wlInfo.double}
+      />
+
       {canRate && (
         <div id="noter">
         <NewCaseForm
@@ -234,6 +256,7 @@ export default async function CounterpartyPage({
           defaultModelId="CORP_STD_V1"
           counterparties={[{ id: counterparty.id, name: counterparty.name, currency: counterparty.currency, entityCode: entity?.code ?? "—", ...(openInfo.last ? { last: openInfo.last } : {}) }]}
           purposes={openInfo.purposes.filter((p) => p.active)}
+          creditTypes={openInfo.creditTypes.filter((t) => t.active)}
           today={today}
           canRate
           fixedCounterpartyId={counterparty.id}

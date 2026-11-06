@@ -18,6 +18,14 @@ import {
   type FinancialsDraft,
 } from "@/financials/compute";
 import type { StatementFormat } from "@/financials/statement-format";
+import {
+  computeClassification,
+  DEFAULT_CLASSIFICATION,
+  FAMILY_LABELS,
+  type ClassificationResult,
+  type ClassificationSettings,
+  type DeclaredCriteria,
+} from "@/reference/classification";
 
 /**
  * Saisie d'un dossier de notation — module PUR, partagé par l'écran (aperçu et
@@ -64,6 +72,30 @@ export interface CaseDraft {
   financials: FinancialsDraft;
   /** Reprise de la dernière note validée, à l'ouverture du dossier. */
   reprise?: CaseReprise;
+  /** Critères de classement BAM déclarés par l'analyste (les critères du bilan sont calculés). */
+  classification?: { declared: DeclaredCriteria };
+}
+
+/** Levée en vigueur sur le dossier (décision de comité), pour le calcul et la fiche. */
+export interface CaseLift {
+  codes: string[];
+  committeeDate: string;
+  reference: string;
+  recordedBy: string;
+  confirmedBy?: string | null;
+}
+
+const DEF_RANK = { DEF1: 1, DEF2: 2, DEF3: 3 } as const;
+
+/** Classement du brouillon : critères du bilan, déclarés, levés ; effet sur la note. */
+export function draftClassification(
+  draft: CaseDraft,
+  fin: FinancialComputation,
+  settings: ClassificationSettings = DEFAULT_CLASSIFICATION,
+  lifts: CaseLift[] = []
+): ClassificationResult {
+  const alerts = new Set(fin.analysis.alerts.filter((a) => a.status === "DECLENCHEE").map((a) => a.key));
+  return computeClassification(settings, draft.classification?.declared, alerts, new Set(lifts.flatMap((l) => l.codes)));
 }
 
 /**
@@ -146,6 +178,7 @@ export function parseDraft(raw: string | null | undefined, model: ModelConfig, a
       redFlags: d.redFlags ?? [],
       financials: parseFinancials(d.financials),
       ...(d.reprise && typeof d.reprise === "object" && Array.isArray(d.reprise.pending) ? { reprise: d.reprise } : { reprise: undefined }),
+      classification: d.classification && typeof d.classification === "object" && d.classification.declared && typeof d.classification.declared === "object" ? { declared: { ...d.classification.declared } } : undefined,
       version: 1,
     };
   } catch {
@@ -228,7 +261,7 @@ export function draftToRequest(
   draft: CaseDraft,
   model: ModelConfig,
   baseAmounts?: Record<string, number>,
-  opts: { currency?: string; format?: StatementFormat } = {}
+  opts: { currency?: string; format?: StatementFormat; classification?: ClassificationSettings; lifts?: CaseLift[] } = {}
 ): Record<string, unknown> {
   const segment = displaySegment(draft, model);
   const criteria: Record<string, CriterionInput> = {};
@@ -301,8 +334,49 @@ export function draftToRequest(
       ...(draft.hasStrongGroupSupport ? { hasStrongGroupSupport: true } : {}),
     },
     redFlags: draft.redFlags,
-    defaultTriggered: draft.defaultTriggered,
-    ...(draft.defaultTriggered ? { defaultGrade: draft.defaultGrade } : {}),
+    ...(() => {
+      // Critères de classement BAM : douteux / compromis imposent un défaut,
+      // sensible / pré-douteux un plafond (D-57). Le défaut déclaré par
+      // l'analyste reste ; le plus sévère l'emporte.
+      const cl = draftClassification(draft, fin, opts.classification, opts.lifts);
+      const out: Record<string, unknown> = {};
+      let defaultTriggered = draft.defaultTriggered;
+      let defaultGrade: "DEF1" | "DEF2" | "DEF3" = draft.defaultGrade;
+      if (cl.effect?.kind === "DEFAUT") {
+        if (!defaultTriggered || DEF_RANK[cl.effect.grade] > DEF_RANK[defaultGrade]) defaultGrade = cl.effect.grade;
+        defaultTriggered = true;
+      }
+      out.defaultTriggered = defaultTriggered;
+      if (defaultTriggered) out.defaultGrade = defaultGrade;
+      if (cl.effect?.kind === "PLAFOND" && cl.family) {
+        const codes = cl.items.filter((i) => i.state === "COCHE" && i.family === cl.family).map((i) => i.code);
+        out.regulatoryCap = {
+          maxGrade: cl.effect.grade,
+          family: cl.family,
+          codes: cl.active,
+          labelFr: `${FAMILY_LABELS[cl.family]} (${codes.join(", ")}) : note plafonnée à ${cl.effect.grade}`.slice(0, 300),
+        };
+      }
+      const kept = cl.items.filter((i) => i.state === "COCHE" || i.state === "LEVE");
+      if (kept.length > 0 || (opts.lifts?.length ?? 0) > 0) {
+        out.classificationBasis = {
+          family: cl.family,
+          effect: cl.effect?.grade ?? null,
+          items: kept.map((i) => ({
+            code: i.code,
+            family: i.family,
+            labelFr: i.labelFr.slice(0, 200),
+            article: i.article.slice(0, 80),
+            state: i.state as "COCHE" | "LEVE",
+            ...(i.by ? { by: i.by } : {}),
+            ...(i.date ? { date: i.date.slice(0, 10) } : {}),
+            ...(i.comment ? { comment: i.comment.slice(0, 500) } : {}),
+          })),
+          lifts: (opts.lifts ?? []).map((l) => ({ ...l, reference: l.reference.slice(0, 80) })),
+        };
+      }
+      return out;
+    })(),
     // Trois états : true et false sont transmis, l'inconnu est omis.
     materiality: Object.fromEntries(Object.entries(draft.materiality).filter(([, v]) => typeof v === "boolean")),
     ...(Object.keys(evidence).length ? { materialityEvidence: evidence } : {}),

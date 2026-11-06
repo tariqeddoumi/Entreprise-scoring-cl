@@ -223,6 +223,40 @@ export const ratingRequestSchema = z
     financialBasis: financialBasisSchema.optional(),
     defaultTriggered: z.boolean().optional(),
     defaultGrade: z.enum(["DEF1", "DEF2", "DEF3"]).optional(),
+    regulatoryCap: z
+      .object({ maxGrade: z.string().regex(/^(10|[1-9])$/), family: z.string().max(20), codes: z.array(z.string().max(16)).max(40), labelFr: z.string().max(300) })
+      .strict()
+      .optional(),
+    classificationBasis: z
+      .object({
+        family: z.string().max(20).nullable(),
+        effect: z.string().max(10).nullable(),
+        items: z
+          .array(
+            z
+              .object({
+                code: z.string().max(16),
+                family: z.string().max(20),
+                labelFr: z.string().max(200),
+                article: z.string().max(80),
+                state: z.enum(["COCHE", "LEVE"]),
+                by: z.enum(["BILAN", "ANALYSTE"]).optional(),
+                date: z.string().max(10).optional(),
+                comment: z.string().max(500).optional(),
+              })
+              .strict()
+          )
+          .max(60),
+        lifts: z
+          .array(
+            z
+              .object({ codes: z.array(z.string().max(16)).max(60), committeeDate: z.string().max(10), reference: z.string().max(80), recordedBy: z.string().max(120), confirmedBy: z.string().max(120).nullable().optional() })
+              .strict()
+          )
+          .max(20),
+      })
+      .strict()
+      .optional(),
     asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date d'arrêté au format YYYY-MM-DD"),
   })
   .strict();

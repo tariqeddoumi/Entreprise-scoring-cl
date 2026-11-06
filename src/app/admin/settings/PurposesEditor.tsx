@@ -5,7 +5,7 @@ import { checkPurposes, type CasePurpose } from "@/reference/case-purposes";
 import { savePurposesAction } from "./purposes-actions";
 
 /** Motifs d'ouverture des dossiers (renouvellement annuel, investissement…). */
-export function PurposesEditor({ initial, readOnly }: { initial: CasePurpose[]; readOnly: boolean }) {
+export function PurposesEditor({ initial, readOnly, creditTypes = [] }: { initial: CasePurpose[]; readOnly: boolean; creditTypes?: Array<{ code: string; labelFr: string }> }) {
   const [list, setList] = useState<CasePurpose[]>(initial);
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
@@ -32,6 +32,14 @@ export function PurposesEditor({ initial, readOnly }: { initial: CasePurpose[]; 
               <option value="">Exercice selon la date</option>
               <option value="SUIVANT">Exercice suivant si clos</option>
               <option value="CONSERVE">Conserver l&apos;exercice</option>
+            </select>
+            <select aria-label="Type de crédit proposé" value={p.defaultCreditType ?? ""} onChange={(e) => set(i, { defaultCreditType: e.target.value || undefined })}>
+              <option value="">Type de crédit au choix</option>
+              {creditTypes.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.labelFr}
+                </option>
+              ))}
             </select>
             <button type="button" className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setList((l) => l.filter((_, k) => k !== i))}>
               Retirer

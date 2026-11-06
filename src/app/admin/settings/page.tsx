@@ -6,8 +6,14 @@ import { loadCircuit } from "@/lib/workflow";
 import { CircuitEditor } from "./CircuitEditor";
 import { SettingsForm } from "./SettingsForm";
 import { PurposesEditor } from "./PurposesEditor";
-import { loadPurposes } from "@/lib/financial-statements";
-import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
+import { RefListEditor } from "./RefListEditor";
+import { ClassificationEditor } from "./ClassificationEditor";
+import { loadClassification } from "@/lib/classification-store";
+import { DEFAULT_CLASSIFICATION } from "@/reference/classification";
+import { effectiveFormat } from "@/lib/statement-format";
+import { today } from "@/lib/rating-scale";
+import { loadCreditTypes, loadEntityTiers, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_CREDIT_TYPES, DEFAULT_ENTITY_TIERS, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +28,11 @@ export default async function SettingsPage() {
     return Object.fromEntries(rows.map((r) => [r.jobFunction ?? "", r._count._all]));
   }, {} as Record<string, number>);
   const { data: purposes } = await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES);
+  const { data: lists } = await safeQuery(
+    async (db) => ({ creditTypes: await loadCreditTypes(db), tiers: await loadEntityTiers(db), classification: await loadClassification(db) }),
+    { creditTypes: DEFAULT_CREDIT_TYPES, tiers: DEFAULT_ENTITY_TIERS, classification: DEFAULT_CLASSIFICATION }
+  );
+  const format = await effectiveFormat(today());
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -36,8 +47,31 @@ export default async function SettingsPage() {
       <div className="card" role="status" style={{ padding: "12px 16px", fontSize: 13 }}>
         <strong>État de l&apos;IA :</strong> {ai.enabled ? (ai.missing ? `activée, mais ${ai.missing}` : `active (${ai.provider}, ${ai.model})`) : "désactivée"}.
       </div>
-      <CircuitEditor circuit={circuit} stored={stored} readOnly={!perimeter.all} holders={holders} />
-      <PurposesEditor initial={purposes} readOnly={!perimeter.all} />
+      <CircuitEditor
+        circuit={circuit}
+        stored={stored}
+        readOnly={!perimeter.all}
+        holders={holders}
+        creditTypes={lists.creditTypes.filter((t) => t.active)}
+        tiers={lists.tiers.filter((t) => t.active)}
+      />
+      <PurposesEditor initial={purposes} readOnly={!perimeter.all} creditTypes={lists.creditTypes.filter((t) => t.active)} />
+      <ClassificationEditor initial={lists.classification} readOnly={!perimeter.all} alertKeys={format.alerts.map((a) => a.key)} />
+      <RefListEditor
+        listKey="CREDIT_TYPES"
+        title="Types de crédit"
+        intro="Type de crédit choisi à l'ouverture du dossier ; une étape du circuit peut ne s'appliquer qu'à certains types (par exemple un niveau de décision supérieur pour l'investissement ou la promotion immobilière)."
+        initial={lists.creditTypes}
+        readOnly={!perimeter.all}
+      />
+      <RefListEditor
+        listKey="ENTITY_TIERS"
+        title="Catégories de délégation des centres"
+        intro="Attribuées à chaque centre d'affaires (Administration › Banques et filiales) d'après la taille du portefeuille, sa sinistralité (créances en souffrance, coût du risque), les dérogations et rejets en contre-étude et les constats d'audit ; revues au moins une fois par an. Elles rendent bloquant l'avis du directeur du centre ou ajoutent un niveau de décision selon le circuit."
+        initial={lists.tiers}
+        readOnly={!perimeter.all}
+        withHelp
+      />
       <SettingsForm
         readOnly={!perimeter.all}
         values={values}

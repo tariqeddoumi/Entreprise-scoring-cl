@@ -13,6 +13,68 @@ export interface CasePurpose {
   active: boolean;
   /** Exercice proposé par défaut à l'ouverture : suivant si disponible, ou conserver. */
   defaultExercise?: "SUIVANT" | "CONSERVE";
+  /** Type de crédit proposé par défaut. */
+  defaultCreditType?: string;
+}
+
+/** Élément d'une liste paramétrable simple (types de crédit, catégories de délégation). */
+export interface RefItem {
+  code: string;
+  labelFr: string;
+  active: boolean;
+  /** Aide affichée (critères d'attribution d'une catégorie, par exemple). */
+  helpFr?: string;
+}
+
+export const CREDIT_TYPES_KEY = "CREDIT_TYPES";
+export const ENTITY_TIERS_KEY = "ENTITY_TIERS";
+
+/** Types de crédit du dossier : condition possible des étapes du circuit. */
+export const DEFAULT_CREDIT_TYPES: RefItem[] = [
+  { code: "FONCTIONNEMENT", labelFr: "Crédits de fonctionnement (court terme)", active: true },
+  { code: "INVESTISSEMENT", labelFr: "Crédit d'investissement (moyen et long terme)", active: true },
+  { code: "CREDIT_BAIL", labelFr: "Crédit-bail", active: true },
+  { code: "PROMOTION_IMMOBILIERE", labelFr: "Promotion immobilière", active: true },
+  { code: "ENGAGEMENTS_SIGNATURE", labelFr: "Engagements par signature (cautions, crédits documentaires)", active: true },
+  { code: "AUTRE", labelFr: "Autre", active: true },
+];
+
+/**
+ * Catégories de délégation d'un centre d'affaires (ou d'une entité). Bonne
+ * pratique : délégation proportionnée à la qualité de la gestion du risque du
+ * centre — taille et complexité du portefeuille, sinistralité (créances en
+ * souffrance, coût du risque), taux de dérogations et de rejets en
+ * contre-étude, constats d'audit — revue au moins une fois par an. La catégorie
+ * rend bloquant l'avis du directeur ou ajoute des niveaux de décision.
+ */
+export const DEFAULT_ENTITY_TIERS: RefItem[] = [
+  { code: "NORMALE", labelFr: "Délégation normale", active: true, helpFr: "Portefeuille sain, sinistralité inférieure à la moyenne du réseau, pas de constat d'audit majeur." },
+  { code: "ENCADREE", labelFr: "Délégation encadrée", active: true, helpFr: "Sinistralité supérieure à la moyenne, dérogations ou rejets fréquents, ou centre récent : l'avis du directeur devient bloquant." },
+  { code: "RESTREINTE", labelFr: "Délégation restreinte", active: true, helpFr: "Sinistralité élevée ou constat d'audit majeur : avis bloquant, décision à un niveau supérieur selon le circuit." },
+];
+
+export function checkRefItems(list: RefItem[], what: string): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  if (!list.some((p) => p.active)) errors.push(`${what} : au moins un élément actif.`);
+  for (const p of list) {
+    if (!/^[A-Z][A-Z0-9_]{1,39}$/.test(p.code)) errors.push(`${what} : code non admis « ${p.code} » (majuscules, chiffres, _).`);
+    if (seen.has(p.code)) errors.push(`${what} : code en double ${p.code}.`);
+    seen.add(p.code);
+    if (!p.labelFr.trim() || p.labelFr.length > 200) errors.push(`${what} ${p.code} : libellé de 1 à 200 caractères.`);
+    if (p.helpFr && p.helpFr.length > 500) errors.push(`${what} ${p.code} : aide de 500 caractères au plus.`);
+  }
+  return errors;
+}
+
+export function parseRefItems(raw: string | null | undefined, fallback: RefItem[]): RefItem[] {
+  if (!raw) return fallback;
+  try {
+    const list = JSON.parse(raw) as RefItem[];
+    return Array.isArray(list) && checkRefItems(list, "liste").length === 0 ? list : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export const CASE_PURPOSES_KEY = "CASE_PURPOSES";
@@ -20,8 +82,8 @@ export const CASE_PURPOSES_KEY = "CASE_PURPOSES";
 export type ExerciseChoice = "CONSERVE" | "SUIVANT";
 
 export const DEFAULT_PURPOSES: CasePurpose[] = [
-  { code: "RENOUVELLEMENT_CT", labelFr: "Renouvellement annuel des crédits de fonctionnement", active: true, defaultExercise: "SUIVANT" },
-  { code: "INVESTISSEMENT", labelFr: "Demande de crédit d'investissement", active: true },
+  { code: "RENOUVELLEMENT_CT", labelFr: "Renouvellement annuel des crédits de fonctionnement", active: true, defaultExercise: "SUIVANT", defaultCreditType: "FONCTIONNEMENT" },
+  { code: "INVESTISSEMENT", labelFr: "Demande de crédit d'investissement", active: true, defaultCreditType: "INVESTISSEMENT" },
   { code: "NOUVELLE_RELATION", labelFr: "Entrée en relation", active: true },
   { code: "REVISION", labelFr: "Révision sur événement (alerte, incident, information nouvelle)", active: true },
   { code: "AUTRE", labelFr: "Autre motif", active: true },

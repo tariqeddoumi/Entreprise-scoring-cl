@@ -1,7 +1,19 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma";
 import { parseAmount } from "@/financials/chart";
 import { type FinancialsDraft, type FinancialYearDraft } from "@/financials/compute";
-import { CASE_PURPOSES_KEY, nextClosing, parsePurposes, type CasePurpose, type ExerciseChoice } from "@/reference/case-purposes";
+import {
+  CASE_PURPOSES_KEY,
+  CREDIT_TYPES_KEY,
+  DEFAULT_CREDIT_TYPES,
+  DEFAULT_ENTITY_TIERS,
+  ENTITY_TIERS_KEY,
+  nextClosing,
+  parsePurposes,
+  parseRefItems,
+  type CasePurpose,
+  type ExerciseChoice,
+  type RefItem,
+} from "@/reference/case-purposes";
 
 export { nextClosing, suggestedExercise, type ExerciseChoice } from "@/reference/case-purposes";
 
@@ -25,6 +37,22 @@ export async function loadPurposes(db: Db): Promise<CasePurpose[]> {
     return parsePurposes(row?.value);
   } catch {
     return parsePurposes(null);
+  }
+}
+
+export async function loadCreditTypes(db: Db): Promise<RefItem[]> {
+  try {
+    return parseRefItems((await db.appSetting.findUnique({ where: { key: CREDIT_TYPES_KEY } }))?.value, DEFAULT_CREDIT_TYPES);
+  } catch {
+    return DEFAULT_CREDIT_TYPES;
+  }
+}
+
+export async function loadEntityTiers(db: Db): Promise<RefItem[]> {
+  try {
+    return parseRefItems((await db.appSetting.findUnique({ where: { key: ENTITY_TIERS_KEY } }))?.value, DEFAULT_ENTITY_TIERS);
+  } catch {
+    return DEFAULT_ENTITY_TIERS;
   }
 }
 

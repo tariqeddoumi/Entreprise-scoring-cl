@@ -662,6 +662,33 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer par la banque :* les seuils d'appréciation proposés (Risques) ; la définition des « dettes financières » de l'alerte BAM (dette brute économique retenue) ; la liste des motifs ; l'obligation de confirmer chaque champ repris.
 
+## D-57 — Profils métier, circuit avis / décision, critères BAM dans la note, watch list — **À CONFIRMER**
+
+*Contexte :* demandes de la banque (6 et 7 novembre 2026). Une créance sensible ne doit pas avoir une bonne note. Un comité peut lever les critères (sensibles ou pré-douteux), la levée est tracée et la note recalculée. Le raisonnement se fait par profil : P1 saisie, P2 validation du directeur du centre, P3 contre-étude (plusieurs niveaux d'instruction, une seule décision), P4 surveillance (watch list). Tout est paramétrable.
+
+*Décision :*
+1. **Profils et droits.** Les profils regroupent des droits paramétrables par fonction : levée, confirmation, watch list. Une seule fonction par compte.
+2. **Circuit.**
+   - Les étapes « avis » sont favorables ou défavorables, non bloquantes par défaut, bloquantes selon la catégorie de délégation du centre.
+   - Les étapes « décision » ont des niveaux conditionnés par le montant, la note et le type de crédit. Seul le plus élevé qui s'applique décide ; les autres instruisent.
+   - Le type de crédit est saisi à l'ouverture. La catégorie de délégation est attribuée par entité et héritée ; à défaut, c'est la première catégorie active. Elle s'attribue d'après la taille, la sinistralité, les dérogations, les rejets et l'audit.
+3. **Critères BAM dans la note.**
+   - Catalogue paramétrable ; critères du bilan automatiques, autres déclaratifs.
+   - Effet : sensible → plafond 8 ; pré-douteux → plafond 10 ; douteux → DEF1 ; compromis → DEF3 (moteur 3.3.0, règle non compensatoire de source réglementaire).
+4. **Levée par le comité.**
+   - Enregistrée par un profil habilité, non contributeur du dossier, avec procès-verbal. Seconde validation paramétrable : désactivée au départ, cible activée.
+   - Note recalculée. La levée vaut pour le dossier ; elle est rappelée au renouvellement.
+5. **Watch list.** Entrée et sortie sur décision de comité, datées (reprise des anciens inscrits), seconde validation paramétrable, historique, badge.
+6. **Données.** Table `committee_decisions` et colonnes `rating_cases.creditType` et `entities.riskTier` (migration 09).
+
+*À confirmer par la banque :*
+- les seuils et niveaux de décision ;
+- la grille d'attribution des catégories de délégation ;
+- les plafonds ;
+- la liste et les libellés des critères ;
+- le passage à la double validation ;
+- l'effet éventuel de la watch list sur la note ou sur le délai de renotation.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

@@ -20,7 +20,7 @@ export type SettingKind = "boolean" | "integer" | "enum" | "text" | "url";
 
 export interface SettingDef {
   key: string;
-  group: "Workflow" | "Dérogations" | "Pièces" | "Intelligence artificielle";
+  group: "Workflow" | "Comités" | "Dérogations" | "Pièces" | "Intelligence artificielle";
   labelFr: string;
   helpFr: string;
   kind: SettingKind;
@@ -94,6 +94,23 @@ export const SETTINGS: readonly SettingDef[] = [
     default: "12",
     min: 1,
     max: 36,
+  },
+  {
+    key: "COMMITTEE_LIFT_DOUBLE_VALIDATION",
+    group: "Comités",
+    labelFr: "Levée d'un critère de classement : confirmation par une seconde personne",
+    helpFr:
+      "Désactivé : la levée enregistrée par un profil habilité (contre-étude, surveillance) prend effet immédiatement. Activé (cible) : elle prend effet lorsqu'une seconde personne habilitée la confirme.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "COMMITTEE_WL_DOUBLE_VALIDATION",
+    group: "Comités",
+    labelFr: "Décision de watch list : confirmation par une seconde personne",
+    helpFr: "Même principe pour l'entrée et la sortie de watch list décidées en comité.",
+    kind: "boolean",
+    default: "false",
   },
   {
     key: "OVERRIDE_MAX_NOTCHES",

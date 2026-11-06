@@ -5,7 +5,7 @@ import { executeRatingRun, RatingServiceError } from "@/lib/rating-service";
 import { guard, readJsonBody } from "@/lib/route-guard";
 import { ratingRequestSchema } from "@/lib/schemas";
 import { auditWithin } from "@/lib/audit";
-import { initialWorkflow } from "@/lib/cases";
+import { caseTier, initialWorkflow } from "@/lib/cases";
 import { isOutOfScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +43,15 @@ export async function POST(req: NextRequest) {
     // Circuit de validation figé comme pour un dossier soumis à l'écran : même
     // exposition, mêmes étapes (un montant absent applique toutes les étapes).
     const exposure = ratingInput.segmentationData?.globalBankExposure;
-    const workflow = await initialWorkflow(typeof exposure === "number" && Number.isFinite(exposure) ? exposure : null);
+    // Note inconnue avant le calcul : les étapes conditionnées par la note
+    // s'appliquent (une donnée inconnue n'allège jamais le circuit).
+    const cp = await g.ctx.db.counterparty.findUnique({ where: { id: counterpartyId }, select: { entityId: true } });
+    const workflow = await initialWorkflow({
+      exposureBase: typeof exposure === "number" && Number.isFinite(exposure) ? exposure : null,
+      grade: null,
+      creditType: null,
+      tier: cp ? await caseTier(g.ctx.db, cp.entityId) : null,
+    });
     const { runId, result, replayed } = await executeRatingRun(
       g.ctx.db,
       g.ctx.identity,

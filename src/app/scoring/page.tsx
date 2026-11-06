@@ -6,8 +6,8 @@ import { getPerimeter, requireSession } from "@/lib/session";
 import { canWrite, loadTree } from "@/lib/scope";
 import { CodeLabel, MODEL_STATUS_LABELS } from "@/app/ui-helpers";
 import { NewCaseForm } from "./NewCaseForm";
-import { lastRatingInfo, loadPurposes } from "@/lib/financial-statements";
-import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
+import { lastRatingInfo, loadCreditTypes, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_CREDIT_TYPES, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { SimulationWorkspace } from "./SimulationWorkspace";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +43,7 @@ export default async function ScoringPage({ searchParams }: { searchParams: Prom
     return writable.map((r) => ({ id: r.id, name: r.name, currency: r.currency, entityCode: code.get(r.entityId) ?? "—", ...(last.get(r.id) ? { last: last.get(r.id) } : {}) }));
   }, [] as Array<{ id: string; name: string; currency: string; entityCode: string; last?: { fiscalYear: string; closingDate: string; grade: string | null; decidedAt: string | null } }>);
   const { data: purposes } = await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES);
+  const { data: creditTypes } = await safeQuery((db) => loadCreditTypes(db), DEFAULT_CREDIT_TYPES);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -63,6 +64,7 @@ export default async function ScoringPage({ searchParams }: { searchParams: Prom
         defaultModelId={model.modelId}
         counterparties={counterparties}
         purposes={purposes.filter((p) => p.active)}
+        creditTypes={creditTypes.filter((t) => t.active)}
         today={today}
         canRate={canRate}
       />

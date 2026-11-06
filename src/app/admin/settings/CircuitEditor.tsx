@@ -2,7 +2,49 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MAX_STEPS, WORKFLOW_ROLE_LABELS, WORKFLOW_ROLES, type WorkflowCircuit, type WorkflowRole, type WorkflowStep } from "@/reference/workflow";
+import {
+  MAX_STEPS,
+  PERMISSIONS,
+  PROFILE_FAMILIES,
+  STEP_KIND_LABELS,
+  WORKFLOW_ROLE_LABELS,
+  WORKFLOW_ROLES,
+  type Permission,
+  type ProfileFamily,
+  type StepKind,
+  type WorkflowCircuit,
+  type WorkflowRole,
+  type WorkflowStep,
+} from "@/reference/workflow";
+
+interface Item {
+  code: string;
+  labelFr: string;
+}
+
+function Checks({ items, value, onChange, disabled, label }: { items: Item[]; value: string[]; onChange: (v: string[]) => void; disabled: boolean; label: string }) {
+  return (
+    <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+      <legend className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+        {label}
+      </legend>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        {items.map((t) => (
+          <label key={t.code} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+            <input
+              type="checkbox"
+              style={{ width: "auto" }}
+              disabled={disabled}
+              checked={value.includes(t.code)}
+              onChange={(e) => onChange(e.target.checked ? [...value, t.code] : value.filter((k) => k !== t.code))}
+            />
+            {t.labelFr}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 import { saveCircuitAction, type CircuitActionState } from "./circuit-actions";
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -12,7 +54,21 @@ const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
  * rôle minimal et seuil d'exposition. Le circuit s'applique aux dossiers soumis
  * après l'enregistrement ; un dossier en cours garde le sien.
  */
-export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit: WorkflowCircuit; stored: boolean; readOnly: boolean; holders: Record<string, number> }) {
+export function CircuitEditor({
+  circuit,
+  stored,
+  readOnly,
+  holders,
+  creditTypes = [],
+  tiers = [],
+}: {
+  circuit: WorkflowCircuit;
+  stored: boolean;
+  readOnly: boolean;
+  holders: Record<string, number>;
+  creditTypes?: Item[];
+  tiers?: Item[];
+}) {
   const router = useRouter();
   const [c, setC] = useState<WorkflowCircuit>(clone(circuit));
   const [result, setResult] = useState<CircuitActionState | null>(null);
@@ -48,10 +104,13 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
       <div>
         <h2 style={{ fontWeight: 600 }}>Circuit de validation</h2>
         <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-          {stored ? `Circuit paramétré (version ${circuit.version}).` : "Circuit par défaut du Groupe Banque Populaire."} L&apos;analyste ou le
-          chargé d&apos;affaires soumet ; chaque étape est décidée par une personne différente, qui détient la fonction et le rôle de
-          l&apos;étape et n&apos;a pas contribué au dossier ; la dernière étape fait de la notation la note officielle. Un rejet, à
-          n&apos;importe quelle étape, renvoie le dossier à l&apos;instruction. Un dossier en cours garde le circuit de sa soumission.
+          {stored ? `Circuit paramétré (version ${circuit.version}).` : "Circuit par défaut du Groupe Banque Populaire."} Le profil de saisie
+          soumet ; chaque étape est traitée par une personne différente, qui détient la fonction et le rôle de l&apos;étape et n&apos;a pas
+          contribué au dossier. Un <strong>avis</strong> (directeur du centre d&apos;affaires) est favorable ou défavorable, bloquant ou non —
+          bloquant, par exemple, pour les centres en délégation encadrée ou restreinte. La <strong>décision</strong> revient à la
+          contre-étude : plusieurs niveaux peuvent être prévus selon le montant, la note et le type de crédit ; seul le plus élevé qui
+          s&apos;applique décide, les niveaux inférieurs instruisent. Une donnée inconnue applique l&apos;étape. Un dossier en cours garde le
+          circuit de sa soumission.
         </p>
       </div>
 
@@ -62,8 +121,7 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
             <li key={i} className="card" style={{ padding: 12, background: "var(--surface-2)", display: "grid", gap: 8 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <strong style={{ minWidth: 70 }}>
-                  Étape {i + 1}
-                  {i === c.steps.length - 1 ? " · finale" : ""}
+                  Étape {i + 1} · {STEP_KIND_LABELS[s.kind ?? "VALIDATION"]}
                 </strong>
                 {!ro && (
                   <>
@@ -105,7 +163,54 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
                   </select>
                 </label>
                 <label>
-                  <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Seulement au-delà d&apos;une exposition de (MAD, vide = toujours)</div>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Nature</div>
+                  <select
+                    value={s.kind ?? "VALIDATION"}
+                    disabled={ro}
+                    aria-label={`Nature de l'étape ${i + 1}`}
+                    onChange={(e) =>
+                      setStep(i, (x) => {
+                        x.kind = e.target.value as StepKind;
+                        if (x.kind !== "AVIS") {
+                          delete x.blocking;
+                          delete x.blockingTiers;
+                        } else x.blocking = x.blocking ?? false;
+                      })
+                    }
+                  >
+                    {(Object.keys(STEP_KIND_LABELS) as StepKind[]).map((k) => (
+                      <option key={k} value={k}>
+                        {STEP_KIND_LABELS[k]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Condition : note égale ou moins bonne que</div>
+                  <select
+                    value={s.minGrade ?? ""}
+                    disabled={ro}
+                    aria-label={`Condition de note de l'étape ${i + 1}`}
+                    onChange={(e) => setStep(i, (x) => (x.minGrade = e.target.value === "" ? null : Number(e.target.value)))}
+                  >
+                    <option value="">— (toute note)</option>
+                    {Array.from({ length: 10 }, (_, k) => k + 1).map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                    <option value={11}>Défaut (DEF)</option>
+                  </select>
+                </label>
+                <label>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Conditions combinées</div>
+                  <select value={s.conditionMode ?? "ANY"} disabled={ro} aria-label={`Combinaison des conditions de l'étape ${i + 1}`} onChange={(e) => setStep(i, (x) => (x.conditionMode = e.target.value as "ANY" | "ALL"))}>
+                    <option value="ANY">L&apos;une suffit</option>
+                    <option value="ALL">Toutes</option>
+                  </select>
+                </label>
+                <label>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Condition : exposition au-delà de (MAD, vide = sans condition)</div>
                   <input
                     type="number"
                     min={0}
@@ -117,6 +222,23 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
                   />
                 </label>
               </div>
+              {creditTypes.length > 0 && (
+                <Checks label="Condition : types de crédit (aucun coché : tous)" items={creditTypes} value={s.creditTypes ?? []} disabled={ro} onChange={(v) => setStep(i, (x) => (x.creditTypes = v))} />
+              )}
+              {tiers.length > 0 && (
+                <Checks label="Condition : catégorie de délégation du centre (aucune cochée : toutes)" items={tiers} value={s.tiers ?? []} disabled={ro} onChange={(v) => setStep(i, (x) => (x.tiers = v))} />
+              )}
+              {s.kind === "AVIS" && (
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+                    <input type="checkbox" style={{ width: "auto" }} disabled={ro} checked={!!s.blocking} onChange={(e) => setStep(i, (x) => (x.blocking = e.target.checked))} />
+                    Avis bloquant pour tous les centres
+                  </label>
+                  {tiers.length > 0 && (
+                    <Checks label="Avis bloquant pour les centres de catégorie" items={tiers} value={s.blockingTiers ?? []} disabled={ro} onChange={(v) => setStep(i, (x) => (x.blockingTiers = v))} />
+                  )}
+                </div>
+              )}
               <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
                 <legend className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
                   Fonctions habilitées (aucune cochée : toute fonction, selon le rôle)
@@ -149,7 +271,7 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
             className="btn-ghost"
             style={{ justifySelf: "start" }}
             onClick={() =>
-              setC((prev) => ({ ...prev, steps: [...prev.steps, { code: `ETAPE_${prev.steps.length + 1}`, labelFr: "Nouvelle étape", functions: [], minRole: "RISK_MANAGER", aboveExposure: null }] }))
+              setC((prev) => ({ ...prev, steps: [...prev.steps, { code: `ETAPE_${prev.steps.length + 1}`, labelFr: "Nouvelle étape", functions: [], minRole: "RISK_MANAGER", aboveExposure: null, kind: "DECISION" }] }))
             }
           >
             + Ajouter une étape
@@ -158,13 +280,15 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
-        <h3 style={{ fontWeight: 600, fontSize: 14 }}>Fonctions</h3>
+        <h3 style={{ fontWeight: 600, fontSize: 14 }}>Profils métier (fonctions) et droits</h3>
         <div className="table-scroll">
           <table className="data">
             <thead>
               <tr>
                 <th>Code</th>
                 <th>Libellé</th>
+                <th>Profil</th>
+                <th>Droits</th>
                 <th>Peut soumettre</th>
                 <th>Comptes actifs</th>
                 <th>
@@ -211,6 +335,51 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
                     />
                   </td>
                   <td>
+                    <select
+                      value={f.profile ?? ""}
+                      disabled={ro}
+                      aria-label={`Profil de la fonction ${f.labelFr}`}
+                      onChange={(e) =>
+                        setC((prev) => {
+                          const next = clone(prev);
+                          if (e.target.value) next.functions[i].profile = e.target.value as ProfileFamily;
+                          else delete next.functions[i].profile;
+                          return next;
+                        })
+                      }
+                    >
+                      <option value="">—</option>
+                      {(Object.keys(PROFILE_FAMILIES) as ProfileFamily[]).map((p) => (
+                        <option key={p} value={p}>
+                          {PROFILE_FAMILIES[p]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <div style={{ display: "grid", gap: 2 }}>
+                      {(Object.keys(PERMISSIONS) as Permission[]).map((p) => (
+                        <label key={p} style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12 }} title={PERMISSIONS[p]}>
+                          <input
+                            type="checkbox"
+                            style={{ width: "auto" }}
+                            disabled={ro}
+                            checked={f.permissions?.includes(p) ?? false}
+                            onChange={(e) =>
+                              setC((prev) => {
+                                const next = clone(prev);
+                                const cur = next.functions[i].permissions ?? [];
+                                next.functions[i].permissions = e.target.checked ? [...cur, p] : cur.filter((k) => k !== p);
+                                return next;
+                              })
+                            }
+                          />
+                          {PERMISSIONS[p]}
+                        </label>
+                      ))}
+                    </div>
+                  </td>
+                  <td>
                     <input
                       type="checkbox"
                       style={{ width: "auto" }}
@@ -253,8 +422,9 @@ export function CircuitEditor({ circuit, stored, readOnly, holders }: { circuit:
           </table>
         </div>
         <p className="muted" style={{ fontSize: 12 }}>
-          « Peut soumettre » : aucune case cochée, toute personne habilitée à noter soumet. La fonction de chaque compte s&apos;attribue dans
-          Administration › Utilisateurs.
+          « Peut soumettre » : aucune case cochée, toute personne habilitée à noter soumet. Un compte porte une seule fonction, donc un seul
+          profil : le cumul saisie et contre-étude, ou saisie et surveillance, est impossible par construction. La fonction de chaque compte
+          s&apos;attribue dans Administration › Utilisateurs.
         </p>
         {!ro && (
           <button
