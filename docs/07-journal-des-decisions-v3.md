@@ -711,6 +711,22 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-59 — Surveillance du portefeuille : KRI, KPI, matrice de migration, alertes — **SEUILS À CONFIRMER EN COPIL**
+
+*Contexte :* point 3 de la feuille de route (6 novembre 2026). La banque demande des graphiques d'évolution des KRI et KPI, une matrice de migration par segment et par secteur, sur la base des meilleures pratiques.
+
+*Décision :*
+- Écran **Surveillance** en lecture seule, cloisonné au périmètre ; accès : gestionnaire des risques, administrateur, ou fonction dotée du nouveau droit VOIR_SURVEILLANCE (directeur de centre, contre-étude, directeur des risques, surveillance par défaut).
+- Douze indicateurs (sept KRI, cinq KPI), seuils orange et rouge paramétrables (docs/20 § 2).
+- Une note compte à la date où elle fait foi (validation) ; seules les notes validées comptent.
+- Matrice de migration par cohorte ; les entrées, sorties et notes non renouvelées sont comptées à part.
+- Parts en exposition, note moyenne pondérée sur les performants.
+- Exposition = engagement déclaré au dossier, jusqu'au raccordement d'un flux d'encours (proposé).
+
+*À confirmer :* seuils, fréquences et responsables des indicateurs ; première classe de risque élevé ; spécification du flux d'encours.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

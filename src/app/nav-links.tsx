@@ -10,6 +10,7 @@ const NAV = [
   { href: "/groups", label: "Groupes" },
   { href: "/scoring", label: "Nouvelle notation" },
   { href: "/renotation", label: "Renotation" },
+  { href: "/surveillance", label: "Surveillance" },
   { href: "/models", label: "Modèles" },
   { href: "/methodology", label: "Méthodologie" },
 ];

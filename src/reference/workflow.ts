@@ -56,6 +56,7 @@ export const PERMISSIONS = {
   CONFIRMER_LEVEE: "Confirmer une levée enregistrée par une autre personne",
   DECIDER_WL: "Enregistrer une décision de watch list (comité)",
   CONFIRMER_WL: "Confirmer une décision de watch list enregistrée par une autre personne",
+  VOIR_SURVEILLANCE: "Consulter la surveillance du portefeuille (KRI, migrations, alertes) de son périmètre",
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 
@@ -112,11 +113,11 @@ export interface WorkflowCircuit {
 export const DEFAULT_FUNCTIONS: WorkflowFunction[] = [
   { code: "CHARGE_AFFAIRES", labelFr: "Chargé d'affaires", profile: "P1" },
   { code: "ANALYSTE", labelFr: "Analyste crédit", profile: "P1" },
-  { code: "DIRECTEUR_CA", labelFr: "Directeur du centre d'affaires", profile: "P2" },
-  { code: "CONTRE_ETUDE", labelFr: "Contre-étude (Risques)", profile: "P3", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE"] },
-  { code: "RESPONSABLE_CE", labelFr: "Responsable de la contre-étude", profile: "P3", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE"] },
-  { code: "DIRECTEUR_RISQUES", labelFr: "Directeur des risques", profile: "P3", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE", "CONFIRMER_WL"] },
-  { code: "SURVEILLANCE", labelFr: "Surveillance des risques", profile: "P4", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE", "DECIDER_WL", "CONFIRMER_WL"] },
+  { code: "DIRECTEUR_CA", labelFr: "Directeur du centre d'affaires", profile: "P2", permissions: ["VOIR_SURVEILLANCE"] },
+  { code: "CONTRE_ETUDE", labelFr: "Contre-étude (Risques)", profile: "P3", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE", "VOIR_SURVEILLANCE"] },
+  { code: "RESPONSABLE_CE", labelFr: "Responsable de la contre-étude", profile: "P3", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE", "VOIR_SURVEILLANCE"] },
+  { code: "DIRECTEUR_RISQUES", labelFr: "Directeur des risques", profile: "P3", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE", "CONFIRMER_WL", "VOIR_SURVEILLANCE"] },
+  { code: "SURVEILLANCE", labelFr: "Surveillance des risques", profile: "P4", permissions: ["LEVER_CRITERE", "CONFIRMER_LEVEE", "DECIDER_WL", "CONFIRMER_WL", "VOIR_SURVEILLANCE"] },
   { code: "COMITE_CREDIT", labelFr: "Comité de crédit", profile: "P3" },
 ];
 
