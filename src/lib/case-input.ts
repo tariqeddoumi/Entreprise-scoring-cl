@@ -17,6 +17,7 @@ import {
   type FinancialComputation,
   type FinancialsDraft,
 } from "@/financials/compute";
+import type { StatementFormat } from "@/financials/statement-format";
 
 /**
  * Saisie d'un dossier de notation — module PUR, partagé par l'écran (aperçu et
@@ -61,6 +62,32 @@ export interface CaseDraft {
   amounts: { annualTurnover: string; groupAnnualTurnover: string; globalBankExposure: string };
   /** Bilan et CPC (N, N−1, N−2) : base des ratios de la grille et de la fiche de notation. */
   financials: FinancialsDraft;
+  /** Reprise de la dernière note validée, à l'ouverture du dossier. */
+  reprise?: CaseReprise;
+}
+
+/**
+ * Ce qui a été repris à l'ouverture. `pending` : champs repris de la note
+ * précédente que l'analyste n'a pas encore confirmés ou modifiés (codes de
+ * critère, « AMOUNTS » pour les montants du cadrage).
+ */
+export interface CaseReprise {
+  fromCaseId: string | null;
+  fromAsOfDate: string | null;
+  fromGrade: string | null;
+  exercise: "CONSERVE" | "SUIVANT";
+  carriedYears: string[];
+  /** Exercice dont le bilan reste à charger (passage à l'exercice suivant). */
+  toLoad: string | null;
+  pending: string[];
+}
+
+/** Retire des champs à confirmer (modification ou confirmation par l'analyste). */
+export function confirmReprise(draft: CaseDraft, keys: readonly string[] | "ALL"): CaseDraft {
+  if (!draft.reprise || draft.reprise.pending.length === 0) return draft;
+  const pending = keys === "ALL" ? [] : draft.reprise.pending.filter((k) => !keys.includes(k));
+  if (pending.length === draft.reprise.pending.length) return draft;
+  return { ...draft, reprise: { ...draft.reprise, pending } };
 }
 
 export const DATA_STATUSES: DataStatus[] = ["AVAILABLE", "MISSING", "NOT_APPLICABLE", "INVALID", "STALE", "ESTIMATED"];
@@ -118,6 +145,7 @@ export function parseDraft(raw: string | null | undefined, model: ModelConfig, a
       flags: d.flags ?? {},
       redFlags: d.redFlags ?? [],
       financials: parseFinancials(d.financials),
+      ...(d.reprise && typeof d.reprise === "object" && Array.isArray(d.reprise.pending) ? { reprise: d.reprise } : { reprise: undefined }),
       version: 1,
     };
   } catch {
@@ -159,11 +187,16 @@ const toNumber = (s: string): number | undefined => {
  * Calcul financier du brouillon : indicateurs, ratios de la grille, contrôles.
  * Même calcul à l'écran et à la soumission.
  */
-export function draftFinancials(draft: CaseDraft, model: ModelConfig): FinancialComputation {
-  return computeFinancials(draft.financials ?? emptyFinancials(), model.modelId, {
-    asOfDate: draft.asOfDate,
-    declaredTurnover: toNumber(draft.amounts.annualTurnover),
-  });
+export function draftFinancials(draft: CaseDraft, model: ModelConfig, format?: StatementFormat): FinancialComputation {
+  return computeFinancials(
+    draft.financials ?? emptyFinancials(),
+    model.modelId,
+    {
+      asOfDate: draft.asOfDate,
+      declaredTurnover: toNumber(draft.amounts.annualTurnover),
+    },
+    format
+  );
 }
 
 /** Chiffre d'affaires de l'exercice N lu au bilan, s'il existe. */
@@ -195,13 +228,13 @@ export function draftToRequest(
   draft: CaseDraft,
   model: ModelConfig,
   baseAmounts?: Record<string, number>,
-  opts: { currency?: string } = {}
+  opts: { currency?: string; format?: StatementFormat } = {}
 ): Record<string, unknown> {
   const segment = displaySegment(draft, model);
   const criteria: Record<string, CriterionInput> = {};
   // Ratios calculés depuis le bilan : ils priment sur une saisie manuelle du
   // critère ; seule une correction motivée les remplace.
-  const fin = draftFinancials(draft, model);
+  const fin = draftFinancials(draft, model, opts.format);
   const links = gridLinks(model.modelId);
   const fromBalanceSheet = new Map(fin.gridRatios.map((g) => [g.criterion, g]));
   for (const c of model.criteria) {
@@ -279,7 +312,7 @@ export function draftToRequest(
     },
     ...(draft.groupSupport.claimed ? { groupSupport: draft.groupSupport } : {}),
     ...(() => {
-      const basis = buildFinancialBasis(draft.financials ?? emptyFinancials(), fin, opts.currency);
+      const basis = buildFinancialBasis(draft.financials ?? emptyFinancials(), fin, opts.currency, opts.format);
       return basis ? { financialBasis: basis } : {};
     })(),
   };

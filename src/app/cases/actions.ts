@@ -54,6 +54,8 @@ export async function createCaseAction(_prev: ActionResult, fd: FormData): Promi
       counterpartyId: String(fd.get("counterpartyId") ?? ""),
       modelId: String(fd.get("modelId") ?? ""),
       asOfDate: String(fd.get("asOfDate") ?? ""),
+      purpose: String(fd.get("purpose") ?? "") || undefined,
+      exercise: fd.get("exercise") === "SUIVANT" ? "SUIVANT" : fd.get("exercise") === "CONSERVE" ? "CONSERVE" : undefined,
     });
     id = created.id;
   } catch (e) {

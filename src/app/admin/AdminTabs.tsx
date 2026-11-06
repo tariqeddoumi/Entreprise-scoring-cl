@@ -9,6 +9,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/currencies", label: "Devises" },
   { href: "/admin/grilles", label: "Paramétrage des grilles" },
   { href: "/admin/scale", label: "Échelle de notation" },
+  { href: "/admin/bilan", label: "Format du bilan" },
   { href: "/admin/settings", label: "Paramétrage" },
 ];
 

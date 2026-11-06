@@ -129,6 +129,44 @@ export const financialBasisSchema = z
           .strict()
       )
       .max(200),
+    formatVersion: z.string().max(40).optional(),
+    indicatorMeta: z
+      .array(z.object({ key: z.string().max(40), labelFr: z.string().max(200), unit: z.enum(["MAD", "%", "x", "j"]), group: z.string().max(20) }).strict())
+      .max(40)
+      .optional(),
+    analysis: z
+      .object({
+        situation: z.enum(["SAINE", "A_SURVEILLER", "DEGRADEE", "CRITIQUE"]).nullable(),
+        motifsFr: z.array(z.string().max(200)).max(10),
+        alerts: z
+          .array(
+            z
+              .object({
+                key: z.string().max(40),
+                labelFr: z.string().max(300),
+                severity: z.enum(["CRITIQUE", "ALERTE"]),
+                referenceFr: z.string().max(300).optional(),
+                status: z.enum(["DECLENCHEE", "NON", "NON_EVALUABLE"]),
+              })
+              .strict()
+          )
+          .max(60),
+        appraisals: z
+          .array(
+            z
+              .object({
+                key: z.string().max(40),
+                levels: z.array(z.enum(["BON", "MOYEN", "MAUVAIS", "CRITIQUE"]).nullable()).max(3),
+                trend: z.enum(["AMELIORATION", "STABLE", "DEGRADATION"]).nullable(),
+                change: finiteOrNull,
+                grid: z.string().max(32).optional(),
+              })
+              .strict()
+          )
+          .max(80),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

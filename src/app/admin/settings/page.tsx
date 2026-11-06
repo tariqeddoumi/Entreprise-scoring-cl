@@ -5,6 +5,9 @@ import { getPerimeter, requireSession } from "@/lib/session";
 import { loadCircuit } from "@/lib/workflow";
 import { CircuitEditor } from "./CircuitEditor";
 import { SettingsForm } from "./SettingsForm";
+import { PurposesEditor } from "./PurposesEditor";
+import { loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +21,7 @@ export default async function SettingsPage() {
     const rows = await db.user.groupBy({ by: ["jobFunction"], where: { isActive: true, jobFunction: { not: null } }, _count: { _all: true } });
     return Object.fromEntries(rows.map((r) => [r.jobFunction ?? "", r._count._all]));
   }, {} as Record<string, number>);
+  const { data: purposes } = await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -33,6 +37,7 @@ export default async function SettingsPage() {
         <strong>État de l&apos;IA :</strong> {ai.enabled ? (ai.missing ? `activée, mais ${ai.missing}` : `active (${ai.provider}, ${ai.model})`) : "désactivée"}.
       </div>
       <CircuitEditor circuit={circuit} stored={stored} readOnly={!perimeter.all} holders={holders} />
+      <PurposesEditor initial={purposes} readOnly={!perimeter.all} />
       <SettingsForm
         readOnly={!perimeter.all}
         values={values}

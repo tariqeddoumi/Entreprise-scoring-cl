@@ -1,6 +1,8 @@
 import type { FinancialBasis, ModelConfig } from "@/core/types";
 import { KEY_POSTES, POSTE_BY_KEY, STATEMENT_MODEL_LABELS } from "@/financials/chart";
-import { INDICATOR_BY_KEY } from "@/financials/compute";
+import { INDICATOR_BY_KEY, indicatorCatalog, type IndicatorMeta } from "@/financials/compute";
+import type { StatementFormat } from "@/financials/statement-format";
+import { FinancialAnalysisPanel } from "./FinancialAnalysisPanel";
 import { formatAmount, formatIndicator } from "@/financials/format";
 import { IndicatorTable } from "./FinancialsSection";
 
@@ -23,7 +25,12 @@ export function readFinancialBasis(inputSnapshot: string | null | undefined): Fi
  * retenus et les contrôles, tels qu'ils ont été figés à la soumission. Permet
  * de vérifier que la note repose sur le bon bilan remis par le client.
  */
-export function FinancialBasisPanel({ basis, model }: { basis: FinancialBasis; model?: ModelConfig | null }) {
+export function FinancialBasisPanel({ basis, model, format }: { basis: FinancialBasis; model?: ModelConfig | null; format?: StatementFormat }) {
+  // Libellés : indicateurs de l'outil, puis ceux du format figés dans la notation.
+  const metas: IndicatorMeta[] = [
+    ...indicatorCatalog(format && format.version === basis.formatVersion ? format : undefined).filter((m) => !basis.indicatorMeta?.some((x) => x.key === m.key)),
+    ...(basis.indicatorMeta ?? []).map((m) => ({ ...m, group: m.group as IndicatorMeta["group"], formulaFr: "Indicateur du format de bilan.", custom: true })),
+  ];
   const n = basis.years[0];
   const yearLabels = basis.years.map((y, i) => y.fiscalYear || ["N", "N−1", "N−2"][i]);
   const ko = basis.controls.filter((c) => c.status === "KO");
@@ -51,6 +58,13 @@ export function FinancialBasisPanel({ basis, model }: { basis: FinancialBasis; m
           {alerts.length ? ` · ${alerts.length} à vérifier` : ""}.
         </p>
       </div>
+
+      {basis.analysis && (
+        <div>
+          <h3 style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Analyse du bilan à la date de la notation</h3>
+          <FinancialAnalysisPanel analysis={basis.analysis} indicators={basis.indicators} years={yearLabels} metas={metas} model={model} formatVersion={basis.formatVersion} />
+        </div>
+      )}
 
       <div>
         <h3 style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Postes clés du bilan et du CPC</h3>
@@ -139,7 +153,7 @@ export function FinancialBasisPanel({ basis, model }: { basis: FinancialBasis; m
       <details style={{ minWidth: 0 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Tous les indicateurs financiers</summary>
         <div style={{ marginTop: 8 }}>
-          <IndicatorTable rows={basis.indicators} years={yearLabels} />
+          <IndicatorTable rows={basis.indicators} years={yearLabels} metas={metas} />
         </div>
       </details>
 

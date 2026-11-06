@@ -160,6 +160,14 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/07-circuit-validation.sql
 
 Ajoute la fonction des comptes (`users.jobFunction`) et le circuit figé des dossiers (`rating_cases.workflow`). Idempotent et transactionnel. **Après la migration**, renseigner la fonction de chaque valideur (Administration › Utilisateurs) : le circuit par défaut exige un directeur du centre d'affaires puis la contre-étude, et un dossier soumis reste en attente tant que personne ne porte la fonction de l'étape. Le circuit se modifie dans Administration › Paramétrage ; il est enregistré dans `app_settings` (clé `WORKFLOW_CIRCUIT`). Les dossiers soumis avant la migration gardent une validation en une étape.
 
+### Format du bilan, motif des dossiers et référentiel des bilans (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/09-referentiel-bilans-motifs.sql
+```
+
+Ajoute le motif des dossiers (`rating_cases.purpose`) et la table `financial_statements` (bilans du client par exercice), puis y reprend les bilans des notes déjà validées. Idempotent et transactionnel ; à appliquer **avant** de déployer la version correspondante. Le format du bilan est enregistré dans `app_settings` (clé `FINANCIAL_FORMAT_VERSIONS`) et les motifs sous la clé `CASE_PURPOSES` ; sans enregistrement, le format embarqué (bilan complet) et les motifs embarqués s'appliquent. Le script `08-seed-demonstration-echelle-1-10.sql` est antérieur à cette migration : il ne vide pas `financial_statements` (`npm run db:reset-seed` le fait).
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son

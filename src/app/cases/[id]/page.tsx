@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getScoringModel } from "@/lib/rating-scale";
+import { getScoringModel, today } from "@/lib/rating-scale";
+import { effectiveFormat, formatByVersion } from "@/lib/statement-format";
+import { loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { aiStatus } from "@/lib/ai";
 import { hasRole } from "@/lib/auth";
 import { parseDraft, proposableFields } from "@/lib/case-input";
@@ -127,7 +130,11 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const fx: FxConversion | null = c.fxDetail ? (JSON.parse(c.fxDetail) as FxConversion) : null;
   const snapshot = c.run ? readResultSnapshot(c.run.resultSnapshot) : null;
   const editable = c.status === "DRAFT" && canRate;
+  // Dossier en cours : format en vigueur ; dossier soumis : celui figé dans la notation.
+  const frozenBasis = c.run ? readFinancialBasis(c.run.inputSnapshot) : null;
+  const format = c.status === "DRAFT" ? await effectiveFormat(today()) : await formatByVersion(frozenBasis?.formatVersion, today());
   const ai = await aiStatus();
+  const purposeLabel = c.purpose ? ((await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES)).data.find((p) => p.code === c.purpose)?.labelFr ?? c.purpose) : null;
   const maxMb = await settingInt("DOCUMENT_MAX_MB");
   const workflow = c.status === "SUBMITTED" || c.status === "VALIDATED" || c.status === "REJECTED" ? await caseWorkflow(c) : null;
   const circuit = workflow ? stepsView(workflow, c) : [];
@@ -162,6 +169,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           Dossier de notation — {c.counterparty.name} <CaseStatusBadge status={c.status} />
         </h1>
         <p className="muted">
+          {purposeLabel ? <><strong style={{ color: "var(--text)" }}>{purposeLabel}</strong> · </> : null}
           {entity?.name ?? "—"} · {model.labelFr} v{model.version} · arrêté au {c.asOfDate} · montants en {c.counterparty.currency} ·
           ouvert par {c.createdBy} le {c.createdAt.toISOString().slice(0, 10)}
           {c.submittedBy && ` · soumis par ${c.submittedBy}`}
@@ -259,7 +267,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           {(() => {
             // Le valideur voit le bilan sur lequel la note a été calculée.
             const basis = readFinancialBasis(c.run.inputSnapshot);
-            return basis ? <FinancialBasisPanel basis={basis} model={model} /> : null;
+            return basis ? <FinancialBasisPanel basis={basis} model={model} format={format} /> : null;
           })()}
           {snapshot.kind === "V3" && <ResultPanel result={snapshot.result} model={model} />}
         </section>
@@ -275,6 +283,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         proposals={proposals}
         ai={{ enabled: ai.enabled, missing: ai.missing, provider: ai.provider, model: ai.model }}
         maxMb={maxMb}
+        format={format}
       />
 
       <section className="card" style={{ padding: 16 }}>

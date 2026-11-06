@@ -44,6 +44,15 @@ export const SETTINGS: readonly SettingDef[] = [
     default: "true",
   },
   {
+    key: "WORKFLOW_CONFIRM_CARRIED_OVER",
+    group: "Workflow",
+    labelFr: "Confirmer les champs repris de la note précédente",
+    helpFr:
+      "À l'ouverture d'un dossier, la saisie de la dernière note validée est reprise. Activé : chaque critère et les montants repris doivent être confirmés ou modifiés avant la soumission.",
+    kind: "boolean",
+    default: "true",
+  },
+  {
     key: "WORKFLOW_VALIDATOR_ROLE",
     group: "Workflow",
     labelFr: "Rôle minimal du valideur — dossiers soumis avant le circuit à étapes",

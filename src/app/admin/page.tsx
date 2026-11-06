@@ -2,6 +2,7 @@ import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
 import { loadParamVersions } from "@/lib/model-params";
 import { effectiveScale, today } from "@/lib/rating-scale";
+import { effectiveFormat } from "@/lib/statement-format";
 import { safeQuery } from "@/lib/safe-db";
 import { getPerimeter, requireSession } from "@/lib/session";
 
@@ -25,7 +26,11 @@ export default async function AdminHome() {
   );
   const ai = await aiStatus();
   const day = today();
-  const [scale, paramVersions] = await Promise.all([effectiveScale(day, { fresh: true }), loadParamVersions({ fresh: true })]);
+  const [scale, paramVersions, format] = await Promise.all([
+    effectiveScale(day, { fresh: true }),
+    loadParamVersions({ fresh: true }),
+    effectiveFormat(day, { fresh: true }),
+  ]);
   const inForce = new Set(paramVersions.filter((v) => v.effectiveFrom <= day).map((v) => v.modelId)).size;
   const upcoming = paramVersions.filter((v) => v.effectiveFrom > day).length;
   const cards = [
@@ -43,6 +48,12 @@ export default async function AdminHome() {
       title: "Échelle de notation",
       value: `${scale.version} · ${scale.bands.length} classes`,
       text: "Bornes et libellés des classes 1 à 10, versions datées ; défaut hors échelle.",
+    },
+    {
+      href: "/admin/bilan",
+      title: "Format du bilan",
+      value: format.version,
+      text: "Postes chargés (complet, agrégé, notation seulement), postes propres à la banque, indicateurs par formule, seuils d'appréciation et alertes.",
     },
     {
       href: "/admin/settings",

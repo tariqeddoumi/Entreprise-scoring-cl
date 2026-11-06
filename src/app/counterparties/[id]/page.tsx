@@ -5,6 +5,8 @@ import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { isOfficialRun } from "@/lib/cases";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
 import { safeQuery } from "@/lib/safe-db";
+import { lastRatingInfo, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { hasRole } from "@/lib/auth";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
 import { getPerimeter, requireSession } from "@/lib/session";
@@ -110,6 +112,10 @@ export default async function CounterpartyPage({
   const canRate = canEdit && counterparty.isActive;
   const hasHistory = runs.length + cases.length + renotations > 0;
   const today = new Date().toISOString().slice(0, 10);
+  const { data: openInfo } = await safeQuery(
+    async (db) => ({ last: (await lastRatingInfo(db, [counterparty.id])).get(counterparty.id), purposes: await loadPurposes(db) }),
+    { last: undefined, purposes: DEFAULT_PURPOSES }
+  );
   const opt = (v: string | null) => v ?? "";
   // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
   const master = toGradeScaleConfig(await effectiveScale());
@@ -226,7 +232,8 @@ export default async function CounterpartyPage({
         <NewCaseForm
           models={listModels().map((m) => ({ modelId: m.modelId, label: `${m.labelFr} · v${m.version}` }))}
           defaultModelId="CORP_STD_V1"
-          counterparties={[{ id: counterparty.id, name: counterparty.name, currency: counterparty.currency, entityCode: entity?.code ?? "—" }]}
+          counterparties={[{ id: counterparty.id, name: counterparty.name, currency: counterparty.currency, entityCode: entity?.code ?? "—", ...(openInfo.last ? { last: openInfo.last } : {}) }]}
+          purposes={openInfo.purposes.filter((p) => p.active)}
           today={today}
           canRate
           fixedCounterpartyId={counterparty.id}

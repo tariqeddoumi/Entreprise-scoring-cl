@@ -2,7 +2,7 @@
  * Remise à zéro des données métier puis jeu de démonstration complet, sur
  * l'échelle de notation 1 à 10 en vigueur.
  *
- * Supprimé : clients, groupes d'affaires, dossiers (pièces, propositions),
+ * Supprimé : clients, groupes d'affaires, dossiers (pièces, propositions), bilans du référentiel,
  * notations, dérogations, lots et planifications de renotation, cours de
  * change, webhooks et outbox, paramétrage (retour aux valeurs par défaut).
  *
@@ -73,6 +73,7 @@ async function main() {
       await tx.ratingCase.deleteMany();
       await tx.override.deleteMany();
       await tx.ratingRun.deleteMany();
+      await tx.financialStatement.deleteMany();
       await tx.counterparty.deleteMany();
       await tx.economicGroup.deleteMany();
       await tx.webhookDelivery.deleteMany();

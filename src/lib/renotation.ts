@@ -567,7 +567,7 @@ async function processItem(db: PrismaClient, identity: Identity, batch: BatchRow
       input = rest as RatingInput;
       ignored.push(...Object.keys(updates));
     } else {
-      draft = { ...parseDraft(official.ratingCase.draftInput, model, batch.asOfDate), asOfDate: batch.asOfDate };
+      draft = { ...parseDraft(official.ratingCase.draftInput, model, batch.asOfDate), asOfDate: batch.asOfDate, reprise: undefined };
       const allowed = new Set(refreshFieldsFor(model).map((f) => f.key));
       const links = gridLinks(model.modelId);
       for (const [k, v] of Object.entries(updates)) {

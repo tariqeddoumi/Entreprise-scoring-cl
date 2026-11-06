@@ -66,6 +66,9 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Écran Clients : création, modification, suppression ou désactivation, notation depuis la fiche | Opérationnel |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
 | Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture IA ; ratios calculés, contrôles, correction motivée | Opérationnel |
+| Format du bilan paramétrable par versions datées (complet, agrégé, notation seulement ; postes propres, indicateurs et alertes par formule, seuils d'appréciation) | Opérationnel |
+| Analyse du bilan au chargement : ratios de la grille puis autres indicateurs, évolution sur trois exercices, appréciation, alertes (dont critères chiffrés 1/W/2025, à titre d'information) | Opérationnel |
+| Ouverture du dossier : motif paramétrable, reprise de la dernière note validée, passage à l'exercice suivant (N → N−1), référentiel des bilans du client, repères « repris / à saisir / anomalie » | Opérationnel |
 | Score de confiance, porte de couverture et caps de qualité | Opérationnel |
 | Caps structurels, revues obligatoires et red flags | Opérationnel |
 | Support groupe (au plus 2 crans, 4 conditions documentées) | Opérationnel |

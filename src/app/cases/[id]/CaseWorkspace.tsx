@@ -7,6 +7,7 @@ import { applyField, type CaseDraft, type FieldKind } from "@/lib/case-input";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
 import { ScoringForm } from "@/app/scoring/ScoringForm";
 import { FinancialsSection } from "@/app/scoring/FinancialsSection";
+import type { StatementFormat } from "@/financials/statement-format";
 import { DATA_STATUS_LABELS } from "@/app/ui-helpers";
 import {
   decideProposalAction,
@@ -39,6 +40,8 @@ interface ProposalRow {
 }
 
 interface Props {
+  /** Format de bilan applicable au dossier. */
+  format: StatementFormat;
   caseId: string;
   model: ModelConfig;
   initialDraft: CaseDraft;
@@ -56,7 +59,7 @@ type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<st
  * Espace de travail d'un dossier : la grille (brouillon), l'aperçu du calcul,
  * l'enregistrement, la soumission, et le panneau d'assistance de l'IA.
  */
-export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb }: Props) {
+export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<CaseDraft>(initialDraft);
   const [dirty, setDirty] = useState(false);
@@ -122,8 +125,8 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
       <details className="card" style={{ padding: 16 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Saisie du dossier (lecture seule)</summary>
         <div style={{ marginTop: 14, display: "grid", gap: 18 }}>
-          <FinancialsSection model={model} draft={draft} readOnly currency={currency} />
-          <ScoringForm model={model} draft={draft} onChange={() => undefined} readOnly currency={currency} aiFields={aiFields} />
+          <FinancialsSection model={model} draft={draft} readOnly currency={currency} format={format} />
+          <ScoringForm model={model} draft={draft} onChange={() => undefined} readOnly currency={currency} aiFields={aiFields} format={format} />
         </div>
       </details>
     );
@@ -140,8 +143,9 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
           caseId={caseId}
           documents={documents}
           aiUsable={ai.enabled && !ai.missing}
+          format={format}
         />
-        <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} />
+        <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} format={format} />
         <div className="card no-print action-bar">
           <button type="button" className="btn-ghost" onClick={() => run("save")} disabled={busy !== null}>
             {busy === "save" ? "Enregistrement…" : "Enregistrer le brouillon"}

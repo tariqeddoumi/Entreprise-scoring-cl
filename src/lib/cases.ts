@@ -1,9 +1,12 @@
-import { getScoringModel } from "@/lib/rating-scale";
+import { getScoringModel, today } from "@/lib/rating-scale";
+import { effectiveFormat } from "./statement-format";
 import type { PrismaClient } from "@/generated/prisma";
 import type { RatingInput, RatingResult } from "@/core/types";
 import { hasRole, type Identity, type Role } from "./auth";
 import { auditWithin } from "./audit";
-import { draftAmounts, draftFinancials, draftToRequest, parseDraft, type CaseDraft } from "./case-input";
+import { draftAmounts, draftFinancials, draftToRequest, parseDraft, type CaseDraft, type CaseReprise } from "./case-input";
+import { emptyFinancials, gridLinks, parseFinancials, type FinancialsDraft } from "@/financials/compute";
+import { carryFinancials, loadPurposes, recordStatements, suggestedExercise, type ExerciseChoice } from "./financial-statements";
 import { BASE_CURRENCY, convertToBase, FxError, type FxConversion } from "./fx";
 import { executeRatingRun, RatingServiceError, simulateRating } from "./rating-service";
 import { ratingRequestSchema } from "./schemas";
@@ -118,7 +121,7 @@ export async function contributorsOf(db: PrismaClient, caseId: string): Promise<
 export async function createCase(
   db: PrismaClient,
   identity: Identity,
-  input: { counterpartyId: string; modelId: string; asOfDate: string }
+  input: { counterpartyId: string; modelId: string; asOfDate: string; purpose?: string; exercise?: ExerciseChoice }
 ) {
   const model = await getScoringModel(input.modelId);
   if (!model) throw new CaseError(404, `Modèle inconnu : ${input.modelId}`);
@@ -126,20 +129,57 @@ export async function createCase(
   const counterparty = await db.counterparty.findUnique({ where: { id: input.counterpartyId } });
   if (!counterparty) throw new CaseError(404, "Client introuvable.");
   if (!counterparty.isActive) throw new CaseError(409, "Client désactivé : réactivez-le depuis sa fiche avant d'ouvrir un dossier.");
+  const purposes = await loadPurposes(db);
+  const purpose = input.purpose ? purposes.find((p) => p.code === input.purpose && p.active) : undefined;
+  if (input.purpose && !purpose) throw new CaseError(400, `Motif de dossier inconnu ou inactif : ${input.purpose}.`);
+  if (input.exercise && input.exercise !== "CONSERVE" && input.exercise !== "SUIVANT") throw new CaseError(400, "Exercice : CONSERVE ou SUIVANT.");
   const open = await db.ratingCase.findFirst({
     where: { counterpartyId: counterparty.id, status: { in: ["DRAFT", "SUBMITTED"] } },
     select: { id: true },
   });
   if (open) throw new CaseError(409, `Un dossier est déjà en cours pour ce client (${open.id}).`);
 
+  // Reprise : la dernière note VALIDÉE (un dossier rejeté se reprend par
+  // « Reprendre le dossier »), et le référentiel des bilans du client.
   const previous = await db.ratingCase.findFirst({
-    where: { counterpartyId: counterparty.id, modelId: model.modelId, status: { in: ["VALIDATED", "REJECTED"] } },
-    orderBy: { createdAt: "desc" },
-    select: { draftInput: true },
+    where: { counterpartyId: counterparty.id, modelId: model.modelId, status: "VALIDATED" },
+    orderBy: { decidedAt: "desc" },
+    select: { id: true, asOfDate: true, draftInput: true, run: { select: { finalGrade: true } } },
   });
-  const draft: CaseDraft = previous
-    ? { ...parseDraft(previous.draftInput, model, input.asOfDate), asOfDate: input.asOfDate }
-    : parseDraft(null, model, input.asOfDate);
+  const statements = await db.financialStatement.findMany({
+    where: { counterpartyId: counterparty.id },
+    orderBy: { closingDate: "desc" },
+    take: 6,
+    select: { fiscalYear: true, closingDate: true, values: true, statementModel: true, certified: true },
+  });
+  const base = previous ? parseDraft(previous.draftInput, model, input.asOfDate) : parseDraft(null, model, input.asOfDate);
+  const draft: CaseDraft = { ...base, asOfDate: input.asOfDate };
+  let reprise: CaseReprise | undefined;
+  if (previous || statements.length > 0) {
+    const lastClosing = (previous ? base.financials.years[0]?.closingDate : "") || statements[0]?.closingDate;
+    const exercise = input.exercise ?? suggestedExercise(lastClosing, input.asOfDate, purpose);
+    const carry = carryFinancials(previous ? base.financials : null, statements, exercise, emptyFinancials());
+    draft.financials = carry.financials;
+    const linked = gridLinks(model.modelId);
+    const pending = previous
+      ? [
+          ...model.criteria.filter((c) => !linked[c.code] && base.criteria[c.code] && base.criteria[c.code].status !== "MISSING").map((c) => c.code),
+          ...(Object.values(base.amounts).some((v) => v.trim() !== "") ? ["AMOUNTS"] : []),
+        ]
+      : [];
+    reprise = {
+      fromCaseId: previous?.id ?? null,
+      fromAsOfDate: previous?.asOfDate ?? null,
+      fromGrade: previous?.run?.finalGrade ?? null,
+      exercise,
+      carriedYears: carry.carriedYears,
+      toLoad: carry.toLoad,
+      pending,
+    };
+    draft.reprise = reprise;
+  } else {
+    delete draft.reprise;
+  }
 
   return db.$transaction(async (tx) => {
     const created = await tx.ratingCase.create({
@@ -149,6 +189,7 @@ export async function createCase(
         asOfDate: input.asOfDate,
         draftInput: JSON.stringify(draft),
         createdBy: identity.name,
+        purpose: purpose?.code ?? null,
       },
     });
     await auditWithin(tx, {
@@ -158,7 +199,14 @@ export async function createCase(
       resourceType: "RatingCase",
       resourceId: created.id,
       entityId: counterparty.entityId,
-      detail: { counterpartyId: counterparty.id, modelId: model.modelId, asOfDate: input.asOfDate, reprise: !!previous },
+      detail: {
+        counterpartyId: counterparty.id,
+        modelId: model.modelId,
+        asOfDate: input.asOfDate,
+        purpose: purpose?.code ?? null,
+        reprise: !!previous,
+        ...(reprise ? { exercise: reprise.exercise, carriedYears: reprise.carriedYears, toLoad: reprise.toLoad, fromCaseId: reprise.fromCaseId } : {}),
+      },
     });
     return created;
   });
@@ -218,7 +266,8 @@ export async function buildInput(db: PrismaClient, c: { modelId: string; counter
   const model = await getScoringModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const { base, fx } = await convertAmounts(db, draft, c.counterparty.currency);
-  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency }));
+  const format = await effectiveFormat(today());
+  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency, format }));
   if (!parsed.success) {
     throw new CaseError(
       400,
@@ -248,6 +297,16 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
     const labels = circuit.functions.filter((f) => circuit.submitFunctions.includes(f.code)).map((f) => f.labelFr);
     throw new CaseError(403, `La soumission revient à : ${labels.join(", ")}.`);
   }
+  // Champs repris de la note précédente : confirmés ou modifiés avant la
+  // soumission (paramétrable), pour qu'une ancienne appréciation ne passe pas
+  // inaperçue dans la nouvelle note.
+  if (draft.reprise && draft.reprise.pending.length > 0 && (await settingBool("WORKFLOW_CONFIRM_CARRIED_OVER"))) {
+    const n = draft.reprise.pending.length;
+    throw new CaseError(
+      409,
+      `${n} champ(s) repris de la note précédente à confirmer ou à mettre à jour avant la soumission : ${draft.reprise.pending.slice(0, 12).join(", ")}${n > 12 ? "…" : ""}.`
+    );
+  }
   const { input, fx } = await buildInput(db, c, draft);
   // Un dossier se soumet pour faire valider une NOTE : un calcul sans grade
   // (donnée critique manquante, couverture insuffisante) se complète, il ne se
@@ -256,7 +315,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   // présent, ses contrôles bloquants s'appliquent, quelle que soit la grille.
   const model = await getScoringModel(c.modelId);
   if (model) {
-    const fin = draftFinancials(draft, model);
+    const fin = draftFinancials(draft, model, await effectiveFormat(today()));
     const required = model.routeFamily === "STANDARD" && (await settingBool("WORKFLOW_BALANCE_SHEET_REQUIRED"));
     if (required || fin.present[0]) {
       const blocking = fin.controls.filter((k) => k.status === "KO" && !k.key.startsWith("MOTIF_") && k.key !== "FRAICHEUR");
@@ -442,6 +501,26 @@ export async function decideCase(
         motif: motif || undefined,
       },
     });
+    // Note validée : ses bilans entrent au référentiel du client ; le prochain
+    // dossier en reprendra N−1 et N−2.
+    if (applied.status === "VALIDATED") {
+      let financials: FinancialsDraft | null = null;
+      try {
+        financials = parseFinancials((JSON.parse(c.draftInput) as { financials?: unknown }).financials);
+      } catch {
+        financials = null;
+      }
+      if (financials) {
+        const run = c.runId ? await tx.ratingRun.findUnique({ where: { id: c.runId }, select: { inputSnapshot: true } }) : null;
+        let formatVersion: string | undefined;
+        try {
+          formatVersion = (JSON.parse(run?.inputSnapshot ?? "{}") as { financialBasis?: { formatVersion?: string } }).financialBasis?.formatVersion;
+        } catch {
+          formatVersion = undefined;
+        }
+        await recordStatements(tx, { id: c.id, counterpartyId: c.counterpartyId, runId: c.runId, currency: c.counterparty.currency, actor: identity.name, financials, formatVersion });
+      }
+    }
   });
   return {
     status: applied.status,

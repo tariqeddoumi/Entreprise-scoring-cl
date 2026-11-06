@@ -518,6 +518,23 @@ export interface FinancialBasis {
   indicators: Array<{ key: string; values: Array<number | null> }>;
   gridRatios: FinancialGridRatio[];
   controls: FinancialControl[];
+  /** Format de bilan appliqué (paramétrage). */
+  formatVersion?: string;
+  /** Libellés des indicateurs définis par le format. */
+  indicatorMeta?: Array<{ key: string; labelFr: string; unit: "MAD" | "%" | "x" | "j"; group: string }>;
+  /** Analyse du bilan au moment de la notation (information, sans effet sur la note). */
+  analysis?: {
+    situation: "SAINE" | "A_SURVEILLER" | "DEGRADEE" | "CRITIQUE" | null;
+    motifsFr: string[];
+    alerts: Array<{ key: string; labelFr: string; severity: "CRITIQUE" | "ALERTE"; referenceFr?: string; status: "DECLENCHEE" | "NON" | "NON_EVALUABLE" }>;
+    appraisals: Array<{
+      key: string;
+      levels: Array<"BON" | "MOYEN" | "MAUVAIS" | "CRITIQUE" | null>;
+      trend: "AMELIORATION" | "STABLE" | "DEGRADATION" | null;
+      change: number | null;
+      grid?: string;
+    }>;
+  };
 }
 
 export interface RatingInput {

@@ -226,6 +226,8 @@ export const SCOPED_MODELS: Record<string, Filter> = {
   RenotationSchedule: (ids) => ({ entityId: { in: ids } }),
   RenotationBatch: (ids) => ({ entityId: { in: ids } }),
   RenotationItem: byCounterparty,
+  // Référentiel des bilans : ceux des clients du périmètre.
+  FinancialStatement: byCounterparty,
   // Souscriptions et événements : une filiale ne voit ni ne reçoit ceux d'une
   // autre (diagnostic S01) ; ceux du groupe entier (entité nulle) ne sont
   // visibles que du périmètre groupe.
@@ -325,6 +327,7 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
       return;
     }
     case "RenotationItem":
+    case "FinancialStatement":
       return writableCounterparty(ref(data, "counterpartyId", "counterparty"));
     case "WebhookDelivery": {
       const subId = ref(data, "subscriptionId", "subscription");

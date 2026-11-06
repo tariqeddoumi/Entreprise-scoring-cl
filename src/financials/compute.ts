@@ -1,14 +1,24 @@
 import type { FinancialBasis, FinancialControl, FinancialGridRatio } from "@/core/types";
 import {
-  computeYear,
   FINANCIAL_CHART_VERSION,
-  INPUT_POSTES,
   parseAmount,
+  POSTE_BY_KEY,
   POSTES,
   SIMPLIFIED_MODEL_MAX_TURNOVER_MAD,
   type StatementModel,
   type YearValues,
 } from "./chart";
+import { evaluate, identifiers, parseFormula, type Ast } from "./formula";
+import { levelOf, situationOf, trendOf, type AlertResult, type FinancialAnalysis, type IndicatorAppraisal } from "./analysis";
+import {
+  computeYearWith,
+  DEFAULT_FORMAT,
+  saisiMismatches,
+  unavailablePostes,
+  yearHasDataWith,
+  type Appreciation,
+  type StatementFormat,
+} from "./statement-format";
 
 /**
  * Calcul des indicateurs financiers et des ratios de la grille — DÉTERMINISTE.
@@ -92,7 +102,7 @@ export function parseFinancials(raw: unknown): FinancialsDraft {
 
 /** Un exercice est renseigné dès qu'un poste porte un montant. */
 export function yearHasData(y: FinancialYearDraft | undefined): boolean {
-  return !!y && INPUT_POSTES.some((p) => parseAmount(y.values[p.key]) !== undefined);
+  return !!y && Object.values(y.values ?? {}).some((x) => parseAmount(x) !== undefined);
 }
 
 export function hasFinancials(f: FinancialsDraft | undefined): boolean {
@@ -269,6 +279,127 @@ export const INDICATORS: IndicatorDef[] = [
 
 export const INDICATOR_BY_KEY: ReadonlyMap<string, IndicatorDef> = new Map(INDICATORS.map((d) => [d.key, d]));
 
+// --- Dépendances des indicateurs ------------------------------------------------------
+
+/**
+ * Postes « d'appoint » : leur absence n'empêche pas un calcul (données
+ * complémentaires, tableau de financement, « dont », écarts de conversion).
+ */
+export function isOptionalDependency(key: string): boolean {
+  const p = POSTE_BY_KEY.get(key);
+  return !p || p.section === "COMPL" || p.section === "TF" || p.kind === "DETAIL" || key.startsWith("ECART_CONV");
+}
+
+const HIGH_FILL = new Set(["CHIFFRE_AFFAIRES", "VENTES_MARCHANDISES", "VENTES_BIENS_SERVICES", "CAPITAUX_PROPRES", "CAPITAL", "TOTAL_ACTIF", "TOTAL_PASSIF", "RESULTAT_NET"]);
+let depsCache: Map<string, string[]> | null = null;
+
+/**
+ * Postes lus par chaque indicateur de l'outil, relevés en exécutant le calcul
+ * sur des exercices témoins (aucune liste à tenir à la main).
+ */
+export function indicatorDeps(): ReadonlyMap<string, string[]> {
+  if (depsCache) return depsCache;
+  const out = new Map<string, string[]>();
+  // Plusieurs exercices témoins pour parcourir les branches (EBE positif, intérêts
+  // nuls, données complémentaires absentes : estimations de repli).
+  const appoint = (k: string) => ["TF", "COMPL"].includes(POSTE_BY_KEY.get(k)?.section ?? "");
+  const fills: Array<(k: string) => number | undefined> = [
+    () => 1,
+    (k) => (HIGH_FILL.has(k) ? 1000 : 1),
+    (k) => (HIGH_FILL.has(k) ? 1000 : k === "CHARGES_INTERETS" || k === "SERVICE_DETTE_PRINCIPAL_12M" ? 0 : 1),
+    (k) => (appoint(k) ? undefined : HIGH_FILL.has(k) ? 1000 : 1),
+  ];
+  for (const d of INDICATORS) {
+    const keys = new Set<string>();
+    for (const fill of fills) {
+      const years = [0, 1, 2].map(
+        () =>
+          new Proxy({} as YearValues, {
+            get(_t, k) {
+              if (typeof k !== "string") return undefined;
+              keys.add(k);
+              return fill(k);
+            },
+          })
+      );
+      try {
+        d.compute({ years, present: [true, true, true] }, 0);
+      } catch {
+        // indicateur témoin non calculable : dépendances partielles
+      }
+    }
+    out.set(d.key, [...keys].filter((k) => POSTE_BY_KEY.has(k)).sort());
+  }
+  depsCache = out;
+  return out;
+}
+
+/**
+ * Postes nécessaires aux ratios des grilles indiquées (préréglages
+ * « notation » et « agrégé ») ; `byIndicator` : postes sans lesquels chaque
+ * ratio n'est plus calculable.
+ */
+export function gridNeededPostes(modelIds: readonly string[]): { postes: Set<string>; byIndicator: Map<string, string[]> } {
+  const deps = indicatorDeps();
+  const postes = new Set<string>();
+  const byIndicator = new Map<string, string[]>();
+  for (const id of modelIds) {
+    for (const link of Object.values(gridLinks(id))) {
+      const d = deps.get(link.indicator) ?? [];
+      byIndicator.set(link.indicator, d.filter((k) => !isOptionalDependency(k)));
+      d.filter((k) => !isOptionalDependency(k) || POSTE_BY_KEY.get(k)?.section === "COMPL").forEach((k) => postes.add(k));
+    }
+  }
+  return { postes, byIndicator };
+}
+
+/** Postes à conserver dans un préréglage : ratios des grilles, alertes actives et indicateurs du format. */
+export function presetNeeds(format: StatementFormat, modelIds: readonly string[]): Set<string> {
+  const needed = gridNeededPostes(modelIds).postes;
+  const deps = indicatorDeps();
+  const sources = [...format.alerts.filter((a) => a.active).map((a) => a.condition), ...format.customIndicators.map((c) => c.formula)];
+  for (const src of sources) {
+    const ast = compiled(src);
+    if (!ast) continue;
+    for (const id of identifiers(ast)) {
+      if (POSTE_BY_KEY.has(id)) needed.add(id);
+      for (const d of deps.get(id) ?? []) if (!isOptionalDependency(d)) needed.add(d);
+    }
+  }
+  return needed;
+}
+
+/** Description d'un indicateur (outil ou format) pour l'affichage. */
+export interface IndicatorMeta {
+  key: string;
+  labelFr: string;
+  unit: IndicatorUnit;
+  group: IndicatorGroup;
+  formulaFr: string;
+  custom?: boolean;
+}
+
+/** Indicateurs de l'outil puis indicateurs complémentaires du format. */
+export function indicatorCatalog(format: StatementFormat = DEFAULT_FORMAT): IndicatorMeta[] {
+  return [
+    ...INDICATORS.map((d) => ({ key: d.key, labelFr: d.labelFr, unit: d.unit, group: d.group, formulaFr: d.formulaFr })),
+    ...format.customIndicators.map((c) => ({ key: c.key, labelFr: c.labelFr, unit: c.unit, group: c.group, formulaFr: `Formule du format : ${c.formula}`, custom: true })),
+  ];
+}
+
+const astCache = new Map<string, Ast | null>();
+function compiled(src: string): Ast | null {
+  if (!astCache.has(src)) {
+    try {
+      astCache.set(src, parseFormula(src));
+    } catch {
+      astCache.set(src, null);
+    }
+    if (astCache.size > 500) astCache.delete(astCache.keys().next().value as string);
+  }
+  return astCache.get(src) ?? null;
+}
+
 // --- Liens avec les grilles --------------------------------------------------------
 
 export interface GridLink {
@@ -323,6 +454,10 @@ export interface FinancialComputation {
   controls: FinancialControl[];
   /** Les comptes de l'exercice N ont plus de 18 mois à la date d'arrêté. */
   stale: boolean;
+  /** Analyse du bilan selon le format (appréciations, alertes, situation). */
+  analysis: FinancialAnalysis;
+  /** Version du format de bilan appliquée. */
+  formatVersion: string;
 }
 
 const round = (n: number | null, d = 2): number | null =>
@@ -349,27 +484,63 @@ const fmt = (n: number) => Math.round(n).toLocaleString("fr-FR");
 export function computeFinancials(
   f: FinancialsDraft,
   modelId: string,
-  ctx: { asOfDate: string; declaredTurnover?: number }
+  ctx: { asOfDate: string; declaredTurnover?: number },
+  format: StatementFormat = DEFAULT_FORMAT
 ): FinancialComputation {
-  const years = f.years.map((y) => computeYear(y.values));
-  const present = f.years.map((y) => yearHasData(y));
+  const years = f.years.map((y) => computeYearWith(format, y.values));
+  const present = f.years.map((y) => yearHasDataWith(format, y.values));
   const c: Ctx = { years, present };
+  const unavailable = unavailablePostes(format);
+  const deps = indicatorDeps();
+  const posteLabel = (k: string) => POSTE_BY_KEY.get(k)?.labelFr ?? k;
 
   const indicators: IndicatorResult[] = INDICATORS.map((d) => {
     const values: Array<number | null> = [];
     const notes: Array<string | undefined> = [];
+    const lost = (deps.get(d.key) ?? []).filter((k) => unavailable.has(k));
+    const blocking = lost.filter((k) => !isOptionalDependency(k));
     f.years.forEach((_, i) => {
       if (!present[i] || (d.onlyN && i > 0)) {
         values.push(null);
         notes.push(undefined);
         return;
       }
+      if (blocking.length) {
+        values.push(null);
+        notes.push(`Non calculable dans ce format de bilan : ${blocking.map(posteLabel).join(", ")} non chargé(s).`);
+        return;
+      }
       const o = d.compute(c, i);
       values.push(round(o.value, d.unit === "MAD" ? 0 : 2));
-      notes.push(o.noteFr);
+      notes.push([o.noteFr, lost.length ? `Calculé sans : ${lost.map(posteLabel).join(", ")} (non chargé dans ce format).` : undefined].filter(Boolean).join(" ") || undefined);
     });
     return { key: d.key, values, notes };
   });
+
+  // Variables des formules du format (indicateurs complémentaires, alertes).
+  const closingN = f.years[0]?.closingDate ?? "";
+  const monthsSinceClosing = present[0] && /^\d{4}-\d{2}-\d{2}$/.test(closingN) ? monthsBetween(closingN, ctx.asOfDate) : null;
+  const byKey = new Map<string, Array<number | null>>(indicators.map((r) => [r.key, r.values]));
+  const extraKeys = new Set(format.extraPostes.map((x) => x.key));
+  const resolve = (name: string, i: number): number | null => {
+    if (i >= years.length || !present[i]) return null;
+    if (name === "MOIS_DEPUIS_CLOTURE") return i === 0 ? monthsSinceClosing : null;
+    if (name === "EXERCICES") return present.filter(Boolean).length;
+    const iv = byKey.get(name);
+    if (iv) return iv[i] ?? null;
+    if (POSTE_BY_KEY.has(name) || extraKeys.has(name)) {
+      if (unavailable.has(name)) return null;
+      return years[i][name] ?? 0;
+    }
+    return null;
+  };
+  for (const ci of format.customIndicators) {
+    const ast = compiled(ci.formula);
+    const values = f.years.map((_, i) => (!ast || !present[i] || (ci.onlyN && i > 0) ? null : round(evaluate(ast, resolve, i), ci.unit === "MAD" ? 0 : 2)));
+    const notes = f.years.map((_, i) => (present[i] && !ast ? "Formule illisible." : present[i] && values[i] === null && !(ci.onlyN && i > 0) ? "Non calculable : donnée manquante ou division par zéro." : undefined));
+    indicators.push({ key: ci.key, values, notes });
+    byKey.set(ci.key, values);
+  }
 
   // --- Contrôles ---
   const controls: FinancialControl[] = [];
@@ -411,6 +582,9 @@ export function computeFinancials(
     if (yv.RESULTAT_EXERCICE_BILAN !== undefined && yv.RESULTAT_NET !== undefined) {
       const ok = Math.abs(yv.RESULTAT_EXERCICE_BILAN - yv.RESULTAT_NET) <= Math.max(1, Math.abs(yv.RESULTAT_NET) * 0.001);
       controls.push({ key: `RESULTAT_${i}`, labelFr: `Résultat du bilan = résultat du CPC ${nLabel(i)}`, status: ok ? "OK" : "KO", detailFr: ok ? `${fmt(yv.RESULTAT_NET)}.` : `Bilan ${fmt(yv.RESULTAT_EXERCICE_BILAN)}, CPC ${fmt(yv.RESULTAT_NET)}.` });
+    }
+    for (const [k, typed, sum] of saisiMismatches(format, y.values)) {
+      controls.push({ key: `AGREGE_${k}_${i}`, labelFr: `${posteLabel(k)} ${nLabel(i)} : total saisi / détail`, status: "ALERTE", detailFr: `${fmt(typed)} saisi, ${fmt(sum)} pour le détail renseigné : le total saisi est retenu.` });
     }
     for (const p of POSTES) {
       const val = yv[p.key];
@@ -477,14 +651,58 @@ export function computeFinancials(
     });
   }
 
-  return { years, present, indicators, gridRatios, controls, stale };
+  const analysis = analyseFinancials(format, modelId, indicators, present, resolve);
+  return { years, present, indicators, gridRatios, controls, stale, analysis, formatVersion: format.version };
+}
+
+/** Appréciations, tendances, alertes et situation d'ensemble selon le format. */
+function analyseFinancials(
+  format: StatementFormat,
+  modelId: string,
+  indicators: IndicatorResult[],
+  present: boolean[],
+  resolve: (name: string, i: number) => number | null
+): FinancialAnalysis {
+  const gridOf = new Map<string, string>();
+  for (const [criterion, link] of Object.entries(gridLinks(modelId))) gridOf.set(link.indicator, criterion);
+  const hidden = new Set(format.hiddenIndicators);
+  const appraisals: IndicatorAppraisal[] = [];
+  for (const r of indicators) {
+    const grid = gridOf.get(r.key);
+    if (hidden.has(r.key) && !grid) continue;
+    const ap: Appreciation | undefined = format.appreciations[r.key];
+    const levels = r.values.map((x) => levelOf(x, ap));
+    const { trend, change } = trendOf(r.values[0], r.values[1], ap, [levels[0] ?? null, levels[1] ?? null]);
+    appraisals.push({ key: r.key, levels, trend, change: change === null ? null : Math.round(change * 10) / 10, ...(grid ? { grid } : {}) });
+  }
+  const alerts: AlertResult[] = [];
+  if (present[0]) {
+    for (const a of format.alerts) {
+      if (!a.active) continue;
+      const ast = compiled(a.condition);
+      const v = ast ? evaluate(ast, resolve, 0) : null;
+      alerts.push({ key: a.key, labelFr: a.labelFr, severity: a.severity, ...(a.referenceFr ? { referenceFr: a.referenceFr } : {}), status: v === null ? "NON_EVALUABLE" : v ? "DECLENCHEE" : "NON" });
+    }
+  }
+  const on = alerts.filter((a) => a.status === "DECLENCHEE");
+  const counts = {
+    alertesCritiques: on.filter((a) => a.severity === "CRITIQUE").length,
+    alertes: on.length,
+    critiques: appraisals.filter((a) => a.levels[0] === "CRITIQUE").length,
+    mauvais: appraisals.filter((a) => a.levels[0] === "MAUVAIS").length,
+    degradations: appraisals.filter((a) => a.trend === "DEGRADATION").length,
+    ameliorations: appraisals.filter((a) => a.trend === "AMELIORATION").length,
+  };
+  const s = present[0] ? situationOf(counts, format.synthesis) : null;
+  return { formatVersion: format.version, appraisals, alerts, situation: s?.situation ?? null, counts, motifsFr: s?.motifsFr ?? [] };
 }
 
 /** Instantané figé, joint à la requête de notation (sans effet sur le calcul). */
 export function buildFinancialBasis(
   f: FinancialsDraft,
   comp: FinancialComputation,
-  currency?: string
+  currency?: string,
+  format: StatementFormat = DEFAULT_FORMAT
 ): FinancialBasis | undefined {
   if (!comp.present[0]) return undefined;
   const n = comp.present.filter(Boolean).length;
@@ -505,5 +723,15 @@ export function buildFinancialBasis(
     indicators: comp.indicators.map((r) => ({ key: r.key, values: r.values.slice(0, n) })),
     gridRatios: comp.gridRatios,
     controls: comp.controls.map((x) => ({ ...x, detailFr: x.detailFr.slice(0, 500) })),
+    formatVersion: comp.formatVersion,
+    ...(format.customIndicators.length
+      ? { indicatorMeta: format.customIndicators.map((c) => ({ key: c.key, labelFr: c.labelFr.slice(0, 200), unit: c.unit, group: c.group })) }
+      : {}),
+    analysis: {
+      situation: comp.analysis.situation,
+      motifsFr: comp.analysis.motifsFr.map((m) => m.slice(0, 200)),
+      alerts: comp.analysis.alerts.map((a) => ({ ...a, labelFr: a.labelFr.slice(0, 300), ...(a.referenceFr ? { referenceFr: a.referenceFr.slice(0, 300) } : {}) })),
+      appraisals: comp.analysis.appraisals.map((a) => ({ ...a, levels: a.levels.slice(0, n) })),
+    },
   };
 }
