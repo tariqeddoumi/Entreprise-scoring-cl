@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auditWithin } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { getPerimeter, getSessionIdentity } from "@/lib/session";
-import { checkClassification, CLASSIFICATION_KEY, type ClassificationSettings } from "@/reference/classification";
+import { checkClassification, checkWatchlistLevels, CLASSIFICATION_KEY, WATCHLIST_LEVELS_KEY, type ClassificationSettings, type WatchlistLevel } from "@/reference/classification";
 import { CASE_PURPOSES_KEY, checkPurposes, checkRefItems, CREDIT_TYPES_KEY, ENTITY_TIERS_KEY, type CasePurpose, type RefItem } from "@/reference/case-purposes";
 
 export interface PurposesActionState {
@@ -143,4 +143,39 @@ export async function saveClassificationAction(value: ClassificationSettings): P
   }
   revalidatePath("/admin/settings");
   return { okFr: "Critères de classement enregistrés : ils s'appliquent aux prochains calculs." };
+}
+
+/** Niveaux de watch list : plafond, revue, délai de renotation (D-58). */
+export async function saveWatchlistLevelsAction(list: WatchlistLevel[]): Promise<PurposesActionState> {
+  const session = await getSessionIdentity("ADMIN");
+  if (!session.ok) return { errorFr: session.reasonFr };
+  if (!(await getPerimeter()).all) return { errorFr: "Réservé à un administrateur du groupe." };
+  const clean: WatchlistLevel[] = (Array.isArray(list) ? list : []).slice(0, 10).map((l) => ({
+    code: String(l.code ?? "").trim().toUpperCase(),
+    labelFr: String(l.labelFr ?? "").trim().slice(0, 120),
+    cap: String(l.cap ?? "").trim(),
+    reviewDays: Number(l.reviewDays),
+    renotationDays: Number(l.renotationDays),
+    ...(l.helpFr ? { helpFr: String(l.helpFr).trim().slice(0, 500) } : {}),
+    active: !!l.active,
+  }));
+  const issues = checkWatchlistLevels(clean);
+  if (issues.length) return { errorFr: issues.join(" ") };
+  const used = (await prisma.committeeDecision.findMany({ where: { level: { not: null } }, distinct: ["level"], select: { level: true } })).map((u) => u.level!);
+  const removed = used.filter((code) => !clean.some((l) => l.code === code));
+  if (removed.length) return { errorFr: `Niveau déjà utilisé : ${removed.join(", ")}. Désactivez-le au lieu de le supprimer.` };
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.appSetting.upsert({
+        where: { key: WATCHLIST_LEVELS_KEY },
+        update: { value: JSON.stringify(clean), updatedBy: session.identity.name },
+        create: { key: WATCHLIST_LEVELS_KEY, value: JSON.stringify(clean), updatedBy: session.identity.name },
+      });
+      await auditWithin(tx, { actor: session.identity.name, actorRole: session.identity.role, action: "WATCHLIST_LEVELS_UPDATED", resourceType: "AppSetting", resourceId: WATCHLIST_LEVELS_KEY, detail: { levels: clean } });
+    });
+  } catch {
+    return { errorFr: "Enregistrement impossible : la base de données ne répond pas." };
+  }
+  revalidatePath("/admin/settings");
+  return { okFr: "Niveaux de watch list enregistrés." };
 }

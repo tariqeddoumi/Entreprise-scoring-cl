@@ -594,6 +594,10 @@ export interface RatingInput {
     effect: string | null;
     items: Array<{ code: string; family: string; labelFr: string; article: string; state: "COCHE" | "LEVE"; by?: "BILAN" | "ANALYSTE"; date?: string; comment?: string }>;
     lifts: Array<{ codes: string[]; committeeDate: string; reference: string; recordedBy: string; confirmedBy?: string | null }>;
+    /** Watch list en vigueur à la notation (D-58). */
+    watchlist?: { level: string; labelFr: string; cap: string; since: string };
+    appliedCap?: string;
+    capSource?: "BAM" | "WATCHLIST" | "CUMUL";
   };
   asOfDate: string; // ISO date — date d'arrêté
 }

@@ -113,6 +113,17 @@ export const SETTINGS: readonly SettingDef[] = [
     default: "false",
   },
   {
+    key: "WATCHLIST_CUMUL_NOTCH",
+    group: "Comités",
+    labelFr: "Watch list et créance sensible : cran supplémentaire en cas de cumul",
+    helpFr:
+      "0 (proposé) : le plus sévère des deux plafonds s'applique, sans double comptage. 1 ou 2 : la note est dégradée d'autant de crans au-delà du plafond le plus sévère (10 au plus).",
+    kind: "integer",
+    default: "0",
+    min: 0,
+    max: 2,
+  },
+  {
     key: "OVERRIDE_MAX_NOTCHES",
     group: "Dérogations",
     labelFr: "Ampleur maximale d'une dérogation (crans)",

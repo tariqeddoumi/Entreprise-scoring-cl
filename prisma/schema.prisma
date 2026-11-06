@@ -592,6 +592,9 @@ model CommitteeDecision {
   kind             String
   // Levée : codes des critères levés (JSON).
   criteria         String?      @db.Text
+  // Watch list : niveau (WL1, WL2…), paramétrable ; un niveau différent sur
+  // un client déjà inscrit est un changement de niveau.
+  level            String?
   committeeDate    String // AAAA-MM-JJ
   reference        String // numéro du procès-verbal
   motif            String       @db.Text

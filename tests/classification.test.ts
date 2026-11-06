@@ -91,3 +91,33 @@ describe("Moteur 3.3 : plafond issu du classement BAM", async () => {
     expect(loose.standaloneGrade).toBe(free.standaloneGrade);
   });
 });
+
+describe("Watch list : effet sur la note (D-58)", async () => {
+  const { combineCaps, checkWatchlistLevels, DEFAULT_WATCHLIST_LEVELS } = await import("@/reference/classification");
+  const wl = (cap: string) => ({ level: "WL2", labelFr: "Surveillance renforcée", cap, since: "2026-09-15" });
+  it("niveaux proposés valides : plafonds 8, 9, 10", () => {
+    expect(checkWatchlistLevels(DEFAULT_WATCHLIST_LEVELS)).toEqual([]);
+    expect(DEFAULT_WATCHLIST_LEVELS.map((l) => l.cap)).toEqual(["8", "9", "10"]);
+  });
+  it("le plus sévère des plafonds BAM et watch list s'applique ; cumul paramétrable", () => {
+    expect(combineCaps("8", null)).toEqual({ cap: "8", source: "BAM" });
+    expect(combineCaps(null, wl("9"))).toEqual({ cap: "9", source: "WATCHLIST" });
+    expect(combineCaps("8", wl("9"))).toEqual({ cap: "9", source: "WATCHLIST" });
+    expect(combineCaps("10", wl("9"))).toEqual({ cap: "10", source: "BAM" });
+    expect(combineCaps("8", wl("8"), 1)).toEqual({ cap: "9", source: "CUMUL" });
+    expect(combineCaps("10", wl("9"), 2)).toEqual({ cap: "10", source: "CUMUL" });
+    expect(combineCaps(null, null)).toBeNull();
+  });
+  it("dans la requête : plafond combiné, watch list figée ; un défaut BAM prime", () => {
+    const d = { ...emptyDraft(CORP_STD_V1, "2026-06-30"), financials: pmeFinancials(), classification: { declared: { S01: {} } } };
+    const req = draftToRequest(d, CORP_STD_V1, undefined, { watchlist: wl("9") });
+    expect(req.regulatoryCap).toMatchObject({ maxGrade: "9", family: "WATCHLIST" });
+    expect((req.classificationBasis as { watchlist?: { level: string } }).watchlist?.level).toBe("WL2");
+    expect(ratingRequestSchema.safeParse({ ...req, counterpartyId: "x" }).success).toBe(true);
+    const onlyWl = draftToRequest({ ...d, classification: undefined }, CORP_STD_V1, undefined, { watchlist: wl("8") });
+    expect(onlyWl.regulatoryCap).toMatchObject({ maxGrade: "8", family: "WATCHLIST", codes: ["WL2"] });
+    const def = draftToRequest({ ...d, classification: { declared: { E28: {} } } }, CORP_STD_V1, undefined, { watchlist: wl("9") });
+    expect(def.defaultGrade).toBe("DEF3");
+    expect(def.regulatoryCap).toBeUndefined();
+  });
+});

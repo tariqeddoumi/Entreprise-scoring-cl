@@ -689,6 +689,26 @@ Diagnostic des représentations du système deux à deux : base de production et
 - le passage à la double validation ;
 - l'effet éventuel de la watch list sur la note ou sur le délai de renotation.
 
+## D-58 — Watch list : effet sur la note par niveau ; proposition de paramétrage pour le COPIL — **À CONFIRMER EN COPIL**
+
+*Contexte :* demande de la banque (7 novembre 2026). Un client déjà en créance sensible, inscrit en watch list pour être suivi de plus près, doit voir sa note dégradée, « entre 8, 9 et 10 ». Les valeurs seront arrêtées au COPIL de validation du modèle.
+
+*Décision (proposition paramétrable) :*
+- **Niveaux de watch list décidés en comité**, avec un plafond, un délai de renotation et une fréquence de revue :
+
+  | Niveau | Plafond | Renotation | Revue |
+  |---|---|---|---|
+  | WL1 — sous surveillance | 8 | 60 jours | 90 jours |
+  | WL2 — surveillance renforcée | 9 | 30 jours | 30 jours |
+  | WL3 — pré-recouvrement | 10 | 15 jours | 30 jours |
+
+- **Changement de niveau** par une nouvelle décision ; la date d'inscription est conservée.
+- **Face aux critères BAM**, le plafond le plus sévère s'applique, sans double comptage. Un cran supplémentaire en cas de cumul est paramétrable de 0 à 2 ; 0 est proposé. Un défaut BAM prime toujours.
+- **Moment d'application** : la watch list en vigueur s'applique à chaque calcul de note (soumission, recalcul) et elle est figée sur la fiche.
+- **Proposition complète de paramétrage pour le COPIL** : docs/19 et son document Word. Elle couvre le circuit et la délégation, les catégories de délégation, les critères BAM, la watch list, l'analyse du bilan et la validité des notes.
+
+*À confirmer :* l'ensemble du tableau de synthèse de la proposition (§ 9).
+
 ---
 
 # 3. Ce qui reste à décider par la banque

@@ -8,7 +8,7 @@ import { draftAmounts, draftFinancials, draftToRequest, parseDraft, type CaseDra
 import { emptyFinancials, gridLinks, parseFinancials, type FinancialsDraft } from "@/financials/compute";
 import { carryFinancials, loadCreditTypes, loadEntityTiers, loadPurposes, recordStatements, suggestedExercise, type ExerciseChoice } from "./financial-statements";
 import { loadTree, tierOf } from "./scope";
-import { caseLifts, loadClassification } from "./classification-store";
+import { activeWatchlistCap, caseLifts, loadClassification } from "./classification-store";
 import { BASE_CURRENCY, convertToBase, FxError, type FxConversion } from "./fx";
 import { executeRatingRun, RatingServiceError, simulateRating } from "./rating-service";
 import { ratingRequestSchema } from "./schemas";
@@ -271,7 +271,7 @@ async function convertAmounts(
  * Partagée par la soumission d'un dossier et la renotation par lot : un lot
  * calcule exactement ce qu'aurait calculé le dossier.
  */
-export async function buildInput(db: PrismaClient, c: { id?: string; modelId: string; counterparty: { currency: string } }, draft: CaseDraft) {
+export async function buildInput(db: PrismaClient, c: { id?: string; modelId: string; counterparty: { id?: string; currency: string } }, draft: CaseDraft) {
   const model = await getScoringModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const { base, fx } = await convertAmounts(db, draft, c.counterparty.currency);
@@ -280,7 +280,12 @@ export async function buildInput(db: PrismaClient, c: { id?: string; modelId: st
   // (une levée d'un dossier antérieur a expiré avec lui).
   const classification = await loadClassification(db);
   const lifts = c.id ? await caseLifts(db, c.id) : [];
-  const parsed = ratingRequestSchema.safeParse(draftToRequest(draft, model, base, { currency: c.counterparty.currency, format, classification, lifts }));
+  // Watch list en vigueur au calcul : plafond de son niveau (D-58).
+  const watchlist = c.counterparty.id ? await activeWatchlistCap(db, c.counterparty.id) : null;
+  const cumulNotch = await settingInt("WATCHLIST_CUMUL_NOTCH");
+  const parsed = ratingRequestSchema.safeParse(
+    draftToRequest(draft, model, base, { currency: c.counterparty.currency, format, classification, lifts, watchlist, cumulNotch })
+  );
   if (!parsed.success) {
     throw new CaseError(
       400,

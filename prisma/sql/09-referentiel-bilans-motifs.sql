@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS corp_scoring."committee_decisions" (
   "caseId"           TEXT,
   "kind"             TEXT NOT NULL,
   "criteria"         TEXT,
+  "level"            TEXT,
   "committeeDate"    TEXT NOT NULL,
   "reference"        TEXT NOT NULL,
   "motif"            TEXT NOT NULL,
@@ -52,6 +53,7 @@ CREATE TABLE IF NOT EXISTS corp_scoring."committee_decisions" (
   "cancelReason"     TEXT,
   "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+ALTER TABLE corp_scoring."committee_decisions" ADD COLUMN IF NOT EXISTS "level" TEXT;
 CREATE INDEX IF NOT EXISTS "committee_decisions_counterpartyId_kind_idx" ON corp_scoring."committee_decisions" ("counterpartyId", "kind");
 CREATE INDEX IF NOT EXISTS "committee_decisions_caseId_idx" ON corp_scoring."committee_decisions" ("caseId");
 

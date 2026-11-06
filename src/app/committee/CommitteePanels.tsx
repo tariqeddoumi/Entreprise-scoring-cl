@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { cancelDecisionAction, confirmDecisionAction, recordLiftAction, recordWatchlistAction, type CommitteeActionResult } from "./actions";
 
 const INIT: CommitteeActionResult = { ok: false };
@@ -19,6 +19,7 @@ function Feedback({ state }: { state: CommitteeActionResult }) {
 export interface DecisionRow {
   id: string;
   kind: string;
+  level?: string | null;
   codes?: string[];
   effectiveDate: string;
   committeeDate: string;
@@ -80,7 +81,7 @@ function DecisionList({ rows, canConfirm, canCancel, caseId, counterpartyId, wl 
           <li key={d.id} className="card" style={{ padding: 10, boxShadow: "none", display: "grid", gap: 4, opacity: d.status === "ANNULEE" ? 0.6 : 1 }}>
             <div style={{ fontSize: 13 }}>
               <strong>
-                {wl ? (d.kind === "WL_ENTREE" ? `Entrée en watch list le ${d.effectiveDate}` : `Sortie de watch list le ${d.effectiveDate}`) : `Levée : ${(d.codes ?? []).join(", ")}`}
+                {wl ? (d.kind === "WL_ENTREE" ? `Watch list ${d.level ?? ""} à compter du ${d.effectiveDate}` : `Sortie de watch list le ${d.effectiveDate}`) : `Levée : ${(d.codes ?? []).join(", ")}`}
               </strong>{" "}
               <span style={{ color: st.color, fontWeight: 600 }}>· {st.label}</span>
             </div>
@@ -195,6 +196,9 @@ export function WatchlistPanel({
   today,
   inWatchlist,
   since,
+  level,
+  levelSince,
+  levels,
   history,
   canRecord,
   canConfirm,
@@ -205,6 +209,9 @@ export function WatchlistPanel({
   today: string;
   inWatchlist: boolean;
   since: string | null;
+  level: string | null;
+  levelSince: string | null;
+  levels: Array<{ code: string; labelFr: string; cap: string; reviewDays: number; renotationDays: number; helpFr?: string }>;
   history: DecisionRow[];
   canRecord: boolean;
   canConfirm: boolean;
@@ -212,27 +219,65 @@ export function WatchlistPanel({
   doubleValidation: boolean;
 }) {
   const [state, action, pending] = useActionState(recordWatchlistAction, INIT);
+  const [mode, setMode] = useState<"ENTREE" | "SORTIE">(inWatchlist ? "SORTIE" : "ENTREE");
   const pendingDecision = history.some((h) => h.status === "EN_ATTENTE");
+  const lv = levels.find((l) => l.code === level);
+  const addDays = (d: string, n: number) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
   return (
     <section id="watchlist" className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
       <h2 style={{ fontWeight: 600, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         Watch list
         <span className={inWatchlist ? "wl-badge" : undefined} style={{ fontSize: 12, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: inWatchlist ? "#fff" : "var(--good)", background: inWatchlist ? "var(--bad)" : "transparent", border: inWatchlist ? "none" : "1px solid var(--good)" }}>
-          {inWatchlist ? `En watch list depuis le ${since}` : "Hors watch list"}
+          {inWatchlist ? `${level ?? ""} ${lv ? `— ${lv.labelFr}` : ""} · depuis le ${since}` : "Hors watch list"}
         </span>
       </h2>
+      {inWatchlist && lv && levelSince && (
+        <ul style={{ fontSize: 13, paddingLeft: 18, display: "grid", gap: 2 }}>
+          <li>
+            Effet sur la note : <strong>plafonnée à {lv.cap}</strong> au mieux (le plafond le plus sévère, watch list ou critères BAM, s&apos;applique).
+          </li>
+          <li>
+            Renotation exigée avant le <strong>{addDays(levelSince, lv.renotationDays)}</strong> ; revue par la surveillance tous les {lv.reviewDays} jours (prochaine
+            au plus tard le {addDays(levelSince, lv.reviewDays)}).
+          </li>
+        </ul>
+      )}
       <p className="muted" style={{ fontSize: 12 }}>
-        L&apos;inscription et la sortie relèvent d&apos;une décision de comité, enregistrée avec sa date d&apos;effet, la date du comité et le numéro du procès-verbal.
-        Une date passée reprend l&apos;historique d&apos;un client déjà suivi.
+        L&apos;inscription, le changement de niveau et la sortie relèvent d&apos;une décision de comité, enregistrée avec sa date d&apos;effet, la date du comité et le
+        numéro du procès-verbal. Une date passée reprend l&apos;historique d&apos;un client déjà suivi.
       </p>
       <DecisionList rows={history} canConfirm={canConfirm} canCancel={canRecord} counterpartyId={counterpartyId} wl />
       {canRecord && !pendingDecision ? (
         <form action={action} style={{ display: "grid", gap: 8 }}>
           <input type="hidden" name="counterpartyId" value={counterpartyId} />
-          <input type="hidden" name="kind" value={inWatchlist ? "WL_SORTIE" : "WL_ENTREE"} />
+          <input type="hidden" name="kind" value={mode === "SORTIE" ? "WL_SORTIE" : "WL_ENTREE"} />
+          {inWatchlist && (
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13 }}>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                <input type="radio" style={{ width: 16 }} checked={mode === "ENTREE"} onChange={() => setMode("ENTREE")} />
+                Changer de niveau
+              </label>
+              <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                <input type="radio" style={{ width: 16 }} checked={mode === "SORTIE"} onChange={() => setMode("SORTIE")} />
+                Sortie de watch list
+              </label>
+            </div>
+          )}
+          {mode === "ENTREE" && (
+            <label>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Niveau décidé par le comité</div>
+              <select name="level" required defaultValue={levels.find((l) => l.code !== level)?.code ?? ""}>
+                {levels.map((l) => (
+                  <option key={l.code} value={l.code} disabled={l.code === level}>
+                    {l.code} — {l.labelFr} (note plafonnée à {l.cap})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <div className="grid-fields">
             <label>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{inWatchlist ? "Date de sortie" : "Date d'entrée"}</div>
+              <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{mode === "SORTIE" ? "Date de sortie" : inWatchlist ? "Date du changement" : "Date d'entrée"}</div>
               <input type="date" name="effectiveDate" required max={today} defaultValue={today} />
             </label>
             <label>
@@ -245,12 +290,12 @@ export function WatchlistPanel({
             </label>
           </div>
           <label>
-            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Motif {inWatchlist ? "de la sortie" : "de l'inscription"}</div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Motif {mode === "SORTIE" ? "de la sortie" : inWatchlist ? "du changement de niveau" : "de l'inscription"}</div>
             <textarea name="motif" required minLength={10} maxLength={4000} rows={2} />
           </label>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="submit" className={inWatchlist ? "btn-ghost" : "btn-danger"} disabled={pending}>
-              {pending ? "Enregistrement…" : inWatchlist ? "Enregistrer la sortie de watch list" : "Enregistrer l'entrée en watch list"}
+            <button type="submit" className={mode === "SORTIE" ? "btn-ghost" : "btn-danger"} disabled={pending}>
+              {pending ? "Enregistrement…" : mode === "SORTIE" ? "Enregistrer la sortie de watch list" : inWatchlist ? "Enregistrer le changement de niveau" : "Enregistrer l'entrée en watch list"}
             </button>
             {doubleValidation && <span className="muted" style={{ fontSize: 12 }}>Prend effet après confirmation par une seconde personne habilitée.</span>}
           </div>

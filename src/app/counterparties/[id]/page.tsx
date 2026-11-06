@@ -5,7 +5,8 @@ import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { isOfficialRun } from "@/lib/cases";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
 import { safeQuery } from "@/lib/safe-db";
-import { watchlistState, type WatchlistState } from "@/lib/committee";
+import { loadWatchlistLevels, watchlistState, type WatchlistState } from "@/lib/committee";
+import { DEFAULT_WATCHLIST_LEVELS } from "@/reference/classification";
 import { WatchlistPanel } from "@/app/committee/CommitteePanels";
 import { hasPermission, holdersOf } from "@/reference/workflow";
 import { loadCircuit } from "@/lib/workflow";
@@ -122,8 +123,9 @@ export default async function CounterpartyPage({
     { last: undefined, purposes: DEFAULT_PURPOSES, creditTypes: DEFAULT_CREDIT_TYPES }
   );
   const wlInfo = {
-    state: (await safeQuery((db) => watchlistState(db, counterparty.id), { inWatchlist: false, since: null, lastExit: null, history: [] } as WatchlistState)).data,
+    state: (await safeQuery((db) => watchlistState(db, counterparty.id), { inWatchlist: false, since: null, level: null, levelSince: null, lastExit: null, history: [] } as WatchlistState)).data,
     circuit: (await loadCircuit()).circuit,
+    levels: (await safeQuery((db) => loadWatchlistLevels(db), DEFAULT_WATCHLIST_LEVELS)).data,
     double: await settingBool("COMMITTEE_WL_DOUBLE_VALIDATION"),
   };
   const opt = (v: string | null) => v ?? "";
@@ -242,6 +244,9 @@ export default async function CounterpartyPage({
         today={today}
         inWatchlist={wlInfo.state.inWatchlist}
         since={wlInfo.state.since}
+        level={wlInfo.state.level}
+        levelSince={wlInfo.state.levelSince}
+        levels={wlInfo.levels.filter((l) => l.active)}
         history={wlInfo.state.history}
         canRecord={writableHere && hasPermission(wlInfo.circuit, identity.jobFunction, "DECIDER_WL")}
         canConfirm={writableHere && hasPermission(wlInfo.circuit, identity.jobFunction, "CONFIRMER_WL")}

@@ -66,7 +66,16 @@ Les fonctions, leur profil et leurs droits se paramètrent dans Administration �
 
 ## 5. Watch list
 
-- **Décision de comité**, enregistrée par un profil habilité (surveillance par défaut) : entrée ou sortie, date d'effet, date du comité, numéro du procès-verbal, motif.
+- **Niveaux et effet sur la note (D-58, à arrêter en COPIL)** :
+
+  | Niveau | Note plafonnée à | Renotation | Revue |
+  |---|---|---|---|
+  | WL1 — sous surveillance | 8 | 60 jours | 90 jours |
+  | WL2 — surveillance renforcée | 9 | 30 jours | 30 jours |
+  | WL3 — pré-recouvrement | 10 | 15 jours | 30 jours |
+
+  Face aux critères BAM, le plafond le plus sévère s'applique. Un cran supplémentaire en cas de cumul est paramétrable ; il est désactivé par défaut. Les niveaux se paramètrent dans Administration › Paramétrage › Niveaux de watch list. La proposition complète de paramétrage figure dans docs/19.
+- **Décision de comité**, enregistrée par un profil habilité (surveillance par défaut) : entrée (avec son niveau), changement de niveau ou sortie, date d'effet, date du comité, numéro du procès-verbal, motif.
 - **Reprise de l'historique** : une date passée permet de reprendre l'historique d'un client déjà suivi.
 - **Règles** :
   - une entrée suit une sortie (ou rien) ;

@@ -25,6 +25,8 @@ import {
   type ClassificationResult,
   type ClassificationSettings,
   type DeclaredCriteria,
+  combineCaps,
+  type WatchlistCap,
 } from "@/reference/classification";
 
 /**
@@ -261,7 +263,15 @@ export function draftToRequest(
   draft: CaseDraft,
   model: ModelConfig,
   baseAmounts?: Record<string, number>,
-  opts: { currency?: string; format?: StatementFormat; classification?: ClassificationSettings; lifts?: CaseLift[] } = {}
+  opts: {
+    currency?: string;
+    format?: StatementFormat;
+    classification?: ClassificationSettings;
+    lifts?: CaseLift[];
+    /** Watch list en vigueur (décision de comité) et cran de cumul avec un plafond BAM. */
+    watchlist?: WatchlistCap | null;
+    cumulNotch?: number;
+  } = {}
 ): Record<string, unknown> {
   const segment = displaySegment(draft, model);
   const criteria: Record<string, CriterionInput> = {};
@@ -348,17 +358,26 @@ export function draftToRequest(
       }
       out.defaultTriggered = defaultTriggered;
       if (defaultTriggered) out.defaultGrade = defaultGrade;
-      if (cl.effect?.kind === "PLAFOND" && cl.family) {
-        const codes = cl.items.filter((i) => i.state === "COCHE" && i.family === cl.family).map((i) => i.code);
+      // Plafond : critères BAM (sensible, pré-douteux) et watch list (D-58) ;
+      // le plus sévère s'applique, un cran de cumul s'ajoute s'il est paramétré.
+      const wl = opts.watchlist ?? null;
+      const bamCap = cl.effect?.kind === "PLAFOND" ? cl.effect.grade : null;
+      const combined = cl.effect?.kind === "DEFAUT" ? null : combineCaps(bamCap, wl, opts.cumulNotch ?? 0);
+      if (combined) {
+        const codes = cl.family ? cl.items.filter((i) => i.state === "COCHE" && i.family === cl.family).map((i) => i.code) : [];
+        const parts = [
+          ...(bamCap && cl.family ? [`${FAMILY_LABELS[cl.family]} (${codes.join(", ")}) : plafond ${bamCap}`] : []),
+          ...(wl ? [`watch list ${wl.level} — ${wl.labelFr} depuis le ${wl.since} : plafond ${wl.cap}`] : []),
+        ];
         out.regulatoryCap = {
-          maxGrade: cl.effect.grade,
-          family: cl.family,
-          codes: cl.active,
-          labelFr: `${FAMILY_LABELS[cl.family]} (${codes.join(", ")}) : note plafonnée à ${cl.effect.grade}`.slice(0, 300),
+          maxGrade: combined.cap,
+          family: combined.source === "BAM" ? cl.family! : combined.source,
+          codes: [...cl.active, ...(wl ? [wl.level] : [])].slice(0, 40),
+          labelFr: `${parts.join(" ; ")}${combined.source === "CUMUL" ? ` ; cumul : un cran de plus` : ""} → note plafonnée à ${combined.cap}`.slice(0, 300),
         };
       }
       const kept = cl.items.filter((i) => i.state === "COCHE" || i.state === "LEVE");
-      if (kept.length > 0 || (opts.lifts?.length ?? 0) > 0) {
+      if (kept.length > 0 || (opts.lifts?.length ?? 0) > 0 || wl) {
         out.classificationBasis = {
           family: cl.family,
           effect: cl.effect?.grade ?? null,
@@ -373,6 +392,8 @@ export function draftToRequest(
             ...(i.comment ? { comment: i.comment.slice(0, 500) } : {}),
           })),
           lifts: (opts.lifts ?? []).map((l) => ({ ...l, reference: l.reference.slice(0, 80) })),
+          ...(wl ? { watchlist: { level: wl.level, labelFr: wl.labelFr.slice(0, 120), cap: wl.cap, since: wl.since } } : {}),
+          ...(combined ? { appliedCap: combined.cap, capSource: combined.source } : {}),
         };
       }
       return out;

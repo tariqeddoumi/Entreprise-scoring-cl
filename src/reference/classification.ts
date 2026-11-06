@@ -184,3 +184,85 @@ export function computeClassification(
       : { kind: "PLAFOND" as const, grade: cap };
   return { items, family, effect, active: active.map((i) => i.code), lifted: items.filter((i) => i.state === "LEVE").map((i) => i.code) };
 }
+
+// --- Watch list : niveaux et effet sur la note (D-58) ----------------------------------------
+
+/**
+ * Niveau de watch list décidé en comité. Proposition (à arrêter en COPIL) :
+ * WL1 surveillance → note plafonnée à 8 ; WL2 surveillance renforcée → 9 ;
+ * WL3 pré-recouvrement → 10. Face aux critères BAM, le plafond le plus sévère
+ * s'applique ; un cran supplémentaire peut s'ajouter en cas de cumul
+ * (paramètre, désactivé par défaut) pour éviter un double comptage mécanique.
+ */
+export interface WatchlistLevel {
+  code: string;
+  labelFr: string;
+  /** Classe plafond (1 à 10). */
+  cap: string;
+  /** Revue du client par la surveillance : tous les N jours. */
+  reviewDays: number;
+  /** Renotation exigée dans les N jours suivant l'inscription ou le changement de niveau. */
+  renotationDays: number;
+  helpFr?: string;
+  active: boolean;
+}
+
+export const WATCHLIST_LEVELS_KEY = "WATCHLIST_LEVELS";
+
+export const DEFAULT_WATCHLIST_LEVELS: WatchlistLevel[] = [
+  { code: "WL1", labelFr: "Sous surveillance", cap: "8", reviewDays: 90, renotationDays: 60, active: true, helpFr: "Signaux d'alerte précoce confirmés (dégradation financière, incidents, alertes du bilan) sans défaut ; plan d'action du chargé d'affaires." },
+  { code: "WL2", labelFr: "Surveillance renforcée", cap: "9", reviewDays: 30, renotationDays: 30, active: true, helpFr: "Critère de créance sensible avéré ou dégradation persistante ; plan d'action validé par la contre-étude, revue mensuelle." },
+  { code: "WL3", labelFr: "Pré-recouvrement", cap: "10", reviewDays: 30, renotationDays: 15, active: true, helpFr: "Risque de bascule en souffrance (pré-douteux probable, restructuration en préparation) ; implication du recouvrement." },
+];
+
+export function checkWatchlistLevels(list: WatchlistLevel[]): string[] {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  if (!list.some((l) => l.active)) errors.push("Au moins un niveau de watch list actif.");
+  for (const l of list) {
+    if (!/^[A-Z][A-Z0-9_]{1,15}$/.test(l.code)) errors.push(`Code de niveau non admis : « ${l.code} ».`);
+    if (seen.has(l.code)) errors.push(`Niveau en double : ${l.code}.`);
+    seen.add(l.code);
+    if (!l.labelFr.trim()) errors.push(`${l.code} : libellé à renseigner.`);
+    if (!/^(10|[1-9])$/.test(l.cap)) errors.push(`${l.code} : plafond de 1 à 10.`);
+    for (const [k, v] of [["revue", l.reviewDays], ["renotation", l.renotationDays]] as const) {
+      if (!Number.isInteger(v) || v < 1 || v > 366) errors.push(`${l.code} : délai de ${k} de 1 à 366 jours.`);
+    }
+  }
+  return errors;
+}
+
+export function parseWatchlistLevels(raw: string | null | undefined): WatchlistLevel[] {
+  if (!raw) return DEFAULT_WATCHLIST_LEVELS;
+  try {
+    const v = JSON.parse(raw) as WatchlistLevel[];
+    return Array.isArray(v) && checkWatchlistLevels(v).length === 0 ? v : DEFAULT_WATCHLIST_LEVELS;
+  } catch {
+    return DEFAULT_WATCHLIST_LEVELS;
+  }
+}
+
+/** Watch list en vigueur pour le calcul d'un dossier. */
+export interface WatchlistCap {
+  level: string;
+  labelFr: string;
+  cap: string;
+  since: string;
+}
+
+/**
+ * Plafond combiné : le plus sévère des plafonds BAM et watch list ; si les
+ * deux s'appliquent et qu'un cran de cumul est paramétré, il s'ajoute (au
+ * plus 10). Un défaut BAM (douteux, compromis) prime toujours.
+ */
+export function combineCaps(bamCap: string | null, wl: WatchlistCap | null, cumulNotch = 0): { cap: string; source: "BAM" | "WATCHLIST" | "CUMUL" } | null {
+  const b = bamCap ? Number(bamCap) : null;
+  const w = wl ? Number(wl.cap) : null;
+  if (b === null && w === null) return null;
+  if (b !== null && w !== null) {
+    const worst = Math.max(b, w);
+    if (cumulNotch > 0) return { cap: String(Math.min(10, worst + cumulNotch)), source: "CUMUL" };
+    return { cap: String(worst), source: w > b ? "WATCHLIST" : "BAM" };
+  }
+  return b !== null ? { cap: String(b), source: "BAM" } : { cap: String(w), source: "WATCHLIST" };
+}

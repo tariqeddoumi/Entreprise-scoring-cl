@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import type { ModelConfig } from "@/core/types";
 import type { StatementFormat } from "@/financials/statement-format";
 import { draftClassification, draftFinancials, type CaseDraft, type CaseLift } from "@/lib/case-input";
-import { FAMILY_LABELS, FAMILY_ORDER, type ClassificationSettings, type ClassificationItem } from "@/reference/classification";
+import { combineCaps, FAMILY_LABELS, FAMILY_ORDER, type ClassificationSettings, type ClassificationItem, type WatchlistCap } from "@/reference/classification";
 
 const FAMILY_COLORS = { SENSIBLE: "var(--warn)", PREDOUTEUX: "var(--bcp-orange)", DOUTEUX: "var(--bad)", COMPROMIS: "var(--bad)" } as const;
 
@@ -35,6 +35,8 @@ export function ClassificationPanel({
   format,
   settings,
   lifts,
+  watchlist = null,
+  cumulNotch = 0,
 }: {
   model: ModelConfig;
   draft: CaseDraft;
@@ -43,6 +45,8 @@ export function ClassificationPanel({
   format?: StatementFormat;
   settings: ClassificationSettings;
   lifts: CaseLift[];
+  watchlist?: WatchlistCap | null;
+  cumulNotch?: number;
 }) {
   const fin = useMemo(() => draftFinancials(draft, model, format), [draft, model, format]);
   const cl = useMemo(() => draftClassification(draft, fin, settings, lifts), [draft, fin, settings, lifts]);
@@ -54,6 +58,10 @@ export function ClassificationPanel({
     else delete next[code];
     onChange?.({ ...draft, classification: { declared: next } });
   };
+  const combined = cl.effect?.kind === "DEFAUT" ? null : combineCaps(cl.effect?.kind === "PLAFOND" ? cl.effect.grade : null, watchlist, cumulNotch);
+  const wlFr = watchlist
+    ? ` Watch list ${watchlist.level} (${watchlist.labelFr}) depuis le ${watchlist.since} : plafond ${watchlist.cap}.${combined ? ` Plafond appliqué : ${combined.cap}${combined.source === "CUMUL" ? " (cumul)" : ""}.` : ""}`
+    : "";
   const effectFr = !cl.effect
     ? "Aucun critère actif : pas d'effet sur la note."
     : cl.effect.kind === "PLAFOND"
@@ -74,16 +82,20 @@ export function ClassificationPanel({
       <div
         role="status"
         style={{
-          borderLeft: `6px solid ${cl.family ? FAMILY_COLORS[cl.family] : "var(--good)"}`,
+          borderLeft: `6px solid ${cl.family ? FAMILY_COLORS[cl.family] : watchlist ? "var(--bad)" : "var(--good)"}`,
           background: "var(--surface-2)",
           padding: "8px 12px",
           borderRadius: 6,
           fontSize: 14,
         }}
       >
-        <strong>{cl.family ? FAMILY_LABELS[cl.family] : "Aucun critère de classement actif"}</strong>
+        <strong>
+          {cl.family ? FAMILY_LABELS[cl.family] : "Aucun critère de classement actif"}
+          {watchlist ? ` · watch list ${watchlist.level}` : ""}
+        </strong>
         <div style={{ fontSize: 13 }}>
           {effectFr}
+          {wlFr}
           {cl.lifted.length > 0 ? ` Critère(s) levé(s) par le comité : ${cl.lifted.join(", ")}.` : ""}
         </div>
       </div>

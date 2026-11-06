@@ -3,9 +3,9 @@ import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { CaseError, buildInput, contributorsOf } from "./cases";
 import { draftClassification, draftFinancials, parseDraft } from "./case-input";
-import { caseLifts, loadClassification, parseCodes } from "./classification-store";
+import { caseLifts, loadClassification, loadWatchlistLevels, parseCodes } from "./classification-store";
 
-export { caseLifts, loadClassification } from "./classification-store";
+export { activeWatchlistCap, caseLifts, loadClassification, loadWatchlistLevels } from "./classification-store";
 import { executeRatingRun, RatingServiceError } from "./rating-service";
 import { getScoringModel, today } from "./rating-scale";
 import { settingBool } from "./settings";
@@ -146,7 +146,7 @@ export async function confirmDecision(db: PrismaClient, identity: Identity, deci
   if (d.status !== "EN_ATTENTE") throw new CaseError(409, "Décision déjà confirmée ou annulée.");
   await requirePermission(identity, d.kind === "LEVEE_CRITERES" ? "CONFIRMER_LEVEE" : "CONFIRMER_WL");
   if (d.recordedBy === identity.name) throw new CaseError(403, "La confirmation revient à une autre personne que celle qui a enregistré la décision.");
-  if (d.kind !== "LEVEE_CRITERES") await assertWatchlistTransition(db, d.counterpartyId, d.kind as DecisionKind, d.effectiveDate, d.id);
+  if (d.kind !== "LEVEE_CRITERES") await assertWatchlistTransition(db, d.counterpartyId, d.kind as DecisionKind, d.effectiveDate, d.id, d.level);
   await db.$transaction(async (tx) => {
     const u = await tx.committeeDecision.updateMany({ where: { id: decisionId, status: "EN_ATTENTE" }, data: { status: "EFFECTIVE", confirmedBy: identity.name, confirmedAt: new Date() } });
     if (u.count === 0) throw new CaseError(409, "Décision déjà traitée.");
@@ -195,8 +195,11 @@ export async function cancelDecision(db: PrismaClient, identity: Identity, decis
 export interface WatchlistState {
   inWatchlist: boolean;
   since: string | null;
+  /** Niveau en vigueur et date de la dernière décision d'entrée ou de changement. */
+  level: string | null;
+  levelSince: string | null;
   lastExit: string | null;
-  history: Array<{ id: string; kind: "WL_ENTREE" | "WL_SORTIE"; effectiveDate: string; committeeDate: string; reference: string; motif: string; status: string; recordedBy: string; confirmedBy: string | null; cancelReason: string | null }>;
+  history: Array<{ id: string; kind: "WL_ENTREE" | "WL_SORTIE"; level: string | null; effectiveDate: string; committeeDate: string; reference: string; motif: string; status: string; recordedBy: string; confirmedBy: string | null; cancelReason: string | null }>;
 }
 
 export async function watchlistState(db: PrismaClient, counterpartyId: string): Promise<WatchlistState> {
@@ -207,13 +210,19 @@ export async function watchlistState(db: PrismaClient, counterpartyId: string): 
   });
   const effective = rows.filter((r) => r.status === "EFFECTIVE");
   const last = effective[0];
+  // Date d'inscription : la première entrée de la période en cours (après la dernière sortie).
+  const lastExitIdx = effective.findIndex((r) => r.kind === "WL_SORTIE");
+  const period = lastExitIdx === -1 ? effective : effective.slice(0, lastExitIdx);
   return {
     inWatchlist: last?.kind === "WL_ENTREE",
-    since: last?.kind === "WL_ENTREE" ? last.effectiveDate : null,
+    since: last?.kind === "WL_ENTREE" ? (period[period.length - 1]?.effectiveDate ?? last.effectiveDate) : null,
+    level: last?.kind === "WL_ENTREE" ? last.level : null,
+    levelSince: last?.kind === "WL_ENTREE" ? last.effectiveDate : null,
     lastExit: effective.find((r) => r.kind === "WL_SORTIE")?.effectiveDate ?? null,
     history: rows.map((r) => ({
       id: r.id,
       kind: r.kind as "WL_ENTREE" | "WL_SORTIE",
+      level: r.level,
       effectiveDate: r.effectiveDate,
       committeeDate: r.committeeDate,
       reference: r.reference,
@@ -238,14 +247,16 @@ export async function watchlistedIds(db: PrismaClient, counterpartyIds?: string[
 }
 
 /** Une entrée suit une sortie (ou rien), une sortie suit une entrée ; dates dans l'ordre. */
-async function assertWatchlistTransition(db: PrismaClient, counterpartyId: string, kind: DecisionKind, effectiveDate: string, excludeId?: string) {
+async function assertWatchlistTransition(db: PrismaClient, counterpartyId: string, kind: DecisionKind, effectiveDate: string, excludeId?: string, level?: string | null) {
   const rows = await db.committeeDecision.findMany({
     where: { counterpartyId, kind: { in: ["WL_ENTREE", "WL_SORTIE"] }, status: "EFFECTIVE", ...(excludeId ? { id: { not: excludeId } } : {}) },
     orderBy: [{ effectiveDate: "desc" }, { createdAt: "desc" }],
     take: 1,
   });
   const last = rows[0];
-  if (kind === "WL_ENTREE" && last?.kind === "WL_ENTREE") throw new CaseError(409, `Client déjà en watch list depuis le ${last.effectiveDate}.`);
+  if (kind === "WL_ENTREE" && last?.kind === "WL_ENTREE" && last.level === (level ?? null)) {
+    throw new CaseError(409, `Client déjà en watch list au niveau ${last.level ?? "—"} depuis le ${last.effectiveDate} : choisissez un autre niveau pour un changement.`);
+  }
   if (kind === "WL_SORTIE" && last?.kind !== "WL_ENTREE") throw new CaseError(409, "Client hors watch list : aucune sortie à enregistrer.");
   if (last && effectiveDate < last.effectiveDate) throw new CaseError(409, `Date d'effet antérieure à la dernière décision (${last.effectiveDate}).`);
 }
@@ -255,8 +266,8 @@ export async function recordWatchlist(
   db: PrismaClient,
   identity: Identity,
   counterpartyId: string,
-  input: { kind: "WL_ENTREE" | "WL_SORTIE"; effectiveDate: string; committeeDate: string; reference: string; motif: string }
-): Promise<{ status: "EN_ATTENTE" | "EFFECTIVE" }> {
+  input: { kind: "WL_ENTREE" | "WL_SORTIE"; level?: string; effectiveDate: string; committeeDate: string; reference: string; motif: string }
+): Promise<{ status: "EN_ATTENTE" | "EFFECTIVE"; change: boolean }> {
   const fn = await requirePermission(identity, "DECIDER_WL");
   checkCommon(input);
   if (input.kind !== "WL_ENTREE" && input.kind !== "WL_SORTIE") throw new CaseError(400, "Décision : entrée ou sortie de watch list.");
@@ -264,13 +275,23 @@ export async function recordWatchlist(
   if (input.effectiveDate > today()) throw new CaseError(400, "La date d'effet ne peut pas être future.");
   const cp = await db.counterparty.findUnique({ where: { id: counterpartyId }, select: { id: true, entityId: true } });
   if (!cp) throw new CaseError(404, "Client introuvable.");
-  await assertWatchlistTransition(db, counterpartyId, input.kind, input.effectiveDate);
+  let level: string | null = null;
+  if (input.kind === "WL_ENTREE") {
+    const levels = (await loadWatchlistLevels(db)).filter((l) => l.active);
+    const lv = levels.find((l) => l.code === input.level) ?? (input.level ? undefined : levels[0]);
+    if (!lv) throw new CaseError(400, `Niveau de watch list inconnu ou inactif : ${input.level}.`);
+    level = lv.code;
+  }
+  await assertWatchlistTransition(db, counterpartyId, input.kind, input.effectiveDate, undefined, level);
+  const current = await watchlistState(db, counterpartyId);
+  const change = input.kind === "WL_ENTREE" && current.inWatchlist;
   const status = (await settingBool("COMMITTEE_WL_DOUBLE_VALIDATION")) ? "EN_ATTENTE" : "EFFECTIVE";
   await db.$transaction(async (tx) => {
     const d = await tx.committeeDecision.create({
       data: {
         counterpartyId,
         kind: input.kind,
+        level,
         committeeDate: input.committeeDate,
         reference: input.reference.trim(),
         motif: input.motif.trim(),
@@ -283,12 +304,12 @@ export async function recordWatchlist(
     await auditWithin(tx, {
       actor: identity.name,
       actorRole: identity.role,
-      action: input.kind === "WL_ENTREE" ? "WATCHLIST_ENTRY_RECORDED" : "WATCHLIST_EXIT_RECORDED",
+      action: input.kind === "WL_SORTIE" ? "WATCHLIST_EXIT_RECORDED" : change ? "WATCHLIST_LEVEL_CHANGED" : "WATCHLIST_ENTRY_RECORDED",
       resourceType: "CommitteeDecision",
       resourceId: d.id,
       entityId: cp.entityId,
-      detail: { dateEffet: input.effectiveDate, comite: input.committeeDate, pv: input.reference.trim(), statut: status },
+      detail: { niveau: level, dateEffet: input.effectiveDate, comite: input.committeeDate, pv: input.reference.trim(), statut: status },
     });
   });
-  return { status };
+  return { status, change };
 }

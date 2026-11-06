@@ -21,7 +21,9 @@ export function ClassificationBasisPanel({ basis }: { basis: Basis }) {
       <h2 style={{ fontWeight: 600 }}>Critères de classement BAM à la date de la notation</h2>
       <p style={{ fontSize: 14 }}>
         <strong>{fam ? FAMILY_LABELS[fam] : "Aucun critère actif"}</strong>
-        {basis.effect ? ` — ${/^DEF/.test(basis.effect) ? `note de défaut ${basis.effect}` : `note plafonnée à ${basis.effect}`}` : ""}
+        {basis.effect ? ` — ${/^DEF/.test(basis.effect) ? `note de défaut ${basis.effect}` : `plafond ${basis.effect}`}` : ""}
+        {basis.watchlist ? ` · watch list ${basis.watchlist.level} (${basis.watchlist.labelFr}) depuis le ${basis.watchlist.since} : plafond ${basis.watchlist.cap}` : ""}
+        {basis.appliedCap ? ` · note plafonnée à ${basis.appliedCap}${basis.capSource === "CUMUL" ? " (cumul)" : ""}` : ""}
       </p>
       <div className="table-scroll">
         <table className="data" style={{ minWidth: 520 }}>

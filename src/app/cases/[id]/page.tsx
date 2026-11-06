@@ -9,8 +9,8 @@ import { hasRole } from "@/lib/auth";
 import { draftClassification, draftFinancials, parseDraft, proposableFields } from "@/lib/case-input";
 import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, validationBlocker } from "@/lib/cases";
 import { actorStepIndex, hasPermission, holdersOf, pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
-import { caseLifts, counterpartyLifts, loadClassification, watchlistState } from "@/lib/committee";
-import { DEFAULT_CLASSIFICATION } from "@/reference/classification";
+import { activeWatchlistCap, caseLifts, counterpartyLifts, loadClassification, watchlistState } from "@/lib/committee";
+import { DEFAULT_CLASSIFICATION, type WatchlistCap } from "@/reference/classification";
 import { LiftPanel } from "@/app/committee/CommitteePanels";
 import { loadCircuit } from "@/lib/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
@@ -142,22 +142,24 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const committee = (
     await safeQuery(
       async (db) => {
-        const [classification, lifts, all, wl] = await Promise.all([
+        const [classification, lifts, all, wl, wlCap] = await Promise.all([
           loadClassification(db),
           caseLifts(db, c.id),
           counterpartyLifts(db, c.counterparty.id),
           watchlistState(db, c.counterparty.id),
+          activeWatchlistCap(db, c.counterparty.id),
         ]);
         const otherIds = [...new Set(all.filter((d) => d.caseId && d.caseId !== c.id && d.status === "EFFECTIVE").map((d) => d.caseId!))];
         const others = otherIds.length ? await db.ratingCase.findMany({ where: { id: { in: otherIds } }, select: { id: true, asOfDate: true, status: true, decidedAt: true }, orderBy: { decidedAt: "desc" } }) : [];
         const lastOther = others.find((o) => o.status === "VALIDATED");
-        return { classification, lifts, all, wl, lastOtherId: lastOther?.id ?? null, lastOtherAsOf: lastOther?.asOfDate ?? null };
+        return { classification, lifts, all, wl, wlCap, lastOtherId: lastOther?.id ?? null, lastOtherAsOf: lastOther?.asOfDate ?? null };
       },
-      { classification: DEFAULT_CLASSIFICATION, lifts: [], all: [], wl: { inWatchlist: false, since: null, lastExit: null, history: [] }, lastOtherId: null, lastOtherAsOf: null }
+      { classification: DEFAULT_CLASSIFICATION, lifts: [], all: [], wl: { inWatchlist: false, since: null, level: null, levelSince: null, lastExit: null, history: [] }, wlCap: null as WatchlistCap | null, lastOtherId: null, lastOtherAsOf: null }
     )
   ).data;
   const { circuit: circuitDef } = await loadCircuit();
   const liftDouble = await settingBool("COMMITTEE_LIFT_DOUBLE_VALIDATION");
+  const cumulNotch = await settingInt("WATCHLIST_CUMUL_NOTCH");
   const activeCriteria = (() => {
     const cl = draftClassification(draft, draftFinancials(draft, model, format), committee.classification, committee.lifts);
     return cl.items.filter((i) => i.state === "COCHE").map((i) => ({ code: i.code, labelFr: i.labelFr }));
@@ -327,7 +329,9 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
 
       {committee.wl.inWatchlist && (
         <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--bad)", fontSize: 14 }}>
-          <strong>Client en watch list</strong> depuis le {committee.wl.since} (décision de comité) —{" "}
+          <strong>Client en watch list</strong>
+          {committee.wlCap ? ` ${committee.wlCap.level} — ${committee.wlCap.labelFr}` : ""} depuis le {committee.wl.since} (décision de comité) : note plafonnée à{" "}
+          {committee.wlCap?.cap ?? "—"} au mieux —{" "}
           <Link href={`/counterparties/${c.counterparty.id}#watchlist`} style={{ color: "var(--brand)" }}>
             voir l&apos;historique
           </Link>
@@ -361,6 +365,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         format={format}
         classification={committee.classification}
         lifts={committee.lifts}
+        watchlist={committee.wlCap}
+        cumulNotch={cumulNotch}
       />
 
       <section className="card" style={{ padding: 16 }}>

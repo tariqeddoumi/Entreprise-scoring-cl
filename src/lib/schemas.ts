@@ -254,6 +254,9 @@ export const ratingRequestSchema = z
               .strict()
           )
           .max(20),
+        watchlist: z.object({ level: z.string().max(16), labelFr: z.string().max(120), cap: z.string().regex(/^(10|[1-9])$/), since: z.string().max(10) }).strict().optional(),
+        appliedCap: z.string().regex(/^(10|[1-9])$/).optional(),
+        capSource: z.enum(["BAM", "WATCHLIST", "CUMUL"]).optional(),
       })
       .strict()
       .optional(),

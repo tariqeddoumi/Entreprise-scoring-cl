@@ -86,6 +86,7 @@ export async function recordWatchlistAction(_prev: CommitteeActionResult, fd: Fo
     const kind = str(fd, "kind") === "WL_SORTIE" ? "WL_SORTIE" : "WL_ENTREE";
     const r = await recordWatchlist(await getDb(), session.identity, counterpartyId, {
       kind,
+      level: str(fd, "level") || undefined,
       effectiveDate: str(fd, "effectiveDate"),
       committeeDate: str(fd, "committeeDate"),
       reference: str(fd, "reference"),
@@ -94,7 +95,14 @@ export async function recordWatchlistAction(_prev: CommitteeActionResult, fd: Fo
     refresh(undefined, counterpartyId);
     return {
       ok: true,
-      okFr: r.status === "EN_ATTENTE" ? "Décision enregistrée : en attente de confirmation par une seconde personne habilitée." : kind === "WL_ENTREE" ? "Entrée en watch list enregistrée." : "Sortie de watch list enregistrée.",
+      okFr:
+        r.status === "EN_ATTENTE"
+          ? "Décision enregistrée : en attente de confirmation par une seconde personne habilitée."
+          : kind === "WL_SORTIE"
+            ? "Sortie de watch list enregistrée."
+            : r.change
+              ? "Changement de niveau enregistré."
+              : "Entrée en watch list enregistrée.",
     };
   } catch (e) {
     return failure(e);

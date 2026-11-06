@@ -8,8 +8,9 @@ import { SettingsForm } from "./SettingsForm";
 import { PurposesEditor } from "./PurposesEditor";
 import { RefListEditor } from "./RefListEditor";
 import { ClassificationEditor } from "./ClassificationEditor";
-import { loadClassification } from "@/lib/classification-store";
-import { DEFAULT_CLASSIFICATION } from "@/reference/classification";
+import { loadClassification, loadWatchlistLevels } from "@/lib/classification-store";
+import { DEFAULT_CLASSIFICATION, DEFAULT_WATCHLIST_LEVELS } from "@/reference/classification";
+import { WatchlistLevelsEditor } from "./WatchlistLevelsEditor";
 import { effectiveFormat } from "@/lib/statement-format";
 import { today } from "@/lib/rating-scale";
 import { loadCreditTypes, loadEntityTiers, loadPurposes } from "@/lib/financial-statements";
@@ -29,8 +30,8 @@ export default async function SettingsPage() {
   }, {} as Record<string, number>);
   const { data: purposes } = await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES);
   const { data: lists } = await safeQuery(
-    async (db) => ({ creditTypes: await loadCreditTypes(db), tiers: await loadEntityTiers(db), classification: await loadClassification(db) }),
-    { creditTypes: DEFAULT_CREDIT_TYPES, tiers: DEFAULT_ENTITY_TIERS, classification: DEFAULT_CLASSIFICATION }
+    async (db) => ({ creditTypes: await loadCreditTypes(db), tiers: await loadEntityTiers(db), classification: await loadClassification(db), wlLevels: await loadWatchlistLevels(db) }),
+    { creditTypes: DEFAULT_CREDIT_TYPES, tiers: DEFAULT_ENTITY_TIERS, classification: DEFAULT_CLASSIFICATION, wlLevels: DEFAULT_WATCHLIST_LEVELS }
   );
   const format = await effectiveFormat(today());
 
@@ -57,6 +58,7 @@ export default async function SettingsPage() {
       />
       <PurposesEditor initial={purposes} readOnly={!perimeter.all} creditTypes={lists.creditTypes.filter((t) => t.active)} />
       <ClassificationEditor initial={lists.classification} readOnly={!perimeter.all} alertKeys={format.alerts.map((a) => a.key)} />
+      <WatchlistLevelsEditor initial={lists.wlLevels} readOnly={!perimeter.all} />
       <RefListEditor
         listKey="CREDIT_TYPES"
         title="Types de crédit"
