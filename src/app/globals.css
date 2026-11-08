@@ -518,3 +518,29 @@ pre[data-scroll-focus]:focus-visible {
 .balance-table td { padding-top: 3px; padding-bottom: 3px; }
 .balance-table input { min-width: 110px; }
 .balance-linked { background: var(--brand-soft); border-radius: 6px; padding: 6px 8px; }
+
+/* Graphiques de la surveillance du portefeuille. Palette catégorielle validée
+   (contraste, daltonisme) pour la surface claire et la surface sombre ; les
+   textes restent dans les couleurs de texte, la couleur ne porte que la marque. */
+.viz {
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+  --viz-past: #b3aa9d;
+  --viz-grid: #ece4d8;
+  --viz-up: #2a78d6;
+  --viz-down: #e34948;
+  --viz-same: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  .viz {
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+    --viz-past: #6b6054;
+    --viz-grid: #3b3026;
+    --viz-up: #3987e5;
+    --viz-down: #e66767;
+    --viz-same: #383835;
+  }
+}

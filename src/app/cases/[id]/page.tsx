@@ -1,14 +1,31 @@
 import Link from "next/link";
+import { parseOpeningRefresh } from "@/lib/opening-refresh";
 import { notFound } from "next/navigation";
-import { getScoringModel } from "@/lib/rating-scale";
+import { getScoringModel, today } from "@/lib/rating-scale";
+import { effectiveFormat, formatByVersion } from "@/lib/statement-format";
+import { loadCreditTypes, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_CREDIT_TYPES, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { aiStatus } from "@/lib/ai";
 import { hasRole } from "@/lib/auth";
-import { parseDraft, proposableFields } from "@/lib/case-input";
-import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, validationBlocker } from "@/lib/cases";
-import { pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
+import { draftClassification, draftFinancials, parseDraft, proposableFields } from "@/lib/case-input";
+import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, exposureOf, validationBlocker } from "@/lib/cases";
+import { canWrite } from "@/lib/scope";
+import { getPerimeter } from "@/lib/session";
+import { actorStepIndex, hasPermission, holdersOf, pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
+import { activeWatchlistCap, caseLifts, counterpartyLifts, loadClassification, watchlistState } from "@/lib/committee";
+import { DEFAULT_CLASSIFICATION, type WatchlistCap } from "@/reference/classification";
+import { LiftPanel } from "@/app/committee/CommitteePanels";
+import { CreditReportPanel } from "@/app/counterparties/[id]/ExternalPanels";
+import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
+import { FacilitiesPanel } from "@/app/counterparties/[id]/FacilitiesPanel";
+import { facilityStatus, type FacilityStatus } from "@/lib/facilities";
+import { caseChecklist } from "@/lib/case-checklist";
+import { settingText } from "@/lib/settings";
+import { parseAmount } from "@/financials/chart";
+import { loadCircuit } from "@/lib/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
 import { safeQuery } from "@/lib/safe-db";
-import { settingInt } from "@/lib/settings";
+import { settingBool, settingInt } from "@/lib/settings";
 import { requireSession } from "@/lib/session";
 import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
@@ -76,11 +93,11 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
     const c = await db.ratingCase.findUnique({
       where: { id },
       include: {
-        counterparty: { select: { id: true, name: true, currency: true, ice: true, entityId: true } },
+        counterparty: { select: { id: true, name: true, currency: true, ice: true, rc: true, legalForm: true, legalProfile: true, entityId: true } },
         run: { select: { id: true, resultSnapshot: true, inputSnapshot: true, finalGrade: true, cappedGrade: true, outcome: true } },
         documents: {
           orderBy: { createdAt: "asc" },
-          select: { id: true, fileName: true, mimeType: true, sizeBytes: true, uploadedBy: true, createdAt: true },
+          select: { id: true, fileName: true, mimeType: true, sizeBytes: true, uploadedBy: true, createdAt: true, kind: true },
         },
         proposals: { where: { status: { in: ["PENDING", "ACCEPTED"] } }, orderBy: { createdAt: "asc" } },
       },
@@ -127,7 +144,81 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const fx: FxConversion | null = c.fxDetail ? (JSON.parse(c.fxDetail) as FxConversion) : null;
   const snapshot = c.run ? readResultSnapshot(c.run.resultSnapshot) : null;
   const editable = c.status === "DRAFT" && canRate;
+  // Dossier en cours : format en vigueur ; dossier soumis : celui figé dans la notation.
+  const frozenBasis = c.run ? readFinancialBasis(c.run.inputSnapshot) : null;
+  const format = c.status === "DRAFT" ? await effectiveFormat(today()) : await formatByVersion(frozenBasis?.formatVersion, today());
   const ai = await aiStatus();
+  // Critères de classement BAM, levées de comité (ce dossier, rappel des précédents), watch list.
+  const committee = (
+    await safeQuery(
+      async (db) => {
+        const [classification, lifts, all, wl, wlCap] = await Promise.all([
+          loadClassification(db),
+          caseLifts(db, c.id),
+          counterpartyLifts(db, c.counterparty.id),
+          watchlistState(db, c.counterparty.id),
+          activeWatchlistCap(db, c.counterparty.id),
+        ]);
+        const otherIds = [...new Set(all.filter((d) => d.caseId && d.caseId !== c.id && d.status === "EFFECTIVE").map((d) => d.caseId!))];
+        const others = otherIds.length ? await db.ratingCase.findMany({ where: { id: { in: otherIds } }, select: { id: true, asOfDate: true, status: true, decidedAt: true }, orderBy: { decidedAt: "desc" } }) : [];
+        const lastOther = others.find((o) => o.status === "VALIDATED");
+        return { classification, lifts, all, wl, wlCap, lastOtherId: lastOther?.id ?? null, lastOtherAsOf: lastOther?.asOfDate ?? null };
+      },
+      { classification: DEFAULT_CLASSIFICATION, lifts: [], all: [], wl: { inWatchlist: false, since: null, level: null, levelSince: null, lastExit: null, history: [] }, wlCap: null as WatchlistCap | null, lastOtherId: null, lastOtherAsOf: null }
+    )
+  ).data;
+  // Sources externes : rapport de solvabilité et fiche juridique du client.
+  const canWriteHere = canWrite(await getPerimeter(), c.counterparty.entityId);
+  const bureau = await creditReportSettings();
+  const ext = (
+    await safeQuery(
+      async (db) => {
+        const report = await latestCreditReport(db, c.counterparty.id, { declaredExposure: exposureOf(c.fxDetail, c.draftInput) });
+        const declared = parseAmount(draft.amounts.globalBankExposure);
+        return {
+          report,
+          legal: await legalProfileStatus(db, c.counterparty),
+          facilities: await facilityStatus(db, c.counterparty.id, { bureauOwnOutstanding: report?.analysis.totals.ownOutstanding ?? null, declaredExposure: declared ?? null }),
+        };
+      },
+      {
+        report: null as Awaited<ReturnType<typeof latestCreditReport>>,
+        legal: null as Awaited<ReturnType<typeof legalProfileStatus>>,
+        facilities: null as FacilityStatus | null,
+      }
+    )
+  ).data;
+  const openingRefresh = parseOpeningRefresh(events.find((e) => e.action === "CASE_CREATED")?.detail);
+  const prep = (await safeQuery((db) => caseChecklist(db, { id: c.id, counterpartyId: c.counterparty.id, purpose: c.purpose ?? null }, draft), null)).data;
+  const docsMode = await settingText("DOCS_AT_SUBMISSION");
+  const externalSignals = [...(ext.report?.analysis.signals ?? []), ...(ext.legal?.analysis.signals ?? []), ...(ext.facilities?.signals ?? [])];
+  const { circuit: circuitDef } = await loadCircuit();
+  const liftDouble = await settingBool("COMMITTEE_LIFT_DOUBLE_VALIDATION");
+  const cumulNotch = await settingInt("WATCHLIST_CUMUL_NOTCH");
+  const activeCriteria = (() => {
+    const cl = draftClassification(draft, draftFinancials(draft, model, format), committee.classification, committee.lifts, externalSignals);
+    return cl.items.filter((i) => i.state === "COCHE").map((i) => ({ code: i.code, labelFr: i.labelFr }));
+  })();
+  const toRow = (d: (typeof committee.all)[number]) => ({
+    id: d.id,
+    kind: d.kind,
+    codes: d.codes,
+    effectiveDate: d.effectiveDate,
+    committeeDate: d.committeeDate,
+    reference: d.reference,
+    motif: d.motif,
+    status: d.status,
+    recordedBy: d.recordedBy,
+    confirmedBy: d.confirmedBy,
+    cancelReason: d.cancelReason,
+  });
+  const refs = (await safeQuery(async (db) => ({ purposes: await loadPurposes(db), creditTypes: await loadCreditTypes(db) }), { purposes: DEFAULT_PURPOSES, creditTypes: DEFAULT_CREDIT_TYPES })).data;
+  const purposeLabel = [
+    c.purpose ? (refs.purposes.find((p) => p.code === c.purpose)?.labelFr ?? c.purpose) : null,
+    c.creditType ? (refs.creditTypes.find((t) => t.code === c.creditType)?.labelFr ?? c.creditType) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || null;
   const maxMb = await settingInt("DOCUMENT_MAX_MB");
   const workflow = c.status === "SUBMITTED" || c.status === "VALIDATED" || c.status === "REJECTED" ? await caseWorkflow(c) : null;
   const circuit = workflow ? stepsView(workflow, c) : [];
@@ -162,6 +253,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           Dossier de notation — {c.counterparty.name} <CaseStatusBadge status={c.status} />
         </h1>
         <p className="muted">
+          {purposeLabel ? <><strong style={{ color: "var(--text)" }}>{purposeLabel}</strong> · </> : null}
           {entity?.name ?? "—"} · {model.labelFr} v{model.version} · arrêté au {c.asOfDate} · montants en {c.counterparty.currency} ·
           ouvert par {c.createdBy} le {c.createdAt.toISOString().slice(0, 10)}
           {c.submittedBy && ` · soumis par ${c.submittedBy}`}
@@ -197,16 +289,21 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {c.status === "SUBMITTED" && workflow && pendingIdx !== null && (
-        <DecisionPanel
-          caseId={c.id}
-          blocker={blocker}
-          steps={circuit}
-          pendingLabelFr={workflow.steps[pendingIdx].labelFr}
-          isFinal={pendingIdx === workflow.steps.length - 1}
-          contributors={contributors}
-        />
-      )}
+      {c.status === "SUBMITTED" && workflow && pendingIdx !== null && (() => {
+        // Étape que la personne connectée peut traiter (un avis ouvert ou l'étape en attente).
+        const mineIdx = actorStepIndex(workflow, { name: identity.name, role: identity.role, jobFunction: identity.jobFunction ?? null });
+        const target = workflow.steps[mineIdx ?? pendingIdx];
+        return (
+          <DecisionPanel
+            caseId={c.id}
+            blocker={blocker}
+            steps={circuit}
+            pendingLabelFr={target.labelFr}
+            kind={target.kind === "AVIS" ? "AVIS" : target.kind === "DECISION" ? "DECISION" : mineIdx === workflow.steps.length - 1 || pendingIdx === workflow.steps.length - 1 ? "FINAL" : "VALIDATION"}
+            contributors={contributors}
+          />
+        );
+      })()}
 
       {(c.status === "VALIDATED" || c.status === "REJECTED") && circuit.length > 0 && (
         <section className="card" style={{ padding: 16, display: "grid", gap: 10 }}>
@@ -259,11 +356,152 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           {(() => {
             // Le valideur voit le bilan sur lequel la note a été calculée.
             const basis = readFinancialBasis(c.run.inputSnapshot);
-            return basis ? <FinancialBasisPanel basis={basis} model={model} /> : null;
+            return basis ? <FinancialBasisPanel basis={basis} model={model} format={format} /> : null;
           })()}
           {snapshot.kind === "V3" && <ResultPanel result={snapshot.result} model={model} />}
         </section>
       )}
+
+      {committee.wl.inWatchlist && (
+        <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--bad)", fontSize: 14 }}>
+          <strong>Client en watch list</strong>
+          {committee.wlCap ? ` ${committee.wlCap.level} — ${committee.wlCap.labelFr}` : ""} depuis le {committee.wl.since} (décision de comité) : note plafonnée à{" "}
+          {committee.wlCap?.cap ?? "—"} au mieux —{" "}
+          <Link href={`/counterparties/${c.counterparty.id}#watchlist`} style={{ color: "var(--brand)" }}>
+            voir l&apos;historique
+          </Link>
+          .
+        </div>
+      )}
+
+      {openingRefresh && (openingRefresh.fiche.status !== "IGNORE" || openingRefresh.engagements.status !== "IGNORE") && (
+        <div
+          role={openingRefresh.fiche.status === "ECHEC" || openingRefresh.engagements.status === "ECHEC" ? "alert" : "status"}
+          className="card"
+          style={{
+            padding: 12,
+            fontSize: 13,
+            display: "grid",
+            gap: 4,
+            minWidth: 0,
+            borderLeft: `4px solid ${openingRefresh.fiche.status === "ECHEC" || openingRefresh.engagements.status === "ECHEC" ? "var(--warn)" : "var(--good)"}`,
+          }}
+        >
+          <strong>Données T24 à l&apos;ouverture du dossier</strong>
+          {[openingRefresh.fiche, openingRefresh.engagements].map((p, i) => (
+            <span key={i}>
+              <span aria-hidden="true" style={{ fontWeight: 700, color: p.status === "ECHEC" ? "var(--warn)" : p.status === "ACTUALISE" ? "var(--good)" : "var(--muted)" }}>
+                {p.status === "ECHEC" ? "▲" : p.status === "ACTUALISE" ? "✓" : "–"}
+              </span>{" "}
+              {p.detailFr}
+            </span>
+          ))}
+          {(openingRefresh.fiche.status === "ECHEC" || openingRefresh.engagements.status === "ECHEC") && (
+            <span className="muted">
+              Le dossier part des dernières données enregistrées. Réessayez depuis la{" "}
+              <Link href={`/counterparties/${c.counterparty.id}`}>fiche client</Link>.
+            </span>
+          )}
+        </div>
+      )}
+
+      {prep && prep.items.length > 0 && (
+        <section id="preparation" className="card" style={{ padding: 16, display: "grid", gap: 8, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+            <h2 style={{ fontWeight: 600 }}>Préparation du dossier</h2>
+            <span style={{ fontSize: 13, fontWeight: 600, color: prep.missing.length ? "var(--warn)" : "var(--good)" }}>
+              {prep.missing.length
+                ? `▲ ${prep.missing.length} élément(s) à compléter sur ${prep.items.length}`
+                : `✓ Dossier complet (${prep.items.length} élément(s))`}
+            </span>
+          </div>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Pièces et informations requises pour le motif « {prep.purposeLabel ?? "non précisé"} » (Paramétrage › Motifs). À la soumission :{" "}
+            {docsMode === "BLOQUANT" ? "soumission bloquée tant qu'il en manque" : docsMode === "AUCUN" ? "pas de contrôle" : "avertissement tracé au journal"}.
+          </p>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4, fontSize: 13 }}>
+            {prep.items.map((i) => (
+              <li key={i.code} style={{ display: "flex", gap: 8 }}>
+                <span aria-hidden="true" style={{ fontWeight: 700, color: i.status === "FOURNI" ? "var(--good)" : i.status === "PERIME" ? "var(--warn)" : "var(--bad)" }}>
+                  {i.status === "FOURNI" ? "✓" : i.status === "PERIME" ? "▲" : "✕"}
+                </span>
+                <span>
+                  <strong>{i.labelFr}</strong> — {i.status === "FOURNI" ? "fourni" : i.status === "PERIME" ? "périmé" : "manquant"}
+                  {i.check === "SYSTEME" ? " (contrôlé par l'outil)" : ""}. <span className="muted">{i.detailFr}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {ext.facilities && (
+        <FacilitiesPanel
+          counterpartyId={c.counterparty.id}
+          lines={ext.facilities.lines}
+          totals={ext.facilities.totals}
+          findings={ext.facilities.findings}
+          signals={ext.facilities.signals}
+          positionDate={ext.facilities.positionDate}
+          settings={ext.facilities.settings}
+          types={ext.facilities.types}
+          currency={c.counterparty.currency}
+          today={today()}
+          canEdit={false}
+          t24Ready={false}
+          compact
+        />
+      )}
+
+      <CreditReportPanel
+        counterpartyId={c.counterparty.id}
+        caseId={c.id}
+        report={ext.report}
+        apiEnabled={bureau.apiEnabled}
+        provider={bureau.provider}
+        maxAgeDays={bureau.maxAgeDays}
+        today={today()}
+        canEdit={editable && canWriteHere}
+        aiUsable={ai.enabled && !ai.missing}
+      />
+
+      {ext.legal && ext.legal.analysis.findings.some((f) => f.level !== "INFO") && (
+        <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--warn)", fontSize: 13, display: "grid", gap: 4 }}>
+          <strong>Fiche juridique (InfoRisque du {ext.legal.profile.reportDate || "—"}) : points d&apos;attention</strong>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {ext.legal.analysis.findings
+              .filter((f) => f.level !== "INFO")
+              .map((f, i) => (
+                <li key={i}>{f.textFr}</li>
+              ))}
+          </ul>
+          <Link href={`/counterparties/${c.counterparty.id}#juridique`} style={{ color: "var(--brand)" }}>
+            Voir la fiche juridique
+          </Link>
+        </div>
+      )}
+      {!ext.legal && (
+        <p className="muted" style={{ fontSize: 13 }}>
+          Fiche juridique du client non renseignée :{" "}
+          <Link href={`/counterparties/${c.counterparty.id}#juridique`} style={{ color: "var(--brand)" }}>
+            charger le rapport InfoRisque
+          </Link>
+          .
+        </p>
+      )}
+
+      <LiftPanel
+        caseId={c.id}
+        today={today()}
+        activeCriteria={activeCriteria}
+        decisions={committee.all.filter((d) => d.caseId === c.id).map(toRow)}
+        previous={committee.lastOtherId ? committee.all.filter((d) => d.caseId === committee.lastOtherId && d.status === "EFFECTIVE").map((d) => ({ ...toRow(d), caseAsOf: committee.lastOtherAsOf })) : []}
+        canRecord={hasPermission(circuitDef, identity.jobFunction, "LEVER_CRITERE")}
+        canConfirm={hasPermission(circuitDef, identity.jobFunction, "CONFIRMER_LEVEE")}
+        holdersFr={holdersOf(circuitDef, "LEVER_CRITERE").map((f) => f.labelFr).join(", ") || "aucun profil"}
+        open={c.status === "DRAFT" || c.status === "SUBMITTED"}
+        doubleValidation={liftDouble}
+      />
 
       <CaseWorkspace
         caseId={c.id}
@@ -275,6 +513,13 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         proposals={proposals}
         ai={{ enabled: ai.enabled, missing: ai.missing, provider: ai.provider, model: ai.model }}
         maxMb={maxMb}
+        format={format}
+        classification={committee.classification}
+        lifts={committee.lifts}
+        watchlist={committee.wlCap}
+        cumulNotch={cumulNotch}
+        signals={externalSignals}
+        facilityExposure={ext.facilities && ext.facilities.lines.length ? { value: ext.facilities.totals.exposure, lines: ext.facilities.totals.lines, positionDate: ext.facilities.positionDate } : null}
       />
 
       <section className="card" style={{ padding: 16 }}>
@@ -323,11 +568,21 @@ function stepsView(
 ): CircuitStepView[] {
   const pending = pendingStepIndex(w);
   const legacyDone = !c.workflow && (c.status === "VALIDATED" || c.status === "REJECTED");
-  return w.steps.map((st, i) => {
+  return w.steps.map((rawStep, i) => {
+    // Niveau de décision inférieur devenu instruction pour ce dossier.
+    const st = rawStep.instruction ? { ...rawStep, labelFr: `${rawStep.labelFr.replace(/\s*:\s*décision$/i, "")} : instruction` } : rawStep;
     const d = w.decisions.find((x) => x.step === st.code);
-    const whoFr = `${st.functionLabels.length > 0 ? st.functionLabels.join(", ") : "Toute fonction"} · rôle ${WORKFLOW_ROLE_LABELS[st.minRole] ?? st.minRole} au moins`;
+    const nature = st.kind === "AVIS" ? (st.instruction ? "instruction, avis bloquant" : st.blocking ? "avis bloquant" : "avis non bloquant") : st.kind === "DECISION" ? "décision" : null;
+    const whoFr = `${nature ? `${nature[0].toUpperCase()}${nature.slice(1)} · ` : ""}${st.functionLabels.length > 0 ? st.functionLabels.join(", ") : "Toute fonction"} · rôle ${WORKFLOW_ROLE_LABELS[st.minRole] ?? st.minRole} au moins`;
     if (d) {
-      return { code: st.code, labelFr: st.labelFr, whoFr, state: d.decision === "APPROVED" ? "DONE" : "REJECTED", decidedBy: d.by, decidedAt: d.at.slice(0, 16).replace("T", " "), comment: d.comment };
+      const state = d.decision === "APPROVED" ? "DONE" : d.decision === "REJECTED" ? "REJECTED" : d.decision === "FAVORABLE" ? "FAVORABLE" : "DEFAVORABLE";
+      return { code: st.code, labelFr: st.labelFr, whoFr, state, decidedBy: d.by, decidedAt: d.at.slice(0, 16).replace("T", " "), comment: d.comment };
+    }
+    if (st.kind === "AVIS" && !st.blocking && c.status !== "SUBMITTED") {
+      return { code: st.code, labelFr: st.labelFr, whoFr, state: "SKIPPED" };
+    }
+    if (st.kind === "AVIS" && !st.blocking && c.status === "SUBMITTED") {
+      return { code: st.code, labelFr: st.labelFr, whoFr, state: "OPEN" };
     }
     if (legacyDone && i === 0) {
       return {

@@ -129,6 +129,44 @@ export const financialBasisSchema = z
           .strict()
       )
       .max(200),
+    formatVersion: z.string().max(40).optional(),
+    indicatorMeta: z
+      .array(z.object({ key: z.string().max(40), labelFr: z.string().max(200), unit: z.enum(["MAD", "%", "x", "j"]), group: z.string().max(20) }).strict())
+      .max(40)
+      .optional(),
+    analysis: z
+      .object({
+        situation: z.enum(["SAINE", "A_SURVEILLER", "DEGRADEE", "CRITIQUE"]).nullable(),
+        motifsFr: z.array(z.string().max(200)).max(10),
+        alerts: z
+          .array(
+            z
+              .object({
+                key: z.string().max(40),
+                labelFr: z.string().max(300),
+                severity: z.enum(["CRITIQUE", "ALERTE"]),
+                referenceFr: z.string().max(300).optional(),
+                status: z.enum(["DECLENCHEE", "NON", "NON_EVALUABLE"]),
+              })
+              .strict()
+          )
+          .max(60),
+        appraisals: z
+          .array(
+            z
+              .object({
+                key: z.string().max(40),
+                levels: z.array(z.enum(["BON", "MOYEN", "MAUVAIS", "CRITIQUE"]).nullable()).max(3),
+                trend: z.enum(["AMELIORATION", "STABLE", "DEGRADATION"]).nullable(),
+                change: finiteOrNull,
+                grid: z.string().max(32).optional(),
+              })
+              .strict()
+          )
+          .max(80),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -185,6 +223,43 @@ export const ratingRequestSchema = z
     financialBasis: financialBasisSchema.optional(),
     defaultTriggered: z.boolean().optional(),
     defaultGrade: z.enum(["DEF1", "DEF2", "DEF3"]).optional(),
+    regulatoryCap: z
+      .object({ maxGrade: z.string().regex(/^(10|[1-9])$/), family: z.string().max(20), codes: z.array(z.string().max(16)).max(40), labelFr: z.string().max(300) })
+      .strict()
+      .optional(),
+    classificationBasis: z
+      .object({
+        family: z.string().max(20).nullable(),
+        effect: z.string().max(10).nullable(),
+        items: z
+          .array(
+            z
+              .object({
+                code: z.string().max(16),
+                family: z.string().max(20),
+                labelFr: z.string().max(200),
+                article: z.string().max(80),
+                state: z.enum(["COCHE", "LEVE"]),
+                by: z.enum(["BILAN", "ANALYSTE"]).optional(),
+                date: z.string().max(10).optional(),
+                comment: z.string().max(500).optional(),
+              })
+              .strict()
+          )
+          .max(60),
+        lifts: z
+          .array(
+            z
+              .object({ codes: z.array(z.string().max(16)).max(60), committeeDate: z.string().max(10), reference: z.string().max(80), recordedBy: z.string().max(120), confirmedBy: z.string().max(120).nullable().optional() })
+              .strict()
+          )
+          .max(20),
+        watchlist: z.object({ level: z.string().max(16), labelFr: z.string().max(120), cap: z.string().regex(/^(10|[1-9])$/), since: z.string().max(10) }).strict().optional(),
+        appliedCap: z.string().regex(/^(10|[1-9])$/).optional(),
+        capSource: z.enum(["BAM", "WATCHLIST", "CUMUL"]).optional(),
+      })
+      .strict()
+      .optional(),
     asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date d'arrêté au format YYYY-MM-DD"),
   })
   .strict();
@@ -207,6 +282,12 @@ export const counterpartySchema = z
     legalForm: z.string().max(60).optional(),
     sectorCode: z.string().max(30).optional(),
     city: z.string().max(80).optional(),
+    /** Segment commercial de la banque (T24), distinct du segment du modèle. */
+    commercialSegment: z.string().max(40).optional(),
+    /** Code client T24 connu (saisie minimale quand l'API T24 est indisponible). */
+    coreBankingId: z.string().regex(/^\d{1,20}$/, "code client T24 numérique").optional(),
+    /** Gestionnaire (code chargé d'affaires T24). */
+    accountOfficer: z.string().max(40).optional(),
   })
   .strict();
 
@@ -224,6 +305,9 @@ export const counterpartyPatchSchema = counterpartySchema
     legalForm: z.string().max(60).nullable().optional(),
     sectorCode: z.string().max(30).nullable().optional(),
     city: z.string().max(80).nullable().optional(),
+    commercialSegment: z.string().max(40).nullable().optional(),
+    coreBankingId: z.string().regex(/^\d{1,20}$/, "code client T24 numérique").nullable().optional(),
+    accountOfficer: z.string().max(40).nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .strict();

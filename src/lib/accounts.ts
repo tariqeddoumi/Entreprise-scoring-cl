@@ -211,6 +211,7 @@ export async function resolveSession(token: string | undefined): Promise<Session
       entityId: user.entityId,
       writeScope: user.writeScope,
       jobFunction: user.jobFunction ?? null,
+      accountOfficerCode: user.accountOfficerCode ?? null,
     },
     displayName: user.displayName,
     userId: user.id,
@@ -331,6 +332,7 @@ export async function listUsers(db: { user: typeof prisma.user }) {
       entityId: true,
       writeScope: true,
       jobFunction: true,
+      accountOfficerCode: true,
       id: true,
       username: true,
       displayName: true,
@@ -347,7 +349,7 @@ export async function listUsers(db: { user: typeof prisma.user }) {
 export async function createUser(
   actor: Identity,
   scope: Perimeter,
-  input: { username: string; displayName: string; role: string; entityId: string | null; writeScope: string; jobFunction?: string | null }
+  input: { username: string; displayName: string; role: string; entityId: string | null; writeScope: string; jobFunction?: string | null; accountOfficerCode?: string | null }
 ): Promise<{ username: string; temporaryPassword: string }> {
   const username = normalizeUsername(input.username);
   if (!username) {
@@ -362,6 +364,7 @@ export async function createUser(
   if (!isRole(input.role)) throw new AccountError(`Rôle inconnu : ${input.role}`);
   await assertAssignable(scope, input);
   const jobFunction = await checkedFunction(input.jobFunction);
+  const accountOfficerCode = checkedOfficerCode(input.accountOfficerCode);
   if (await prisma.user.findUnique({ where: { username } })) {
     throw new AccountError(`L'identifiant « ${username} » est déjà utilisé.`);
   }
@@ -380,6 +383,7 @@ export async function createUser(
         entityId: input.entityId,
         writeScope: input.writeScope,
         jobFunction,
+        accountOfficerCode,
       },
     });
     await auditWithin(tx, {
@@ -389,7 +393,7 @@ export async function createUser(
       resourceType: "User",
       resourceId: user.id,
       entityId: input.entityId,
-      detail: { username, displayName, role: input.role, entityId: input.entityId, writeScope: input.writeScope, fonction: jobFunction },
+      detail: { username, displayName, role: input.role, entityId: input.entityId, writeScope: input.writeScope, fonction: jobFunction, codeGestionnaire: accountOfficerCode },
     });
   });
   return { username, temporaryPassword };
@@ -599,6 +603,43 @@ export async function setUserFunction(actor: Identity, scope: Perimeter, userId:
       detail: { username: user.username, avant: user.jobFunction ?? null, apres: jobFunction },
     });
   });
+}
+
+/** Code gestionnaire T24 : lettres, chiffres, point, tiret ; vide = aucun. */
+export function checkedOfficerCode(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").trim();
+  if (!v) return null;
+  if (!/^[A-Za-z0-9._-]{1,40}$/.test(v)) throw new AccountError("Code gestionnaire T24 : 1 à 40 caractères (lettres, chiffres, point, tiret).");
+  return v;
+}
+
+/**
+ * Code gestionnaire T24 d'un compte : relie le chargé d'affaires aux clients
+ * dont il est gestionnaire dans T24 (portefeuille).
+ */
+export async function setUserOfficerCode(actor: Identity, scope: Perimeter, userId: string, raw: string | null): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AccountError("Compte introuvable.");
+  assertManageable(scope, user);
+  const code = checkedOfficerCode(raw);
+  if ((user.accountOfficerCode ?? null) === code) return false;
+  if (code) {
+    const other = await prisma.user.findFirst({ where: { accountOfficerCode: code, id: { not: user.id }, isActive: true }, select: { username: true } });
+    if (other) throw new AccountError(`Code gestionnaire ${code} déjà attribué au compte « ${other.username} ».`);
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { accountOfficerCode: code } });
+    await auditWithin(tx, {
+      actor: actor.name,
+      actorRole: actor.role,
+      action: "USER_OFFICER_CODE_CHANGED",
+      resourceType: "User",
+      resourceId: user.id,
+      entityId: user.entityId,
+      detail: { username: user.username, avant: user.accountOfficerCode ?? null, apres: code },
+    });
+  });
+  return true;
 }
 
 export type { Role };

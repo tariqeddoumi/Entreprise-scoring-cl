@@ -7,7 +7,13 @@ import { applyField, type CaseDraft, type FieldKind } from "@/lib/case-input";
 import { ResultPanel } from "@/app/scoring/ResultPanel";
 import { ScoringForm } from "@/app/scoring/ScoringForm";
 import { FinancialsSection } from "@/app/scoring/FinancialsSection";
+import type { StatementFormat } from "@/financials/statement-format";
+import { ClassificationPanel } from "@/app/scoring/ClassificationPanel";
+import type { FacilityExposure } from "@/app/scoring/ScoringForm";
+import type { ClassificationSettings, WatchlistCap } from "@/reference/classification";
 import { DATA_STATUS_LABELS } from "@/app/ui-helpers";
+import { PIECE_KINDS } from "@/reference/required-docs";
+import type { CaseLift } from "@/lib/case-input";
 import {
   decideProposalAction,
   generateProposalsAction,
@@ -15,6 +21,7 @@ import {
   saveDraftAction,
   submitCaseAction,
   uploadDocumentAction,
+  setDocumentKindAction,
 } from "../actions";
 
 interface DocumentRow {
@@ -24,6 +31,8 @@ interface DocumentRow {
   sizeBytes: number;
   uploadedBy: string;
   createdAt: string;
+  /** Type de la pièce (pièces requises par motif). */
+  kind?: string | null;
 }
 
 interface ProposalRow {
@@ -39,6 +48,8 @@ interface ProposalRow {
 }
 
 interface Props {
+  /** Format de bilan applicable au dossier. */
+  format: StatementFormat;
   caseId: string;
   model: ModelConfig;
   initialDraft: CaseDraft;
@@ -48,6 +59,15 @@ interface Props {
   proposals: ProposalRow[];
   ai: { enabled: boolean; missing: string | null; provider: string; model: string };
   maxMb: number;
+  /** Critères de classement BAM (paramétrage) et levées en vigueur sur le dossier. */
+  classification: ClassificationSettings;
+  lifts: CaseLift[];
+  watchlist?: WatchlistCap | null;
+  cumulNotch?: number;
+  /** Signaux externes (crédit bureau, fiche juridique) : critères BAM proposés à vérifier. */
+  signals?: string[];
+  /** Engagement global calculé sur les lignes d'engagement du client. */
+  facilityExposure?: FacilityExposure | null;
 }
 
 type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<string, { original: number; base: number }> } | null;
@@ -56,7 +76,7 @@ type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<st
  * Espace de travail d'un dossier : la grille (brouillon), l'aperçu du calcul,
  * l'enregistrement, la soumission, et le panneau d'assistance de l'IA.
  */
-export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb }: Props) {
+export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts, watchlist = null, cumulNotch = 0, signals = [], facilityExposure = null }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<CaseDraft>(initialDraft);
   const [dirty, setDirty] = useState(false);
@@ -119,13 +139,16 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
 
   if (!editable) {
     return (
+      <>
+      <ClassificationPanel model={model} draft={draft} readOnly format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} signals={signals} />
       <details className="card" style={{ padding: 16 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Saisie du dossier (lecture seule)</summary>
         <div style={{ marginTop: 14, display: "grid", gap: 18 }}>
-          <FinancialsSection model={model} draft={draft} readOnly currency={currency} />
-          <ScoringForm model={model} draft={draft} onChange={() => undefined} readOnly currency={currency} aiFields={aiFields} />
+          <FinancialsSection model={model} draft={draft} readOnly currency={currency} format={format} />
+          <ScoringForm model={model} draft={draft} onChange={() => undefined} readOnly currency={currency} aiFields={aiFields} format={format} />
         </div>
       </details>
+      </>
     );
   }
 
@@ -140,8 +163,10 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
           caseId={caseId}
           documents={documents}
           aiUsable={ai.enabled && !ai.missing}
+          format={format}
         />
-        <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} />
+        <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} format={format} facilityExposure={facilityExposure} />
+        <ClassificationPanel model={model} draft={draft} onChange={change} format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} signals={signals} />
         <div className="card no-print action-bar">
           <button type="button" className="btn-ghost" onClick={() => run("save")} disabled={busy !== null}>
             {busy === "save" ? "Enregistrement…" : "Enregistrer le brouillon"}
@@ -300,6 +325,22 @@ function AiPanel({
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={d.fileName}>
                   {d.fileName}
                 </span>
+                <select
+                  aria-label={`Type de la pièce ${d.fileName}`}
+                  value={d.kind ?? ""}
+                  style={{ maxWidth: 170, fontSize: 11, padding: "2px 4px" }}
+                  onChange={async (e) => {
+                    const r = await setDocumentKindAction(caseId, d.id, e.target.value);
+                    if (r.ok) router.refresh();
+                  }}
+                >
+                  <option value="">Non typée</option>
+                  {PIECE_KINDS.map((k) => (
+                    <option key={k.code} value={k.code}>
+                      {k.labelFr}
+                    </option>
+                  ))}
+                </select>
                 <span className="muted">{Math.max(1, Math.round(d.sizeBytes / 1024))} ko</span>
               </li>
             ))}
@@ -307,6 +348,14 @@ function AiPanel({
         )}
         <form action={upload} style={{ display: "grid", gap: 6 }}>
           <input type="hidden" name="caseId" value={caseId} />
+          <select name="kind" aria-label="Type des pièces ajoutées" defaultValue="">
+            <option value="">Type de la pièce (facultatif)</option>
+            {PIECE_KINDS.map((k) => (
+              <option key={k.code} value={k.code}>
+                {k.labelFr}
+              </option>
+            ))}
+          </select>
           <input type="file" name="file" multiple aria-label="Pièces à ajouter au dossier" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.txt,.csv,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv" />
           <button type="submit" className="btn-ghost" disabled={uploading}>
             {uploading ? "Envoi…" : "Ajouter"}

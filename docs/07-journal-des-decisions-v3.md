@@ -649,6 +649,214 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer par la banque :* les fonctions et leur attribution ; les seuils d'un éventuel comité de crédit ; la place de la contre-étude dans les dérogations.
 
+## D-56 — Format du bilan paramétrable, analyse au chargement, reprise sur l'exercice suivant — **À CONFIRMER**
+
+*Contexte :* demande de la banque (6 novembre 2026) : rendre paramétrable « au maximum » ce que l'on charge du bilan (complet, agrégé, ou seulement les indicateurs utiles à la notation) ; restituer dès le chargement un tableau des indicateurs, ceux de la grille d'abord, avec leur évolution et une appréciation (bon, mauvais, grave) ; distinguer les deux événements fréquents — renouvellement annuel des crédits de fonctionnement et demande d'investissement ; reprendre les bilans de la dernière note validée et passer, au choix du chargé d'affaires, à l'exercice suivant (N devient N−1) ; signaler les champs non récupérés ou à vérifier.
+
+*Décision :*
+1. **Format du bilan, par versions datées** (Administration › Format du bilan), sur le plan de postes CGNC de la banque, qui reste la référence des ratios : chaque poste chargé ou non chargé ; chaque total calculé, saisi directement (détail facultatif) ou retiré ; postes propres à la banque ; indicateurs complémentaires définis par formule (langage fermé, évalué sans `eval`) ; appréciation de chaque indicateur (sens, seuils bon / mauvais / critique, variation significative) ; alertes par formule ; seuils de la synthèse. Trois préréglages : complet, agrégé, notation seulement — ces deux derniers gardent les postes des ratios de la grille et des alertes actives, et ne laissent jamais un total partiel. Les postes lus par chaque ratio sont relevés automatiquement ; un ratio dont un poste n'est plus chargé devient « non calculable » (le critère s'instruit à la main), jamais calculé sur des zéros. Le gabarit Excel et la lecture par l'IA suivent le format en vigueur. La version appliquée est figée dans la notation.
+2. **Analyse du bilan au chargement** : situation d'ensemble (saine, à surveiller, dégradée, critique), alertes déclenchées, ratios de la grille puis autres indicateurs avec N, N−1, N−2, évolution sur un an et appréciation. Les critères chiffrés de la 1/W/2025 calculables sur le bilan (recul du CA ≥ 50 %, dettes financières / capitaux propres > 3, trois exercices déficitaires, capitaux propres < quart du capital, comptes non reçus à 7 mois) y figurent comme alertes **d'information : ils ne changent pas la note** (leur effet sur la note relève du point 2, à arbitrer). L'analyse est figée dans la notation et restituée sur la fiche.
+3. **Ouverture du dossier** : motif obligatoire, liste paramétrable (renouvellement annuel des crédits de fonctionnement, crédit d'investissement, entrée en relation, révision, autre). La reprise porte sur la dernière note **validée** (et non plus aussi sur un dossier rejeté, qui se reprend par « Reprendre le dossier »). Choix de l'exercice : conserver (bilan repris tel quel) ou passer à l'exercice suivant (N → N−1, N−1 → N−2, nouveau N à charger, pré-rempli s'il est déjà au référentiel) ; proposé par défaut selon la clôture et la date d'arrêté.
+4. **Référentiel des bilans** (`financial_statements`), alimenté à la validation d'une note et destiné à la reprise du stock ; migration 09 (reprise des bilans des notes validées).
+5. **Repères de champs** : calculé du bilan, repris (à confirmer), à saisir, anomalie ; compteur, filtre « champs à traiter », confirmation unitaire ou globale. Soumission bloquée tant que des champs repris ne sont pas confirmés ou modifiés (paramètre `WORKFLOW_CONFIRM_CARRIED_OVER`, activé par défaut).
+
+*À confirmer par la banque :* les seuils d'appréciation proposés (Risques) ; la définition des « dettes financières » de l'alerte BAM (dette brute économique retenue) ; la liste des motifs ; l'obligation de confirmer chaque champ repris.
+
+## D-57 — Profils métier, circuit avis / décision, critères BAM dans la note, watch list — **À CONFIRMER**
+
+*Contexte :* demandes de la banque (6 et 7 novembre 2026). Une créance sensible ne doit pas avoir une bonne note. Un comité peut lever les critères (sensibles ou pré-douteux), la levée est tracée et la note recalculée. Le raisonnement se fait par profil : P1 saisie, P2 validation du directeur du centre, P3 contre-étude (plusieurs niveaux d'instruction, une seule décision), P4 surveillance (watch list). Tout est paramétrable.
+
+*Décision :*
+1. **Profils et droits.** Les profils regroupent des droits paramétrables par fonction : levée, confirmation, watch list. Une seule fonction par compte.
+2. **Circuit.**
+   - Les étapes « avis » sont favorables ou défavorables, non bloquantes par défaut, bloquantes selon la catégorie de délégation du centre.
+   - Les étapes « décision » ont des niveaux conditionnés par le montant, la note et le type de crédit. Seul le plus élevé qui s'applique décide ; les autres instruisent.
+   - Le type de crédit est saisi à l'ouverture. La catégorie de délégation est attribuée par entité et héritée ; à défaut, c'est la première catégorie active. Elle s'attribue d'après la taille, la sinistralité, les dérogations, les rejets et l'audit.
+3. **Critères BAM dans la note.**
+   - Catalogue paramétrable ; critères du bilan automatiques, autres déclaratifs.
+   - Effet : sensible → plafond 8 ; pré-douteux → plafond 10 ; douteux → DEF1 ; compromis → DEF3 (moteur 3.3.0, règle non compensatoire de source réglementaire).
+4. **Levée par le comité.**
+   - Enregistrée par un profil habilité, non contributeur du dossier, avec procès-verbal. Seconde validation paramétrable : désactivée au départ, cible activée.
+   - Note recalculée. La levée vaut pour le dossier ; elle est rappelée au renouvellement.
+5. **Watch list.** Entrée et sortie sur décision de comité, datées (reprise des anciens inscrits), seconde validation paramétrable, historique, badge.
+6. **Données.** Table `committee_decisions` et colonnes `rating_cases.creditType` et `entities.riskTier` (migration 09).
+
+*À confirmer par la banque :*
+- les seuils et niveaux de décision ;
+- la grille d'attribution des catégories de délégation ;
+- les plafonds ;
+- la liste et les libellés des critères ;
+- le passage à la double validation ;
+- l'effet éventuel de la watch list sur la note ou sur le délai de renotation.
+
+## D-58 — Watch list : effet sur la note par niveau ; proposition de paramétrage pour le COPIL — **À CONFIRMER EN COPIL**
+
+*Contexte :* demande de la banque (7 novembre 2026). Un client déjà en créance sensible, inscrit en watch list pour être suivi de plus près, doit voir sa note dégradée, « entre 8, 9 et 10 ». Les valeurs seront arrêtées au COPIL de validation du modèle.
+
+*Décision (proposition paramétrable) :*
+- **Niveaux de watch list décidés en comité**, avec un plafond, un délai de renotation et une fréquence de revue :
+
+  | Niveau | Plafond | Renotation | Revue |
+  |---|---|---|---|
+  | WL1 — sous surveillance | 8 | 60 jours | 90 jours |
+  | WL2 — surveillance renforcée | 9 | 30 jours | 30 jours |
+  | WL3 — pré-recouvrement | 10 | 15 jours | 30 jours |
+
+- **Changement de niveau** par une nouvelle décision ; la date d'inscription est conservée.
+- **Face aux critères BAM**, le plafond le plus sévère s'applique, sans double comptage. Un cran supplémentaire en cas de cumul est paramétrable de 0 à 2 ; 0 est proposé. Un défaut BAM prime toujours.
+- **Moment d'application** : la watch list en vigueur s'applique à chaque calcul de note (soumission, recalcul) et elle est figée sur la fiche.
+- **Proposition complète de paramétrage pour le COPIL** : docs/19 et son document Word. Elle couvre le circuit et la délégation, les catégories de délégation, les critères BAM, la watch list, l'analyse du bilan et la validité des notes.
+
+*À confirmer :* l'ensemble du tableau de synthèse de la proposition (§ 9).
+
+---
+
+## D-59 — Surveillance du portefeuille : KRI, KPI, matrice de migration, alertes — **SEUILS À CONFIRMER EN COPIL**
+
+*Contexte :* point 3 de la feuille de route (6 novembre 2026). La banque demande des graphiques d'évolution des KRI et KPI, une matrice de migration par segment et par secteur, sur la base des meilleures pratiques.
+
+*Décision :*
+- Écran **Surveillance** en lecture seule, cloisonné au périmètre ; accès : gestionnaire des risques, administrateur, ou fonction dotée du nouveau droit VOIR_SURVEILLANCE (directeur de centre, contre-étude, directeur des risques, surveillance par défaut).
+- Douze indicateurs (sept KRI, cinq KPI), seuils orange et rouge paramétrables (docs/20 § 2).
+- Une note compte à la date où elle fait foi (validation) ; seules les notes validées comptent.
+- Matrice de migration par cohorte ; les entrées, sorties et notes non renouvelées sont comptées à part.
+- Parts en exposition, note moyenne pondérée sur les performants.
+- Exposition = engagement déclaré au dossier, jusqu'au raccordement d'un flux d'encours (proposé).
+
+*À confirmer :* seuils, fréquences et responsables des indicateurs ; première classe de risque élevé ; spécification du flux d'encours.
+
+---
+
+## D-60 — Fiche client T24, saisie minimale de repli, rapport de solvabilité et fiche juridique InfoRisque — **ANCIENNETÉS ET CONTRÔLE À ARRÊTER EN COPIL**
+
+*Contexte :* clarification du processus par la banque (7 novembre 2026). Le client se crée depuis T24 par son code client, sinon en saisie minimale (client pas encore dans T24, ou API indisponible). Le rapport de solvabilité se récupère par API ou par lecture de l'IA, et sa date de mise à jour doit être contrôlée. InfoRisque est à lire et à exploiter.
+
+*Décision :*
+- **Fiche client T24 :**
+  - code client numérique, longueur paramétrable ;
+  - rapatriement du maximum d'informations, dont le segment commercial (distinct du segment du modèle), le gestionnaire, le centre et le groupe d'affaires ;
+  - correspondance des champs paramétrable (`T24_FIELD_MAP`) ; jeton en variable d'environnement.
+- **Saisie minimale** (raison sociale, ICE ou RC, forme juridique, secteur, segment commercial) proposée sur toute erreur T24 ; fiche « en attente de T24 », rattachée ensuite. Les données de T24 remplacent alors la saisie, chaque écart étant journalisé.
+- **Rapport de solvabilité :**
+  - récupéré par API ou lu par l'IA, toujours vérifié avant enregistrement ;
+  - ancienneté mesurée depuis sa date de mise à jour (30 jours proposés), avec message systématique de rafraîchissement dans l'outil du crédit bureau ;
+  - à la soumission, un rapport absent ou ancien donne un avertissement tracé (par défaut) ou bloque (paramétrable).
+- **InfoRisque :** lecture par l'IA, fiche juridique datée. Contrôles : identité, comptes déposés au greffe contre bilan remis (tolérance 5 %), événements légaux, jeune entreprise, bénéficiaires effectifs, groupe.
+- **Critères BAM proposés à vérifier** (jamais cochés automatiquement) à partir de ces sources :
+  - crédit bureau : S03, S04, E04, E12, E19, E26 ;
+  - InfoRisque : E15, E28, S14.
+
+*À confirmer :*
+- ancienneté maximale du rapport de solvabilité ;
+- contrôle à la soumission (avertissement ou bloquant) ;
+- ancienneté de la fiche juridique ;
+- tolérance d'écart avec les comptes déposés ;
+- codes de segment commercial T24 ;
+- correspondance des champs T24 (DSI) ;
+- existence d'une API entreprise du crédit bureau.
+
+---
+
+## D-61 — Portefeuille par chargé d'affaires — **ACTIVATION APRÈS RENSEIGNEMENT DES CODES**
+
+*Contexte :* demande de la banque. Le chargé d'affaires ne voit que ses clients ; le directeur de centre voit son centre ; la contre-étude et la surveillance voient leur région ou toute la banque (Casablanca).
+
+*Décision :*
+- Code gestionnaire T24 sur chaque compte.
+- Portefeuille du profil 1 :
+  - clients dont il est gestionnaire (code T24, ou fiche qu'il a créée) ;
+  - clients pour lesquels il a ouvert un dossier.
+- Restriction appliquée dans le client de base de données cloisonné, à tout ce qui dépend du client.
+- Refus :
+  - création d'un client d'un autre gestionnaire ;
+  - cession d'un client ;
+  - dossier hors portefeuille.
+- Paramètre « Visibilité des chargés d'affaires » : tout le centre par défaut, pour ne pas vider les écrans avant le renseignement des codes ; à passer à « Son portefeuille » ensuite.
+
+*À confirmer :* l'inclusion des clients pour lesquels le chargé d'affaires a ouvert un dossier ; le traitement des remplacements (absence, mutation) : délégation temporaire ou réaffectation par le directeur.
+
+---
+
+## D-62 — Engagements du client ligne par ligne — **BASE ET PONDÉRATION À ARRÊTER EN COPIL**
+
+*Contexte :* le dossier ne portait qu'un montant global d'engagement, saisi. La banque souhaite les lignes, par API (T24) ou saisie.
+
+*Décision :*
+- Table des lignes d'engagement par client.
+- **Sources :**
+  - T24 (limites du client), remplacées à chaque rapatriement ;
+  - saisie datée, remplacée à chaque saisie.
+- **Types paramétrables :** nature bilan ou signature, durée court terme ou moyen et long terme.
+- **Engagement global :** somme par ligne du plus grand de l'autorisé et de l'encours (paramétrable). Signature pondérée à 100 % (paramétrable). Repris à l'ouverture du dossier et proposé en saisie.
+- **Constats :** dépassements, lignes échues utilisées, impayés.
+- **Critères BAM proposés :** E04, E12, E19, jamais cochés automatiquement.
+- **Rapprochement :** avec l'encours de la banque déclaré au crédit bureau.
+
+*À confirmer :*
+- base de l'engagement global ;
+- pondération des engagements par signature ;
+- correspondance des codes produit T24 ;
+- raccordement à la surveillance (flux d'encours).
+
+---
+
+## D-63 — Surveillance : flux d'encours tiré des lignes d'engagement
+
+*Décision :*
+- **Exposition d'un client dans la surveillance :** la position de ses lignes d'engagement (base de l'engagement global paramétrée), pour toute photographie datée de la position ou après ; sinon, l'engagement déclaré à la notation.
+- **Deux nouveaux indicateurs de risque :**
+  - impayés sur les lignes, rapportés à leur encours (orange 1 %, rouge 3 %) ;
+  - part des clients en dépassement de plus de 10 % (orange 5 %, rouge 10 %).
+- **Liste d'alertes :** impayés et dépassements.
+- **Export :** il indique la source de l'exposition.
+
+*À confirmer :* seuils en COPIL ; historisation mensuelle des positions.
+
+---
+
+## D-64 — Pièces et informations requises par motif — **LISTES ET CONTRÔLE À ARRÊTER EN COPIL**
+
+*Décision :*
+- **Pièces jointes typées :** statuts et modèle J, attestations fiscale et CNSS, rapport du commissaire aux comptes, business plan, devis, situation intermédiaire.
+- **Éléments contrôlés sur les données :** bilan chargé, rapport de solvabilité, engagements et fiche juridique, chacun à jour.
+- **Liste requise par motif :** paramétrable, avec une liste proposée par défaut.
+- **Panneau « Préparation du dossier »** dans le dossier.
+- **À la soumission :** avertissement tracé (défaut), bloquant ou aucun contrôle.
+
+*À confirmer :* listes par motif, passage au contrôle bloquant.
+
+## D-65 — Reprise du stock (clients, notes historiques, bilans, watch list) — **FORMAT À VALIDER AVEC LA DSI**
+
+*Décision :*
+- **Classeur unique** en quatre feuilles (clients, notes, bilans, watch list), avec un modèle téléchargeable.
+- **Contrôle à blanc obligatoire**, puis import en une seule transaction, tracé avec l'empreinte du fichier.
+- **Import idempotent** : rejouer le même classeur ne crée rien.
+- **Notes reprises officielles**, non recalculées. La note d'origine et le modèle d'origine sont conservés.
+- **Pas de reprise** des dossiers en cours, des pièces ni des engagements : les engagements viennent de T24.
+
+*À confirmer :* table de correspondance des anciennes notes vers l'échelle 1 à 10, profondeur historique, extraction par la DSI.
+
+## D-66 — Actualisation des données T24 à l'ouverture d'un dossier — **ACTIVÉE PAR DÉFAUT, PARAMÉTRABLE**
+
+*Décision :*
+- **Ce qui est relu.** Pour un client rapatrié de T24, l'ouverture d'un dossier relit la fiche client et les lignes d'engagement, puis reprend l'engagement global du jour.
+- **Pas de relecture inutile.** Une fiche relue depuis moins d'une heure, ou des engagements déjà rapatriés le jour même, ne sont pas relus.
+- **Une panne ne bloque pas.** Le dossier s'ouvre sur les dernières données, avec un avertissement daté conservé au journal.
+- **Exclus.** Pas d'actualisation d'office pour une saisie minimale, dont le code n'est pas vérifié, ni pour un client hors du périmètre d'écriture.
+- **Paramètre.** Fiche et engagements, fiche seule, ou aucune actualisation.
+
+*À confirmer :* le délai d'attente acceptable pour T24 à l'ouverture (8 secondes par appel, deux appels au plus).
+
+## D-67 — Démarrage sans API, activation après test de connexion réussi — **ADOPTÉE**
+
+*Décision :*
+- **Démarrage sans API.** T24, le crédit bureau et l'IA sont désactivés par défaut. L'outil fonctionne en saisie.
+- **Test sans activation.** Administration › Raccordements teste chaque API, même désactivée, sur un code réel. Le test n'enregistre aucune donnée client et il est journalisé.
+- **Activation conditionnée.** Elle exige un test réussi de moins de 30 jours, sur l'adresse en vigueur.
+- **Désactivation libre.** Elle reste possible à tout moment, sans condition.
+
+*À confirmer :* procès-verbal de recette DSI par API, durée de validité du test.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

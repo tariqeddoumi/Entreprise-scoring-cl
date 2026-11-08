@@ -108,6 +108,25 @@ export async function runAi(req: AiRequest): Promise<AiResponse> {
   return c.provider === "anthropic" ? runAnthropic(c, req) : runOpenAiCompatible(c, req);
 }
 
+/**
+ * Test de connexion avant activation (Administration › Raccordements) : une
+ * requête minimale, sans pièce ni donnée client, même si l'IA est désactivée.
+ */
+export async function pingAi(): Promise<AiResponse> {
+  const c = await aiConfig();
+  const missing = missingConfig(c);
+  if (missing) throw new AiError(`IA non configurée : ${missing}.`);
+  const req: AiRequest = {
+    system: "Test de connexion de l'outil de notation. Réponds uniquement selon le schéma.",
+    documents: [],
+    instruction: 'Renvoie {"ok": true}.',
+    schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"], additionalProperties: false },
+    effort: "low",
+    timeoutMs: 30_000,
+  };
+  return c.provider === "anthropic" ? runAnthropic(c, req) : runOpenAiCompatible(c, req);
+}
+
 // --- Anthropic ------------------------------------------------------------------
 
 function anthropicBlocks(docs: AiDocument[]): Anthropic.Beta.BetaContentBlockParam[] {
@@ -212,41 +231,81 @@ async function runOpenAiCompatible(c: AiConfig, req: AiRequest): Promise<AiRespo
   if (c.provider === "azure_openai") headers["api-key"] = key;
   else headers.authorization = `Bearer ${key}`;
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    signal: AbortSignal.timeout(req.timeoutMs),
-    body: JSON.stringify({
-      model: c.model,
-      messages: [
-        { role: "system", content: req.system },
-        { role: "user", content: parts },
-      ],
-      response_format: { type: "json_schema", json_schema: { name: "propositions", strict: true, schema: req.schema } },
-    }),
-  }).catch(() => {
-    throw new AiError("Le fournisseur d'IA ne répond pas.");
-  });
-  if (!res.ok) throw new AiError(`Erreur du fournisseur d'IA (${res.status}).`);
-  const body = (await res.json()) as {
-    model?: string;
-    choices?: Array<{ finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
-  const choice = body.choices?.[0];
-  if (choice?.message?.refusal) throw new AiError("Le fournisseur d'IA a décliné la demande.");
-  if (choice?.finish_reason === "length") throw new AiError("Réponse de l'IA tronquée : réduisez le nombre de pièces.");
-  return {
-    json: parseJson(choice?.message?.content ?? ""),
-    model: body.model ?? c.model,
-    inputTokens: body.usage?.prompt_tokens ?? 0,
-    outputTokens: body.usage?.completion_tokens ?? 0,
-  };
+  // Sans image, le message part en texte simple : certaines API compatibles
+  // (DeepSeek, modèles hébergés) n'acceptent pas le contenu en plusieurs parties.
+  const userContent = parts.some((p) => p.type === "image_url")
+    ? parts
+    : parts.map((p) => (p.type === "text" ? p.text : "")).join("\n\n");
+
+  // Sortie JSON contrainte par le schéma quand l'API le permet ; sinon (DeepSeek
+  // et la plupart des API compatibles) mode « json_object », le schéma étant
+  // alors donné dans les consignes.
+  const strictFirst = c.provider !== "compatible_openai";
+  const attempts: Array<"json_schema" | "json_object"> = strictFirst ? ["json_schema", "json_object"] : ["json_object"];
+  let lastError: AiError | null = null;
+  for (const mode of attempts) {
+    for (let retry = 0; retry < 2; retry++) {
+      const system =
+        mode === "json_schema"
+          ? req.system
+          : `${req.system}\n\nRéponds UNIQUEMENT par un objet JSON valide (json), sans texte autour, conforme à ce schéma JSON :\n${JSON.stringify(req.schema)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: AbortSignal.timeout(req.timeoutMs),
+        body: JSON.stringify({
+          model: c.model,
+          // Plafond explicite pour les API compatibles (DeepSeek tronque sinon le JSON) ;
+          // OpenAI et Azure gardent leur valeur par défaut.
+          ...(c.provider === "compatible_openai" ? { max_tokens: 8000 } : {}),
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userContent },
+          ],
+          response_format:
+            mode === "json_schema"
+              ? { type: "json_schema", json_schema: { name: "propositions", strict: true, schema: req.schema } }
+              : { type: "json_object" },
+        }),
+      }).catch(() => {
+        throw new AiError("Le fournisseur d'IA ne répond pas.");
+      });
+      if (res.status === 401 || res.status === 403) throw new AiError("Clé d'API refusée par le fournisseur d'IA.");
+      if (res.status === 429) throw new AiError("Fournisseur d'IA saturé : réessayez dans une minute.");
+      if (res.status === 400 && mode === "json_schema") {
+        lastError = new AiError("Erreur du fournisseur d'IA (400).");
+        break; // l'API ne connaît pas json_schema : passage au mode json_object
+      }
+      if (!res.ok) throw new AiError(`Erreur du fournisseur d'IA (${res.status}).`);
+      const body = (await res.json()) as {
+        model?: string;
+        choices?: Array<{ finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      const choice = body.choices?.[0];
+      if (choice?.message?.refusal) throw new AiError("Le fournisseur d'IA a décliné la demande.");
+      if (choice?.finish_reason === "length") throw new AiError("Réponse de l'IA tronquée : réduisez le nombre de pièces.");
+      const content = (choice?.message?.content ?? "").trim();
+      if (!content) {
+        // DeepSeek peut renvoyer un contenu vide en mode JSON : une nouvelle tentative.
+        lastError = new AiError("Réponse de l'IA vide.");
+        continue;
+      }
+      return {
+        json: parseJson(content),
+        model: body.model ?? c.model,
+        inputTokens: body.usage?.prompt_tokens ?? 0,
+        outputTokens: body.usage?.completion_tokens ?? 0,
+      };
+    }
+  }
+  throw lastError ?? new AiError("Réponse de l'IA illisible.");
 }
 
 function parseJson(text: string): unknown {
+  const t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   try {
-    return JSON.parse(text);
+    return JSON.parse(t);
   } catch {
     throw new AiError("Réponse de l'IA illisible.");
   }

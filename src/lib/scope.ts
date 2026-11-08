@@ -39,15 +39,17 @@ export interface EntityNode {
   toolName: string | null;
   logoUrl: string | null;
   primaryColor: string | null;
+  riskTier?: string | null;
 }
 
-export const ENTITY_TYPES = ["GROUP", "BANK", "REGIONAL_BANK", "SUBSIDIARY_GROUP", "SUBSIDIARY"] as const;
+export const ENTITY_TYPES = ["GROUP", "BANK", "REGIONAL_BANK", "BUSINESS_CENTER", "SUBSIDIARY_GROUP", "SUBSIDIARY"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
 
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
   GROUP: "Groupe",
   BANK: "Banque",
   REGIONAL_BANK: "Banque régionale",
+  BUSINESS_CENTER: "Centre d'affaires",
   SUBSIDIARY_GROUP: "Groupe de filiales",
   SUBSIDIARY: "Filiale",
 };
@@ -64,6 +66,14 @@ export interface Perimeter {
   read: string[];
   /** Entités où l'on peut créer et modifier. */
   write: string[];
+  /**
+   * Portefeuille du chargé d'affaires (profil 1, paramétrable) : identifiants
+   * qui le désignent comme gestionnaire (code gestionnaire T24, identifiant
+   * de compte). Présent, il restreint EN PLUS de l'entité les clients et tout
+   * ce qui en dépend : clients dont il est gestionnaire, et clients pour
+   * lesquels il a ouvert un dossier. Absent : toute l'entité.
+   */
+  portfolio?: { owners: string[]; username: string } | null;
 }
 
 export const PERIMETER_ALL: Perimeter = { all: true, entityId: null, read: [], write: [] };
@@ -183,11 +193,21 @@ export async function loadTree(): Promise<EntityNode[]> {
     orderBy: [{ level: "asc" }, { name: "asc" }],
     select: {
       id: true, code: true, name: true, type: true, parentId: true, path: true, level: true,
-      country: true, currency: true, isActive: true, toolName: true, logoUrl: true, primaryColor: true,
+      country: true, currency: true, isActive: true, toolName: true, logoUrl: true, primaryColor: true, riskTier: true,
     },
   });
   treeCache = { tree, expires: Date.now() + TREE_TTL_MS };
   return tree;
+}
+
+/** Catégorie de délégation d'une entité : la sienne, sinon celle de l'entité mère la plus proche. */
+export function tierOf(tree: EntityNode[], entityId: string | null | undefined): string | null {
+  let cur = entityId ? tree.find((e) => e.id === entityId) : undefined;
+  while (cur) {
+    if (cur.riskTier) return cur.riskTier;
+    cur = cur.parentId ? tree.find((e) => e.id === cur!.parentId) : undefined;
+  }
+  return null;
 }
 
 /** À appeler après toute modification de l'arbre. */
@@ -205,17 +225,31 @@ export class OutOfScopeError extends Error {
   }
 }
 
-type Filter = (ids: string[]) => Record<string, unknown>;
+type Portfolio = Perimeter["portfolio"];
+type Filter = (ids: string[], portfolio?: Portfolio) => Record<string, unknown>;
 
-const byCounterparty: Filter = (ids) => ({ counterparty: { entityId: { in: ids } } });
-const byCase: Filter = (ids) => ({ ratingCase: { counterparty: { entityId: { in: ids } } } });
+/**
+ * Condition sur un client : entité du périmètre et, pour un portefeuille,
+ * gestionnaire parmi les identifiants de la personne ou dossier ouvert par elle.
+ */
+export function counterpartyWhere(ids: string[], portfolio?: Portfolio): Record<string, unknown> {
+  const base = { entityId: { in: ids } };
+  if (!portfolio) return base;
+  return {
+    ...base,
+    OR: [{ accountOfficer: { in: portfolio.owners } }, { ratingCases: { some: { createdBy: portfolio.username } } }],
+  };
+}
+
+const byCounterparty: Filter = (ids, pf) => ({ counterparty: counterpartyWhere(ids, pf) });
+const byCase: Filter = (ids, pf) => ({ ratingCase: { counterparty: counterpartyWhere(ids, pf) } });
 
 /** Modèles cloisonnés et chemin jusqu'à leur entité. */
 export const SCOPED_MODELS: Record<string, Filter> = {
-  Counterparty: (ids) => ({ entityId: { in: ids } }),
+  Counterparty: (ids, pf) => counterpartyWhere(ids, pf),
   RatingRun: byCounterparty,
   RatingCase: byCounterparty,
-  Override: (ids) => ({ ratingRun: { counterparty: { entityId: { in: ids } } } }),
+  Override: (ids, pf) => ({ ratingRun: { counterparty: counterpartyWhere(ids, pf) } }),
   CaseDocument: byCase,
   AiProposal: byCase,
   AuditEvent: (ids) => ({ entityId: { in: ids } }),
@@ -226,6 +260,11 @@ export const SCOPED_MODELS: Record<string, Filter> = {
   RenotationSchedule: (ids) => ({ entityId: { in: ids } }),
   RenotationBatch: (ids) => ({ entityId: { in: ids } }),
   RenotationItem: byCounterparty,
+  // Référentiel des bilans : ceux des clients du périmètre.
+  FinancialStatement: byCounterparty,
+  CommitteeDecision: byCounterparty,
+  CreditReport: byCounterparty,
+  CreditFacility: byCounterparty,
   // Souscriptions et événements : une filiale ne voit ni ne reçoit ceux d'une
   // autre (diagnostic S01) ; ceux du groupe entier (entité nulle) ne sont
   // visibles que du périmètre groupe.
@@ -277,23 +316,29 @@ function ref(data: Record<string, unknown>, field: string, relation: string): st
  * peut écrire. Une contrepartie sans entité reçoit celle de l'utilisateur.
  */
 async function checkCreate(model: string, data: Record<string, unknown>, p: Perimeter): Promise<void> {
+  // Client du périmètre d'écriture et, pour un portefeuille, de ce portefeuille.
   const writableCounterparty = async (id: string | null) => {
     if (!id) throw new OutOfScopeError("Client absent.");
-    const c = await basePrisma.counterparty.findUnique({ where: { id }, select: { entityId: true } });
-    if (!c || !canWrite(p, c.entityId)) throw new OutOfScopeError();
+    const c = await basePrisma.counterparty.findFirst({ where: { id, ...counterpartyWhere(p.write, p.portfolio) }, select: { id: true } });
+    if (!c) throw new OutOfScopeError();
   };
   const writableCase = async (id: string | null) => {
     if (!id) throw new OutOfScopeError("Dossier absent.");
-    const c = await basePrisma.ratingCase.findUnique({
-      where: { id },
-      select: { counterparty: { select: { entityId: true } } },
-    });
-    if (!c || !canWrite(p, c.counterparty.entityId)) throw new OutOfScopeError();
+    const c = await basePrisma.ratingCase.findFirst({ where: { id, counterparty: counterpartyWhere(p.write, p.portfolio) }, select: { id: true } });
+    if (!c) throw new OutOfScopeError();
   };
   switch (model) {
     case "Counterparty": {
       const target = ref(data, "entityId", "entity") ?? p.entityId;
       if (!target || !canWrite(p, target)) throw new OutOfScopeError("Entité hors de votre périmètre d'écriture.");
+      // Portefeuille : le client créé est le sien ; un client d'un autre
+      // gestionnaire (T24) se crée par son gestionnaire ou son directeur.
+      if (p.portfolio) {
+        const officer = data.accountOfficer;
+        if (officer === undefined || officer === null || officer === "") data.accountOfficer = p.portfolio.owners[0];
+        else if (typeof officer !== "string" || !p.portfolio.owners.includes(officer))
+          throw new OutOfScopeError(`Client géré par un autre chargé d'affaires (gestionnaire ${String(officer)}) : sa création revient à son gestionnaire ou au directeur du centre.`);
+      }
       const groupId = ref(data, "economicGroupId", "economicGroup");
       if (groupId) {
         const g = await basePrisma.economicGroup.findUnique({ where: { id: groupId }, select: { entityId: true } });
@@ -325,6 +370,10 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
       return;
     }
     case "RenotationItem":
+    case "FinancialStatement":
+    case "CommitteeDecision":
+    case "CreditReport":
+    case "CreditFacility":
       return writableCounterparty(ref(data, "counterpartyId", "counterparty"));
     case "WebhookDelivery": {
       const subId = ref(data, "subscriptionId", "subscription");
@@ -367,6 +416,11 @@ async function checkRelink(data: Record<string, unknown>, p: Perimeter): Promise
     if (!id) continue;
     const target = await entityOf[relation](id);
     if (target === undefined || !canWrite(p, target)) throw new OutOfScopeError();
+    // Portefeuille : le nouveau client de rattachement doit en faire partie.
+    if (relation === "counterparty" && p.portfolio) {
+      const ok = await basePrisma.counterparty.findFirst({ where: { id, ...counterpartyWhere(p.write, p.portfolio) }, select: { id: true } });
+      if (!ok) throw new OutOfScopeError("Client hors de votre portefeuille.");
+    }
   }
   const groupId = ref(data, "economicGroupId", "economicGroup");
   if (groupId) {
@@ -393,12 +447,18 @@ export function scopedPrisma(p: Perimeter): PrismaClient {
           }
           const a = { ...((args ?? {}) as Record<string, unknown>) };
           if (READS.has(operation)) {
-            a.where = restrict(a.where, filter(p.read));
+            a.where = restrict(a.where, filter(p.read, p.portfolio));
           } else if (UPDATES.has(operation)) {
-            a.where = restrict(a.where, filter(p.write));
+            a.where = restrict(a.where, filter(p.write, p.portfolio));
             const data = (operation === "upsert" ? a.update : a.data) as Record<string, unknown> | undefined;
             const target = data?.entityId;
             if (typeof target === "string" && !canWrite(p, target)) throw new OutOfScopeError();
+            // Portefeuille : un chargé d'affaires ne cède pas un client à un autre gestionnaire.
+            if (model === "Counterparty" && p.portfolio && data && "accountOfficer" in data) {
+              const officer = data.accountOfficer;
+              if (typeof officer !== "string" || !p.portfolio.owners.includes(officer))
+                throw new OutOfScopeError("Changement de gestionnaire réservé au directeur du centre (ou à T24).");
+            }
             // Rattachement à un autre parent (écriture imbriquée, connect) :
             // la nouvelle cible doit relever du périmètre d'écriture.
             if (operation !== "upsert" && relinks(data)) await checkRelink(data!, p);

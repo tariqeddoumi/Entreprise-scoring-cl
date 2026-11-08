@@ -19,6 +19,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:reset-seed": "tsx scripts/reset-seed.mts",
     "db:check": "tsx scripts/check-db.mts",
     "check:alignment": "tsx scripts/check-alignment.mts",
     "users:create": "tsx scripts/create-user.mts",

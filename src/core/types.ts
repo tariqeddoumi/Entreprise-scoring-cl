@@ -518,6 +518,23 @@ export interface FinancialBasis {
   indicators: Array<{ key: string; values: Array<number | null> }>;
   gridRatios: FinancialGridRatio[];
   controls: FinancialControl[];
+  /** Format de bilan appliqué (paramétrage). */
+  formatVersion?: string;
+  /** Libellés des indicateurs définis par le format. */
+  indicatorMeta?: Array<{ key: string; labelFr: string; unit: "MAD" | "%" | "x" | "j"; group: string }>;
+  /** Analyse du bilan au moment de la notation (information, sans effet sur la note). */
+  analysis?: {
+    situation: "SAINE" | "A_SURVEILLER" | "DEGRADEE" | "CRITIQUE" | null;
+    motifsFr: string[];
+    alerts: Array<{ key: string; labelFr: string; severity: "CRITIQUE" | "ALERTE"; referenceFr?: string; status: "DECLENCHEE" | "NON" | "NON_EVALUABLE" }>;
+    appraisals: Array<{
+      key: string;
+      levels: Array<"BON" | "MOYEN" | "MAUVAIS" | "CRITIQUE" | null>;
+      trend: "AMELIORATION" | "STABLE" | "DEGRADATION" | null;
+      change: number | null;
+      grid?: string;
+    }>;
+  };
 }
 
 export interface RatingInput {
@@ -561,6 +578,27 @@ export interface RatingInput {
   defaultTriggered?: boolean;
   /** Grade de défaut constaté (DEF1/DEF2/DEF3) ; DEF1 par défaut. */
   defaultGrade?: "DEF1" | "DEF2" | "DEF3";
+  /**
+   * Plafond issu des critères de classement BAM (créance sensible,
+   * pré-douteuse) : appliqué après le grade moteur, comme une exception non
+   * compensatoire (D-57). Un critère levé par un comité n'y figure plus.
+   */
+  regulatoryCap?: { maxGrade: string; family: string; codes: string[]; labelFr: string };
+  /**
+   * Critères de classement du dossier (cochés, levés), conservés dans
+   * l'instantané pour la fiche ; SANS effet sur le calcul au-delà du plafond
+   * ou du défaut transmis.
+   */
+  classificationBasis?: {
+    family: string | null;
+    effect: string | null;
+    items: Array<{ code: string; family: string; labelFr: string; article: string; state: "COCHE" | "LEVE"; by?: "BILAN" | "ANALYSTE"; date?: string; comment?: string }>;
+    lifts: Array<{ codes: string[]; committeeDate: string; reference: string; recordedBy: string; confirmedBy?: string | null }>;
+    /** Watch list en vigueur à la notation (D-58). */
+    watchlist?: { level: string; labelFr: string; cap: string; since: string };
+    appliedCap?: string;
+    capSource?: "BAM" | "WATCHLIST" | "CUMUL";
+  };
   asOfDate: string; // ISO date — date d'arrêté
 }
 

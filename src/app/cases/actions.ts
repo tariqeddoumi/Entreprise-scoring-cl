@@ -10,15 +10,15 @@ import {
   extractFinancials,
   generateProposals,
   importFinancialsTemplate,
-  type ExtractedFinancials,
-} from "@/lib/ai-assist";
+  type ExtractedFinancials, setDocumentKind } from "@/lib/ai-assist";
 import type { CaseDraft } from "@/lib/case-input";
 import { cancelCase, CaseError, createCase, decideCase, previewCase, reopenCase, saveDraft, submitCase } from "@/lib/cases";
 import type { FxConversion } from "@/lib/fx";
 import { decideOverride, OverrideError, requestOverride } from "@/lib/overrides";
 import { overrideDecisionSchema, overrideRequestSchema } from "@/lib/schemas";
 import { isOutOfScope } from "@/lib/scope";
-import { getDb, getSessionIdentity } from "@/lib/session";
+import { refreshAtOpening } from "@/lib/opening-refresh";
+import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 
 /**
  * Actions serveur du workflow des dossiers de notation.
@@ -50,10 +50,22 @@ export async function createCaseAction(_prev: ActionResult, fd: FormData): Promi
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   let id: string;
   try {
-    const created = await createCase(await getDb(), session.identity, {
-      counterpartyId: String(fd.get("counterpartyId") ?? ""),
+    const db = await getDb();
+    const counterpartyId = String(fd.get("counterpartyId") ?? "");
+    // Actualisation T24 avant la création : le dossier reprend l'engagement
+    // global du jour. Une panne ne bloque pas l'ouverture.
+    const openingRefresh = await refreshAtOpening(db, await getPerimeter(), session.identity, counterpartyId).catch((e) => {
+      console.error("[ouverture] actualisation T24", e instanceof Error ? e.message : e);
+      return null;
+    });
+    const created = await createCase(db, session.identity, {
+      openingRefresh,
+      counterpartyId,
       modelId: String(fd.get("modelId") ?? ""),
       asOfDate: String(fd.get("asOfDate") ?? ""),
+      purpose: String(fd.get("purpose") ?? "") || undefined,
+      creditType: String(fd.get("creditType") ?? "") || undefined,
+      exercise: fd.get("exercise") === "SUIVANT" ? "SUIVANT" : fd.get("exercise") === "CONSERVE" ? "CONSERVE" : undefined,
     });
     id = created.id;
   } catch (e) {
@@ -119,7 +131,9 @@ export async function decideCaseAction(_prev: ActionResult, fd: FormData): Promi
       ? "Validation finale : la notation devient la note du client."
       : outcome.status === "REJECTED"
         ? "Dossier rejeté."
-        : `Étape « ${outcome.stepFr} » validée. Étape suivante : ${outcome.nextStepFr}.`;
+        : outcome.opinion
+          ? `Avis ${outcome.opinion === "FAVORABLE" ? "favorable" : "défavorable"} enregistré (« ${outcome.stepFr} »).${outcome.nextStepFr ? ` En attente : ${outcome.nextStepFr}.` : ""}`
+          : `Étape « ${outcome.stepFr} » validée. Étape suivante : ${outcome.nextStepFr}.`;
   return { ok: true, okFr };
 }
 
@@ -156,17 +170,31 @@ export async function uploadDocumentAction(_prev: ActionResult, fd: FormData): P
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   const caseId = String(fd.get("caseId") ?? "");
   const files = fd.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  const kind = String(fd.get("kind") ?? "") || null;
   if (files.length === 0) return { ok: false, errorFr: "Choisissez au moins un fichier." };
   try {
     const db = await getDb();
     for (const f of files) {
-      await addDocument(db, session.identity, caseId, { name: f.name, type: f.type, bytes: new Uint8Array(await f.arrayBuffer()) });
+      await addDocument(db, session.identity, caseId, { name: f.name, type: f.type, bytes: new Uint8Array(await f.arrayBuffer()), kind });
     }
   } catch (e) {
     return failure(e);
   }
   revalidatePath(`/cases/${caseId}`);
   return { ok: true, okFr: files.length > 1 ? `${files.length} pièces ajoutées.` : "Pièce ajoutée." };
+}
+
+/** Type d'une pièce du dossier (pièces requises par motif). */
+export async function setDocumentKindAction(caseId: string, documentId: string, kind: string): Promise<ActionResult> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    await setDocumentKind(await getDb(), session.identity, documentId, kind || null);
+  } catch (e) {
+    return failure(e);
+  }
+  revalidatePath(`/cases/${caseId}`);
+  return { ok: true, okFr: "Type de la pièce enregistré." };
 }
 
 export async function generateProposalsAction(

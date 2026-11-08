@@ -2,6 +2,7 @@ import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
 import { OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
+import { watchlistedIds } from "@/lib/committee";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
 import { transposeGrade } from "@/core/grades";
 import { effectiveScale } from "@/lib/rating-scale";
@@ -10,6 +11,9 @@ import { toGradeScaleConfig } from "@/reference/rating-scale";
 import { getPerimeter, getSessionIdentity, requireSession } from "@/lib/session";
 import { CounterpartiesTable, type CounterpartyRow } from "./CounterpartiesTable";
 import { NewCounterpartyForm, type WritableEntity } from "./NewCounterpartyForm";
+import { t24Config } from "@/lib/core-banking";
+import { loadCommercialSegments } from "@/lib/financial-statements";
+import { DEFAULT_COMMERCIAL_SEGMENTS } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +39,9 @@ export default async function CounterpartiesPage() {
             id: true,
             name: true,
             ice: true,
+            coreBankingId: true,
+            dataSource: true,
+            accountOfficer: true,
             segment: true,
             sectorCode: true,
             entityId: true,
@@ -47,6 +54,7 @@ export default async function CounterpartiesPage() {
       const ids = rows.map((r) => r.id);
       const lastRun = new Map<string, CounterpartyRow["ratingRuns"]>();
       const openCase = new Map<string, string>();
+      let wl = new Set<string>();
       try {
         const [runs, cases] = await Promise.all([
           // Note courante : la dernière notation qui fait foi (validée, ou
@@ -73,6 +81,7 @@ export default async function CounterpartiesPage() {
           }
         }
         for (const c of cases) openCase.set(c.counterpartyId, c.status);
+        wl = await watchlistedIds(db, ids);
       } catch (e) {
         console.error("[clients] lecture des notations impossible :", e instanceof Error ? e.message : e);
       }
@@ -81,6 +90,9 @@ export default async function CounterpartiesPage() {
         id: r.id,
         name: r.name,
         ice: r.ice,
+        coreBankingId: r.coreBankingId,
+        dataSource: r.dataSource,
+        accountOfficer: r.accountOfficer,
         segment: r.segment,
         sectorCode: r.sectorCode,
         entityCode: code.get(r.entityId) ?? "—",
@@ -88,6 +100,7 @@ export default async function CounterpartiesPage() {
         isActive: r.isActive,
         canRate: canRateHere && r.isActive && canWrite(perimeter, r.entityId),
         openCase: openCase.get(r.id) ?? null,
+        watchlist: wl.has(r.id),
         ratingRuns: lastRun.get(r.id) ?? [],
       }));
       const writable: WritableEntity[] = sortTree(writableEntities(tree, perimeter)).map((e) => ({
@@ -102,6 +115,9 @@ export default async function CounterpartiesPage() {
     { items: [] as CounterpartyRow[], writable: [] as WritableEntity[] }
   );
   const ai = await aiStatus();
+  const t24 = await t24Config();
+  const portfolio = perimeter.portfolio ?? null;
+  const { data: segments } = await safeQuery((db) => loadCommercialSegments(db), DEFAULT_COMMERCIAL_SEGMENTS);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -112,6 +128,13 @@ export default async function CounterpartiesPage() {
           client ou le supprimer.
         </p>
       </div>
+
+      {portfolio && (
+        <div className="card" role="status" style={{ padding: "10px 14px", fontSize: 13, borderLeft: "4px solid var(--brand)" }}>
+          <strong>Votre portefeuille</strong> : clients dont vous êtes gestionnaire ({portfolio.owners.join(", ")}) et clients pour lesquels vous avez
+          ouvert un dossier. Un client d&apos;un autre gestionnaire se voit par son gestionnaire ou par le directeur du centre.
+        </div>
+      )}
 
       {!dbAvailable && (
         <div className="card" style={{ padding: 14 }}>
@@ -127,6 +150,9 @@ export default async function CounterpartiesPage() {
           entities={data.writable}
           defaultEntityId={identity.entityId ?? null}
           aiUsable={ai.enabled && !ai.missing}
+          t24Enabled={t24.enabled}
+          segments={segments.filter((x) => x.active)}
+          ownPortfolio={!!portfolio}
         />
       )}
 

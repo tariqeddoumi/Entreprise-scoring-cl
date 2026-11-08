@@ -46,6 +46,8 @@ export async function createCounterparty(
           entityId,
           country: input.country ?? entity.country ?? null,
           currency: input.currency ?? entityCurrency(tree, entityId),
+          // Création hors T24 : saisie, à rattacher au code client T24 (src/lib/core-banking.ts).
+          dataSource: "SAISIE",
         },
       });
       await auditWithin(tx, {
@@ -62,7 +64,7 @@ export async function createCounterparty(
     });
   } catch (e) {
     if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-      throw new CounterpartyError(409, "Conflit : cet ICE est déjà enregistré dans cette entité.");
+      throw new CounterpartyError(409, "Conflit : cet ICE ou ce code client T24 est déjà enregistré dans cette entité.");
     }
     throw e;
   }
@@ -89,6 +91,9 @@ export async function updateCounterparty(
   const existing = await db.counterparty.findUnique({ where: { id } });
   if (!existing) throw new CounterpartyError(404, "Client inconnu.");
   if (!canWrite(perimeter, existing.entityId)) throw new OutOfScopeError("Client hors de votre périmètre d'écriture.");
+  if (existing.dataSource === "T24" && patch.coreBankingId !== undefined && patch.coreBankingId !== existing.coreBankingId) {
+    throw new CounterpartyError(409, "Fiche rapatriée de T24 : son code client ne se modifie pas à la main.");
+  }
   if (patch.entityId && patch.entityId !== existing.entityId) {
     const tree = await loadTree();
     const target = tree.find((e) => e.id === patch.entityId);
@@ -112,7 +117,7 @@ export async function updateCounterparty(
     });
   } catch (e) {
     if (e && typeof e === "object" && "code" in e && (e as { code: string }).code === "P2002") {
-      throw new CounterpartyError(409, "Conflit : cet ICE est déjà enregistré dans cette entité.");
+      throw new CounterpartyError(409, "Conflit : cet ICE ou ce code client T24 est déjà enregistré dans cette entité.");
     }
     throw e;
   }

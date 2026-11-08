@@ -48,6 +48,7 @@ export default async function UsersAdminPage() {
             entityId: u.entityId,
             writeScope: u.writeScope,
             jobFunction: u.jobFunction ?? null,
+            accountOfficerCode: u.accountOfficerCode ?? null,
             id: u.id,
             username: u.username,
             displayName: u.displayName,

@@ -5,6 +5,7 @@ import { AiError } from "@/lib/ai";
 import { extractCounterparty, type CounterpartyExtraction } from "@/lib/ai-assist";
 import { CounterpartyError, createCounterparty, deleteCounterparty, updateCounterparty } from "@/lib/counterparties";
 import { isOutOfScope } from "@/lib/scope";
+import { checkMinimalEntry } from "@/reference/core-banking";
 import { counterpartyPatchSchema, counterpartySchema } from "@/lib/schemas";
 import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 
@@ -39,6 +40,10 @@ export async function createCounterpartyAction(
         .join(" ; "),
     };
   }
+
+  // Écran : saisie minimale exigée (le rapatriement T24 a son propre chemin).
+  const missing = checkMinimalEntry(parsed.data);
+  if (missing.length) return { ok: false, errorFr: `Saisie minimale incomplète : ${missing.join(" ")}` };
 
   try {
     const created = await createCounterparty(

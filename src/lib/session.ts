@@ -5,6 +5,7 @@ import type { PrismaClient } from "@/generated/prisma";
 import { resolveSession, type SessionInfo } from "./accounts";
 import { hasRole, type Identity, type Role } from "./auth";
 import { perimeterFor, PERIMETER_NONE, scopedPrisma, type Perimeter } from "./scope";
+import { portfolioFor } from "./portfolio-scope";
 
 /**
  * Session de l'interface web.
@@ -84,11 +85,15 @@ export const getPerimeter = cache(async (): Promise<Perimeter> => {
   const session = await getCurrentSession();
   if (!session) return PERIMETER_NONE;
   try {
-    return await perimeterFor({
+    const perimeter = await perimeterFor({
       entityId: session.identity.entityId ?? null,
       writeScope: session.identity.writeScope,
       role: session.identity.role,
     });
+    // Chargé d'affaires : restreint à son portefeuille (paramétrable).
+    if (perimeter.all) return perimeter;
+    const portfolio = await portfolioFor(session.identity);
+    return portfolio ? { ...perimeter, portfolio } : perimeter;
   } catch {
     return PERIMETER_NONE;
   }

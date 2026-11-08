@@ -21,6 +21,7 @@ import { isOfficialRun } from "@/lib/cases";
 import { effectiveGrade } from "@/lib/overrides";
 import { settingInt } from "@/lib/settings";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
+import { ClassificationBasisPanel, readClassificationBasis } from "@/app/scoring/ClassificationBasisPanel";
 import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
 export const dynamic = "force-dynamic";
@@ -138,6 +139,26 @@ export default async function RatingRunPage({
         </div>
       )}
 
+      {run.origin === "REPRISE" &&
+        (() => {
+          let src: { noteOrigine?: string | null; modeleOrigine?: string | null; commentaire?: string | null; fichier?: string | null } = {};
+          try {
+            src = JSON.parse(run.inputSnapshot);
+          } catch {
+            /* instantané illisible */
+          }
+          return (
+            <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--brand)", fontSize: 13 }}>
+              <strong>Note reprise du stock</strong> : note {run.finalGrade} validée le {run.createdAt.toISOString().slice(0, 10)}, importée par{" "}
+              {run.requestedBy}
+              {src.fichier ? ` (classeur « ${src.fichier} »)` : ""}. Note d&apos;origine : {src.noteOrigine ?? "—"} · modèle d&apos;origine :{" "}
+              {src.modeleOrigine ?? "—"}
+              {src.commentaire ? ` · ${src.commentaire}` : ""}. Elle fait foi pour l&apos;historique (surveillance, migrations) ; aucun détail de grille
+              n&apos;est disponible.
+            </div>
+          );
+        })()}
+
       {run.origin === "BATCH" && (
         <div className="card" role="status" style={{ padding: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", borderLeft: "4px solid var(--warn)" }}>
           <span style={{ fontSize: 13 }}>
@@ -222,6 +243,11 @@ export default async function RatingRunPage({
           })()}
         </section>
       )}
+
+      {(() => {
+        const cb = readClassificationBasis(run.inputSnapshot);
+        return cb ? <ClassificationBasisPanel basis={cb} /> : null;
+      })()}
 
       {financialBasis ? (
         <FinancialBasisPanel basis={financialBasis} model={model} />

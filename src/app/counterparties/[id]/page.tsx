@@ -5,6 +5,14 @@ import { readResultSnapshot } from "@/lib/snapshot-compat";
 import { isOfficialRun } from "@/lib/cases";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
 import { safeQuery } from "@/lib/safe-db";
+import { loadWatchlistLevels, watchlistState, type WatchlistState } from "@/lib/committee";
+import { DEFAULT_WATCHLIST_LEVELS } from "@/reference/classification";
+import { WatchlistPanel } from "@/app/committee/CommitteePanels";
+import { hasPermission, holdersOf } from "@/reference/workflow";
+import { loadCircuit } from "@/lib/workflow";
+import { settingBool } from "@/lib/settings";
+import { lastRatingInfo, loadCreditTypes, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_CREDIT_TYPES, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 import { hasRole } from "@/lib/auth";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
 import { getPerimeter, requireSession } from "@/lib/session";
@@ -17,6 +25,16 @@ import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 import { NewCaseForm } from "@/app/scoring/NewCaseForm";
 import { ClientActions } from "../ClientActions";
 import { NewCounterpartyForm, type WritableEntity } from "../NewCounterpartyForm";
+import { CreditReportPanel, LegalProfilePanel, T24Panel } from "./ExternalPanels";
+import { FacilitiesPanel } from "./FacilitiesPanel";
+import { facilityStatus, type FacilityStatus } from "@/lib/facilities";
+import { settingText } from "@/lib/settings";
+import { parseT24Data, t24Config } from "@/lib/core-banking";
+import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
+import { loadCommercialSegments } from "@/lib/financial-statements";
+import { aiStatus } from "@/lib/ai";
+import { DEFAULT_COMMERCIAL_SEGMENTS } from "@/reference/case-purposes";
+import type { DataSource } from "@/reference/core-banking";
 
 export const dynamic = "force-dynamic";
 
@@ -110,7 +128,40 @@ export default async function CounterpartyPage({
   const canRate = canEdit && counterparty.isActive;
   const hasHistory = runs.length + cases.length + renotations > 0;
   const today = new Date().toISOString().slice(0, 10);
+  const { data: openInfo } = await safeQuery(
+    async (db) => ({ last: (await lastRatingInfo(db, [counterparty.id])).get(counterparty.id), purposes: await loadPurposes(db), creditTypes: await loadCreditTypes(db) }),
+    { last: undefined, purposes: DEFAULT_PURPOSES, creditTypes: DEFAULT_CREDIT_TYPES }
+  );
+  const wlInfo = {
+    state: (await safeQuery((db) => watchlistState(db, counterparty.id), { inWatchlist: false, since: null, level: null, levelSince: null, lastExit: null, history: [] } as WatchlistState)).data,
+    circuit: (await loadCircuit()).circuit,
+    levels: (await safeQuery((db) => loadWatchlistLevels(db), DEFAULT_WATCHLIST_LEVELS)).data,
+    double: await settingBool("COMMITTEE_WL_DOUBLE_VALIDATION"),
+  };
   const opt = (v: string | null) => v ?? "";
+  // Sources externes : T24, crédit bureau, fiche juridique (InfoRisque).
+  const t24 = await t24Config();
+  const bureau = await creditReportSettings();
+  const ai = await aiStatus();
+  const aiUsable = ai.enabled && !ai.missing;
+  const { data: ext } = await safeQuery(
+    async (db) => {
+      const report = await latestCreditReport(db, counterparty.id);
+      return {
+        report,
+        legal: await legalProfileStatus(db, counterparty),
+        segments: await loadCommercialSegments(db),
+        facilities: await facilityStatus(db, counterparty.id, { bureauOwnOutstanding: report?.analysis.totals.ownOutstanding ?? null }),
+      };
+    },
+    {
+      report: null as Awaited<ReturnType<typeof latestCreditReport>>,
+      legal: null as Awaited<ReturnType<typeof legalProfileStatus>>,
+      segments: DEFAULT_COMMERCIAL_SEGMENTS,
+      facilities: null as FacilityStatus | null,
+    }
+  );
+  const t24FacilitiesReady = t24.enabled && !!counterparty.coreBankingId && !!(await settingText("T24_FACILITIES_PATH"));
   // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
   const master = toGradeScaleConfig(await effectiveScale());
   const equivalentOf = (grade: string | null, rawScore: unknown) => {
@@ -206,8 +257,14 @@ export default async function CounterpartyPage({
                   city: opt(counterparty.city),
                   country: opt(counterparty.country),
                   currency: counterparty.currency,
+                  commercialSegment: opt(counterparty.commercialSegment),
+                  coreBankingId: opt(counterparty.coreBankingId),
+                  accountOfficer: opt(counterparty.accountOfficer),
                 },
               }}
+              segments={ext.segments.filter((x) => x.active)}
+              fromT24={counterparty.dataSource === "T24"}
+              ownPortfolio={!!perimeter.portfolio}
             />
           )}
           {canDelete && (
@@ -221,12 +278,81 @@ export default async function CounterpartyPage({
         </section>
       )}
 
+      <T24Panel
+        counterpartyId={counterparty.id}
+        source={(counterparty.dataSource as DataSource | null) ?? null}
+        code={counterparty.coreBankingId}
+        syncedAt={counterparty.coreBankingSyncedAt?.toISOString() ?? null}
+        data={parseT24Data(counterparty.coreBankingData)}
+        commercialSegment={counterparty.commercialSegment}
+        segmentLabel={ext.segments.find((x) => x.code === counterparty.commercialSegment)?.labelFr ?? null}
+        accountOfficer={counterparty.accountOfficer}
+        modelSegment={counterparty.segment}
+        t24Enabled={t24.enabled}
+        canEdit={canEdit}
+      />
+
+      {ext.facilities && (
+        <FacilitiesPanel
+          counterpartyId={counterparty.id}
+          lines={ext.facilities.lines}
+          totals={ext.facilities.totals}
+          findings={ext.facilities.findings}
+          signals={ext.facilities.signals}
+          positionDate={ext.facilities.positionDate}
+          settings={ext.facilities.settings}
+          types={ext.facilities.types}
+          currency={counterparty.currency}
+          today={today}
+          canEdit={canEdit}
+          t24Ready={t24FacilitiesReady}
+        />
+      )}
+
+      <CreditReportPanel
+        counterpartyId={counterparty.id}
+        report={ext.report}
+        apiEnabled={bureau.apiEnabled}
+        provider={bureau.provider}
+        maxAgeDays={bureau.maxAgeDays}
+        today={today}
+        canEdit={canEdit}
+        aiUsable={aiUsable}
+      />
+
+      <LegalProfilePanel
+        counterpartyId={counterparty.id}
+        profile={ext.legal?.profile ?? null}
+        findings={ext.legal?.analysis.findings ?? []}
+        signals={ext.legal?.analysis.signals ?? []}
+        today={today}
+        canEdit={canEdit}
+        aiUsable={aiUsable}
+      />
+
+      <WatchlistPanel
+        counterpartyId={counterparty.id}
+        today={today}
+        inWatchlist={wlInfo.state.inWatchlist}
+        since={wlInfo.state.since}
+        level={wlInfo.state.level}
+        levelSince={wlInfo.state.levelSince}
+        levels={wlInfo.levels.filter((l) => l.active)}
+        history={wlInfo.state.history}
+        canRecord={writableHere && hasPermission(wlInfo.circuit, identity.jobFunction, "DECIDER_WL")}
+        canConfirm={writableHere && hasPermission(wlInfo.circuit, identity.jobFunction, "CONFIRMER_WL")}
+        holdersFr={holdersOf(wlInfo.circuit, "DECIDER_WL").map((f) => f.labelFr).join(", ") || "aucun profil"}
+        doubleValidation={wlInfo.double}
+      />
+
       {canRate && (
         <div id="noter">
         <NewCaseForm
           models={listModels().map((m) => ({ modelId: m.modelId, label: `${m.labelFr} · v${m.version}` }))}
           defaultModelId="CORP_STD_V1"
-          counterparties={[{ id: counterparty.id, name: counterparty.name, currency: counterparty.currency, entityCode: entity?.code ?? "—" }]}
+          counterparties={[{ id: counterparty.id, name: counterparty.name, currency: counterparty.currency, entityCode: entity?.code ?? "—", ...(openInfo.last ? { last: openInfo.last } : {}) }]}
+          purposes={openInfo.purposes.filter((p) => p.active)}
+          creditTypes={openInfo.creditTypes.filter((t) => t.active)}
           today={today}
           canRate
           fixedCounterpartyId={counterparty.id}
@@ -387,6 +513,12 @@ export default async function CounterpartyPage({
                       <span className="muted" style={{ fontSize: 11 }}>
                         {" "}
                         {r.ratingCase.status === "REJECTED" ? "(rejetée)" : "(proposée, non validée)"}
+                      </span>
+                    )}
+                    {r.origin === "REPRISE" && (
+                      <span className="muted" style={{ fontSize: 11 }} title="Note de l'existant, importée (reprise du stock)">
+                        {" "}
+                        (reprise du stock)
                       </span>
                     )}
                     {r.origin === "BATCH" && (

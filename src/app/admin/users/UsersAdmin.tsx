@@ -24,6 +24,7 @@ interface UserRow {
   entityId: string | null;
   writeScope: string;
   jobFunction: string | null;
+  accountOfficerCode?: string | null;
   id: string;
   username: string;
   displayName: string;
@@ -239,6 +240,12 @@ export function UsersAdmin({
             </div>
             <FunctionSelect functions={functions} />
           </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+              Code gestionnaire T24 (chargé d&apos;affaires)
+            </div>
+            <input name="accountOfficerCode" maxLength={40} placeholder="ex. CA0107" style={{ minWidth: 140 }} />
+          </label>
           <button
             type="submit"
             disabled={pending}
@@ -329,12 +336,23 @@ export function UsersAdmin({
                     </td>
                     <td>
                       {self ? (
-                        <span style={{ fontSize: 13 }}>{functions.find((f) => f.code === u.jobFunction)?.labelFr ?? u.jobFunction ?? "—"}</span>
+                        <span style={{ fontSize: 13 }}>
+                          {functions.find((f) => f.code === u.jobFunction)?.labelFr ?? u.jobFunction ?? "—"}
+                          {u.accountOfficerCode ? ` · gestionnaire ${u.accountOfficerCode}` : ""}
+                        </span>
                       ) : (
                         <form action={formAction} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           <input type="hidden" name="op" value="function" />
                           <input type="hidden" name="userId" value={u.id} />
                           <FunctionSelect functions={functions} defaultValue={u.jobFunction} ariaLabel={`Fonction de ${u.displayName}`} />
+                          <input
+                            name="accountOfficerCode"
+                            defaultValue={u.accountOfficerCode ?? ""}
+                            maxLength={40}
+                            placeholder="Code gestionnaire T24"
+                            aria-label={`Code gestionnaire T24 de ${u.displayName}`}
+                            style={{ width: 150 }}
+                          />
                           <button type="submit" disabled={pending} style={smallButton}>
                             Appliquer
                           </button>

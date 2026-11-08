@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
+import { integrationStates } from "@/lib/integrations";
+import { prisma } from "@/lib/prisma";
 import { loadParamVersions } from "@/lib/model-params";
 import { effectiveScale, today } from "@/lib/rating-scale";
+import { effectiveFormat } from "@/lib/statement-format";
 import { safeQuery } from "@/lib/safe-db";
 import { getPerimeter, requireSession } from "@/lib/session";
 
@@ -24,8 +27,13 @@ export default async function AdminHome() {
     { users: 0, entities: 0, currencies: 0, settings: 0 }
   );
   const ai = await aiStatus();
+  const integrations = await integrationStates(prisma).catch(() => [] as Awaited<ReturnType<typeof integrationStates>>);
   const day = today();
-  const [scale, paramVersions] = await Promise.all([effectiveScale(day, { fresh: true }), loadParamVersions({ fresh: true })]);
+  const [scale, paramVersions, format] = await Promise.all([
+    effectiveScale(day, { fresh: true }),
+    loadParamVersions({ fresh: true }),
+    effectiveFormat(day, { fresh: true }),
+  ]);
   const inForce = new Set(paramVersions.filter((v) => v.effectiveFrom <= day).map((v) => v.modelId)).size;
   const upcoming = paramVersions.filter((v) => v.effectiveFrom > day).length;
   const cards = [
@@ -45,10 +53,28 @@ export default async function AdminHome() {
       text: "Bornes et libellés des classes 1 à 10, versions datées ; défaut hors échelle.",
     },
     {
+      href: "/admin/bilan",
+      title: "Format du bilan",
+      value: format.version,
+      text: "Postes chargés (complet, agrégé, notation seulement), postes propres à la banque, indicateurs par formule, seuils d'appréciation et alertes.",
+    },
+    {
       href: "/admin/settings",
       title: "Paramétrage",
       value: ai.enabled ? (ai.missing ? "IA activée, non configurée" : "IA activée") : "IA désactivée",
-      text: "Circuit de validation, délégation par montant, dérogations, pièces, intelligence artificielle.",
+      text: "Circuit de validation, délégation par montant, dérogations, pièces, intelligence artificielle, référentiels externes (T24, crédit bureau).",
+    },
+    {
+      href: "/admin/raccordements",
+      title: "Raccordements",
+      value: `${integrations.filter((i) => i.enabled).length} API activée(s) sur ${integrations.length}`,
+      text: "T24, crédit bureau, IA : désactivés au démarrage, test de connexion sans enregistrement, activation après un test réussi.",
+    },
+    {
+      href: "/admin/reprise",
+      title: "Reprise du stock",
+      value: "Import Excel",
+      text: "Clients, notes historiques, bilans et historique de watch list de l'existant : contrôle à blanc ligne par ligne, puis import journalisé, sans écrasement.",
     },
   ];
   return (

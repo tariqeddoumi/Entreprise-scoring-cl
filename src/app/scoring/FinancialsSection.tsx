@@ -2,23 +2,21 @@
 
 import { useMemo, useState } from "react";
 import type { ModelConfig } from "@/core/types";
-import {
-  POSTES,
-  SECTION_LABELS,
-  STATEMENT_MODEL_LABELS,
-  type PosteSection,
-  type StatementModel,
-} from "@/financials/chart";
+import { SECTION_LABELS, STATEMENT_MODEL_LABELS, type PosteSection, type StatementModel } from "@/financials/chart";
 import {
   emptyYear,
   hasFinancials,
+  yearHasData,
   INDICATOR_BY_KEY,
   INDICATOR_GROUP_LABELS,
-  INDICATORS,
+  indicatorCatalog,
   MAX_FISCAL_YEARS,
   type FinancialsDraft,
   type FinancialYearDraft,
+  type IndicatorMeta,
 } from "@/financials/compute";
+import { DEFAULT_FORMAT, formatPostes, type FormatPoste, type StatementFormat } from "@/financials/statement-format";
+import { FinancialAnalysisPanel } from "./FinancialAnalysisPanel";
 import { draftFinancials, type CaseDraft } from "@/lib/case-input";
 import { formatAmount, formatIndicator } from "@/financials/format";
 import { extractFinancialsAction, importFinancialsAction } from "@/app/cases/actions";
@@ -40,6 +38,8 @@ interface Props {
   caseId?: string;
   documents?: BalanceSheetDocument[];
   aiUsable?: boolean;
+  /** Format de bilan en vigueur (postes à charger, analyse). */
+  format?: StatementFormat;
 }
 
 const YEAR_LABELS = ["N", "N−1", "N−2"];
@@ -52,13 +52,13 @@ const CONTROL_LABELS = { OK: "Conforme", ALERTE: "À vérifier", KO: "Bloquant" 
  * Bilan et CPC du dossier : chargement (IA, gabarit Excel, saisie), contrôles,
  * ratios de la grille calculés et corrigeables avec motif, indicateurs.
  */
-export function FinancialsSection({ model, draft, onChange, readOnly = false, currency, caseId, documents = [], aiUsable = false }: Props) {
+export function FinancialsSection({ model, draft, onChange, readOnly = false, currency, caseId, documents = [], aiUsable = false, format = DEFAULT_FORMAT }: Props) {
   const f = draft.financials;
-  const fin = useMemo(() => draftFinancials(draft, model), [draft, model]);
+  const fin = useMemo(() => draftFinancials(draft, model, format), [draft, model, format]);
+  const metas = useMemo(() => indicatorCatalog(format), [format]);
   const [busy, setBusy] = useState<null | "ai" | "excel">(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string; summary?: string } | null>(null);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
-  const [showAll, setShowAll] = useState(false);
   const editable = !readOnly && !!onChange;
   const filled = hasFinancials(f);
 
@@ -114,14 +114,14 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
 
   const years = f.years;
   const sections = useMemo(() => {
-    const out: Array<{ section: PosteSection; postes: typeof POSTES }> = [];
-    for (const p of POSTES) {
+    const out: Array<{ section: PosteSection; postes: FormatPoste[] }> = [];
+    for (const p of formatPostes(format)) {
       const last = out[out.length - 1];
       if (last && last.section === p.section) last.postes.push(p);
       else out.push({ section: p.section, postes: [p] });
     }
     return out;
-  }, []);
+  }, [format]);
   const readableDocs = documents.filter((d) => /pdf|image|sheet|text|csv/.test(d.mimeType));
   const ko = fin.controls.filter((c) => c.status === "KO").length;
   const alerts = fin.controls.filter((c) => c.status === "ALERTE").length;
@@ -136,6 +136,19 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
           ratio avec un motif. Exercices N et N−1 exigés, N−2 facultatif. Montants en {currency}.
         </p>
       </div>
+
+      {draft.reprise && draft.reprise.exercise === "SUIVANT" && !yearHasData(years[0]) && (
+        <div role="note" style={{ fontSize: 13, borderLeft: "4px solid var(--bcp-orange)", background: "var(--surface-2)", padding: "8px 10px", borderRadius: 4 }}>
+          <strong>Bilan {draft.reprise.toLoad ?? years[0]?.fiscalYear ?? "N"} à charger.</strong> Les exercices {draft.reprise.carriedYears.join(" et ")} sont repris
+          de la dernière note validée en N−1{draft.reprise.carriedYears.length > 1 ? " et N−2" : ""} : seul le nouvel exercice N est à charger
+          (lecture du PDF, gabarit Excel ou saisie dans la colonne « Exercice N »).
+        </div>
+      )}
+      {draft.reprise && draft.reprise.exercise === "CONSERVE" && filled && (
+        <p className="muted" style={{ fontSize: 12 }}>
+          Bilan repris de la dernière note validée (même exercice) : rien à recharger, vérifiez seulement qu&apos;il est toujours le dernier arrêté.
+        </p>
+      )}
 
       {editable && caseId && (
         <div className="balance-tools" style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
@@ -193,6 +206,20 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
         <div role={message.ok ? "status" : "alert"} style={{ fontSize: 12, color: message.ok ? "var(--text)" : "var(--bad)" }}>
           {message.text}
           {message.summary && <p className="muted" style={{ marginTop: 4 }}>{message.summary}</p>}
+        </div>
+      )}
+
+      {filled && (
+        <div className="card" style={{ padding: 12, boxShadow: "none", display: "grid", gap: 8, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <h3 style={{ fontWeight: 600, fontSize: 14 }}>Analyse du bilan</h3>
+          <FinancialAnalysisPanel
+            analysis={fin.analysis}
+            indicators={fin.indicators}
+            years={years.map((y, i) => y.fiscalYear || YEAR_LABELS[i])}
+            metas={metas}
+            model={model}
+            formatVersion={fin.formatVersion}
+          />
         </div>
       )}
 
@@ -375,20 +402,6 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
         </div>
       )}
 
-      {filled && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-            <h3 style={{ fontWeight: 600, fontSize: 14 }}>Indicateurs financiers</h3>
-            <button type="button" className="btn-ghost" style={{ fontSize: 12, padding: "2px 8px" }} onClick={() => setShowAll((x) => !x)}>
-              {showAll ? "Masquer le détail" : "Afficher tous les indicateurs"}
-            </button>
-          </div>
-          <IndicatorTable
-            rows={fin.indicators.filter((r) => showAll || ["CA", "EBE", "RESULTAT_NET", "DETTE_NETTE", "AUTONOMIE_FINANCIERE", "MARGE_EBE", "BFR_JOURS"].includes(r.key))}
-            years={years.map((y, i) => y.fiscalYear || YEAR_LABELS[i])}
-          />
-        </div>
-      )}
     </section>
   );
 }
@@ -402,7 +415,7 @@ function SectionRows({
   onValue,
 }: {
   label: string;
-  postes: typeof POSTES;
+  postes: FormatPoste[];
   years: FinancialYearDraft[];
   computed: Array<Record<string, number | undefined>>;
   editable: boolean;
@@ -415,11 +428,14 @@ function SectionRows({
       </tr>
       {postes.map((p) => (
         <tr key={p.key}>
-          <td style={{ fontWeight: p.kind === "TOTAL" ? 600 : 400, paddingLeft: p.kind === "DETAIL" ? 24 : undefined }} title={p.hintFr}>
+          <td style={{ fontWeight: p.kind === "TOTAL" ? 600 : 400, paddingLeft: p.kind === "DETAIL" || p.optionalDetail ? 24 : undefined }} title={p.hintFr}>
             {p.labelFr}
+            {p.kind === "TOTAL" && p.input ? <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}> · à saisir tel qu&apos;au bilan</span> : null}
+            {p.optionalDetail ? <span className="muted" style={{ fontSize: 11 }}> · détail facultatif</span> : null}
+            {p.extra ? <span className="muted" style={{ fontSize: 11 }}> · poste de la banque</span> : null}
           </td>
           {years.map((y, i) => {
-            if (p.kind === "TOTAL") {
+            if (!p.input) {
               return (
                 <td key={i} style={{ textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" }}>
                   {formatAmount(computed[i]?.[p.key])}
@@ -451,7 +467,15 @@ function SectionRows({
   );
 }
 
-export function IndicatorTable({ rows, years }: { rows: Array<{ key: string; values: Array<number | null>; notes?: Array<string | undefined> }>; years: string[] }) {
+export function IndicatorTable({
+  rows,
+  years,
+  metas = indicatorCatalog(),
+}: {
+  rows: Array<{ key: string; values: Array<number | null>; notes?: Array<string | undefined> }>;
+  years: string[];
+  metas?: IndicatorMeta[];
+}) {
   const groups = Object.keys(INDICATOR_GROUP_LABELS) as Array<keyof typeof INDICATOR_GROUP_LABELS>;
   return (
     <div className="table-scroll" style={{ overflowX: "auto" }}>
@@ -466,9 +490,10 @@ export function IndicatorTable({ rows, years }: { rows: Array<{ key: string; val
         </thead>
         <tbody>
           {groups.map((g) => {
-            const inGroup = INDICATORS.filter((d) => d.group === g)
+            const inGroup = metas
+              .filter((d) => d.group === g)
               .map((d) => ({ d, r: rows.find((r) => r.key === d.key) }))
-              .filter((x): x is { d: (typeof INDICATORS)[number]; r: (typeof rows)[number] } => !!x.r);
+              .filter((x): x is { d: IndicatorMeta; r: (typeof rows)[number] } => !!x.r);
             if (inGroup.length === 0) return null;
             return [
               <tr key={g}>

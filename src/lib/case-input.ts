@@ -17,6 +17,17 @@ import {
   type FinancialComputation,
   type FinancialsDraft,
 } from "@/financials/compute";
+import type { StatementFormat } from "@/financials/statement-format";
+import {
+  computeClassification,
+  DEFAULT_CLASSIFICATION,
+  FAMILY_LABELS,
+  type ClassificationResult,
+  type ClassificationSettings,
+  type DeclaredCriteria,
+  combineCaps,
+  type WatchlistCap,
+} from "@/reference/classification";
 
 /**
  * Saisie d'un dossier de notation — module PUR, partagé par l'écran (aperçu et
@@ -61,6 +72,58 @@ export interface CaseDraft {
   amounts: { annualTurnover: string; groupAnnualTurnover: string; globalBankExposure: string };
   /** Bilan et CPC (N, N−1, N−2) : base des ratios de la grille et de la fiche de notation. */
   financials: FinancialsDraft;
+  /** Reprise de la dernière note validée, à l'ouverture du dossier. */
+  reprise?: CaseReprise;
+  /** Critères de classement BAM déclarés par l'analyste (les critères du bilan sont calculés). */
+  classification?: { declared: DeclaredCriteria };
+}
+
+/** Levée en vigueur sur le dossier (décision de comité), pour le calcul et la fiche. */
+export interface CaseLift {
+  codes: string[];
+  committeeDate: string;
+  reference: string;
+  recordedBy: string;
+  confirmedBy?: string | null;
+}
+
+const DEF_RANK = { DEF1: 1, DEF2: 2, DEF3: 3 } as const;
+
+/** Classement du brouillon : critères du bilan, déclarés, levés ; effet sur la note. */
+export function draftClassification(
+  draft: CaseDraft,
+  fin: FinancialComputation,
+  settings: ClassificationSettings = DEFAULT_CLASSIFICATION,
+  lifts: CaseLift[] = [],
+  /** Signaux externes (crédit bureau, fiche juridique) : critères proposés à vérifier. */
+  signals: readonly string[] = []
+): ClassificationResult {
+  const alerts = new Set([...fin.analysis.alerts.filter((a) => a.status === "DECLENCHEE").map((a) => a.key), ...signals]);
+  return computeClassification(settings, draft.classification?.declared, alerts, new Set(lifts.flatMap((l) => l.codes)));
+}
+
+/**
+ * Ce qui a été repris à l'ouverture. `pending` : champs repris de la note
+ * précédente que l'analyste n'a pas encore confirmés ou modifiés (codes de
+ * critère, « AMOUNTS » pour les montants du cadrage).
+ */
+export interface CaseReprise {
+  fromCaseId: string | null;
+  fromAsOfDate: string | null;
+  fromGrade: string | null;
+  exercise: "CONSERVE" | "SUIVANT";
+  carriedYears: string[];
+  /** Exercice dont le bilan reste à charger (passage à l'exercice suivant). */
+  toLoad: string | null;
+  pending: string[];
+}
+
+/** Retire des champs à confirmer (modification ou confirmation par l'analyste). */
+export function confirmReprise(draft: CaseDraft, keys: readonly string[] | "ALL"): CaseDraft {
+  if (!draft.reprise || draft.reprise.pending.length === 0) return draft;
+  const pending = keys === "ALL" ? [] : draft.reprise.pending.filter((k) => !keys.includes(k));
+  if (pending.length === draft.reprise.pending.length) return draft;
+  return { ...draft, reprise: { ...draft.reprise, pending } };
 }
 
 export const DATA_STATUSES: DataStatus[] = ["AVAILABLE", "MISSING", "NOT_APPLICABLE", "INVALID", "STALE", "ESTIMATED"];
@@ -118,6 +181,8 @@ export function parseDraft(raw: string | null | undefined, model: ModelConfig, a
       flags: d.flags ?? {},
       redFlags: d.redFlags ?? [],
       financials: parseFinancials(d.financials),
+      ...(d.reprise && typeof d.reprise === "object" && Array.isArray(d.reprise.pending) ? { reprise: d.reprise } : { reprise: undefined }),
+      classification: d.classification && typeof d.classification === "object" && d.classification.declared && typeof d.classification.declared === "object" ? { declared: { ...d.classification.declared } } : undefined,
       version: 1,
     };
   } catch {
@@ -159,11 +224,16 @@ const toNumber = (s: string): number | undefined => {
  * Calcul financier du brouillon : indicateurs, ratios de la grille, contrôles.
  * Même calcul à l'écran et à la soumission.
  */
-export function draftFinancials(draft: CaseDraft, model: ModelConfig): FinancialComputation {
-  return computeFinancials(draft.financials ?? emptyFinancials(), model.modelId, {
-    asOfDate: draft.asOfDate,
-    declaredTurnover: toNumber(draft.amounts.annualTurnover),
-  });
+export function draftFinancials(draft: CaseDraft, model: ModelConfig, format?: StatementFormat): FinancialComputation {
+  return computeFinancials(
+    draft.financials ?? emptyFinancials(),
+    model.modelId,
+    {
+      asOfDate: draft.asOfDate,
+      declaredTurnover: toNumber(draft.amounts.annualTurnover),
+    },
+    format
+  );
 }
 
 /** Chiffre d'affaires de l'exercice N lu au bilan, s'il existe. */
@@ -195,13 +265,21 @@ export function draftToRequest(
   draft: CaseDraft,
   model: ModelConfig,
   baseAmounts?: Record<string, number>,
-  opts: { currency?: string } = {}
+  opts: {
+    currency?: string;
+    format?: StatementFormat;
+    classification?: ClassificationSettings;
+    lifts?: CaseLift[];
+    /** Watch list en vigueur (décision de comité) et cran de cumul avec un plafond BAM. */
+    watchlist?: WatchlistCap | null;
+    cumulNotch?: number;
+  } = {}
 ): Record<string, unknown> {
   const segment = displaySegment(draft, model);
   const criteria: Record<string, CriterionInput> = {};
   // Ratios calculés depuis le bilan : ils priment sur une saisie manuelle du
   // critère ; seule une correction motivée les remplace.
-  const fin = draftFinancials(draft, model);
+  const fin = draftFinancials(draft, model, opts.format);
   const links = gridLinks(model.modelId);
   const fromBalanceSheet = new Map(fin.gridRatios.map((g) => [g.criterion, g]));
   for (const c of model.criteria) {
@@ -268,8 +346,60 @@ export function draftToRequest(
       ...(draft.hasStrongGroupSupport ? { hasStrongGroupSupport: true } : {}),
     },
     redFlags: draft.redFlags,
-    defaultTriggered: draft.defaultTriggered,
-    ...(draft.defaultTriggered ? { defaultGrade: draft.defaultGrade } : {}),
+    ...(() => {
+      // Critères de classement BAM : douteux / compromis imposent un défaut,
+      // sensible / pré-douteux un plafond (D-57). Le défaut déclaré par
+      // l'analyste reste ; le plus sévère l'emporte.
+      const cl = draftClassification(draft, fin, opts.classification, opts.lifts);
+      const out: Record<string, unknown> = {};
+      let defaultTriggered = draft.defaultTriggered;
+      let defaultGrade: "DEF1" | "DEF2" | "DEF3" = draft.defaultGrade;
+      if (cl.effect?.kind === "DEFAUT") {
+        if (!defaultTriggered || DEF_RANK[cl.effect.grade] > DEF_RANK[defaultGrade]) defaultGrade = cl.effect.grade;
+        defaultTriggered = true;
+      }
+      out.defaultTriggered = defaultTriggered;
+      if (defaultTriggered) out.defaultGrade = defaultGrade;
+      // Plafond : critères BAM (sensible, pré-douteux) et watch list (D-58) ;
+      // le plus sévère s'applique, un cran de cumul s'ajoute s'il est paramétré.
+      const wl = opts.watchlist ?? null;
+      const bamCap = cl.effect?.kind === "PLAFOND" ? cl.effect.grade : null;
+      const combined = cl.effect?.kind === "DEFAUT" ? null : combineCaps(bamCap, wl, opts.cumulNotch ?? 0);
+      if (combined) {
+        const codes = cl.family ? cl.items.filter((i) => i.state === "COCHE" && i.family === cl.family).map((i) => i.code) : [];
+        const parts = [
+          ...(bamCap && cl.family ? [`${FAMILY_LABELS[cl.family]} (${codes.join(", ")}) : plafond ${bamCap}`] : []),
+          ...(wl ? [`watch list ${wl.level} — ${wl.labelFr} depuis le ${wl.since} : plafond ${wl.cap}`] : []),
+        ];
+        out.regulatoryCap = {
+          maxGrade: combined.cap,
+          family: combined.source === "BAM" ? cl.family! : combined.source,
+          codes: [...cl.active, ...(wl ? [wl.level] : [])].slice(0, 40),
+          labelFr: `${parts.join(" ; ")}${combined.source === "CUMUL" ? ` ; cumul : un cran de plus` : ""} → note plafonnée à ${combined.cap}`.slice(0, 300),
+        };
+      }
+      const kept = cl.items.filter((i) => i.state === "COCHE" || i.state === "LEVE");
+      if (kept.length > 0 || (opts.lifts?.length ?? 0) > 0 || wl) {
+        out.classificationBasis = {
+          family: cl.family,
+          effect: cl.effect?.grade ?? null,
+          items: kept.map((i) => ({
+            code: i.code,
+            family: i.family,
+            labelFr: i.labelFr.slice(0, 200),
+            article: i.article.slice(0, 80),
+            state: i.state as "COCHE" | "LEVE",
+            ...(i.by ? { by: i.by } : {}),
+            ...(i.date ? { date: i.date.slice(0, 10) } : {}),
+            ...(i.comment ? { comment: i.comment.slice(0, 500) } : {}),
+          })),
+          lifts: (opts.lifts ?? []).map((l) => ({ ...l, reference: l.reference.slice(0, 80) })),
+          ...(wl ? { watchlist: { level: wl.level, labelFr: wl.labelFr.slice(0, 120), cap: wl.cap, since: wl.since } } : {}),
+          ...(combined ? { appliedCap: combined.cap, capSource: combined.source } : {}),
+        };
+      }
+      return out;
+    })(),
     // Trois états : true et false sont transmis, l'inconnu est omis.
     materiality: Object.fromEntries(Object.entries(draft.materiality).filter(([, v]) => typeof v === "boolean")),
     ...(Object.keys(evidence).length ? { materialityEvidence: evidence } : {}),
@@ -279,7 +409,7 @@ export function draftToRequest(
     },
     ...(draft.groupSupport.claimed ? { groupSupport: draft.groupSupport } : {}),
     ...(() => {
-      const basis = buildFinancialBasis(draft.financials ?? emptyFinancials(), fin, opts.currency);
+      const basis = buildFinancialBasis(draft.financials ?? emptyFinancials(), fin, opts.currency, opts.format);
       return basis ? { financialBasis: basis } : {};
     })(),
   };

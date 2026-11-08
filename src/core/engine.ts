@@ -38,8 +38,12 @@ import type {
  * complet que le dossier (M05) ; le routage est décidé par le serveur (M06,
  * M07) ; le défaut prime sur tout refus de routage (M11) ; l'usage production
  * exige une approbation explicite (M12) ; l'horloge n'est plus implicite (M10).
+ *
+ * 3.3.0 (D-57) : plafond issu des critères de classement BAM (créance
+ * sensible, pré-douteuse), appliqué comme une exception non compensatoire ;
+ * sans critère transmis, le résultat est identique à la 3.2.0.
  */
-export const ENGINE_VERSION = "3.2.0";
+export const ENGINE_VERSION = "3.3.0";
 
 /** Âge minimal, en années, en deçà duquel la contrepartie est routée hors grilles publiées. */
 const YOUNG_COMPANY_YEARS = 2;
@@ -447,6 +451,19 @@ export function computeRating(
         centralCriterion: rule.centralCriterion,
       });
     }
+  }
+
+  // --- 09b. Critères de classement BAM (D-57) --------------------------------
+  // Créance sensible ou pré-douteuse : plafond non compensatoire. (Douteux et
+  // compromis imposent un défaut, traité plus haut.)
+  if (input.regulatoryCap) {
+    appliedRules.push({
+      code: `BAM_${input.regulatoryCap.family}`,
+      labelFr: input.regulatoryCap.labelFr,
+      maxGrade: input.regulatoryCap.maxGrade,
+      source: "REGULATORY",
+      centralCriterion: null,
+    });
   }
 
   // --- 10. Grade autonome --------------------------------------------------

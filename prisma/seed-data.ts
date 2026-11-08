@@ -495,7 +495,7 @@ export const OVERRIDES: SeedOverride[] = [
   {
     counterpartyKey: "AGRO",
     asOfDate: "2025-12-31",
-    toGrade: "STD-P2",
+    toGrade: "3",
     reasonCode: "RECENT_EVENT_POSITIVE",
     comment:
       "Contrat pluriannuel signé postérieurement à la date d'arrêté, sécurisant environ 40 % du chiffre d'affaires prévisionnel. L'information n'est reflétée par aucun critère du modèle à cette date.",
@@ -509,7 +509,7 @@ export const OVERRIDES: SeedOverride[] = [
   {
     counterpartyKey: "BTP",
     asOfDate: "2025-12-31",
-    toGrade: "STD-P6",
+    toGrade: "7",
     reasonCode: "TEMPORARY_SHOCK",
     comment:
       "Le demandeur estime le déficit de couverture de dette temporaire, lié au décalage d'encaissement d'un marché public.",
@@ -523,7 +523,7 @@ export const OVERRIDES: SeedOverride[] = [
   {
     counterpartyKey: "AUTO",
     asOfDate: "2025-12-31",
-    toGrade: "STD-P5",
+    toGrade: "3",
     reasonCode: "GROUP_SUPPORT",
     comment:
       "Lettre de soutien de la maison mère étrangère, non juridiquement contraignante mais assortie d'un historique de recapitalisation. Depuis la V3, le support groupe relève d'une méthode dédiée exigeant les quatre conditions (capacité, volonté, caractère contraignant, transférabilité) : cette demande illustre précisément le cas où le relèvement passe par une dérogation tracée faute d'engagement contraignant, et non par la méthode.",

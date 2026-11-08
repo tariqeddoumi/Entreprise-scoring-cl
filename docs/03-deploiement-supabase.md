@@ -148,6 +148,10 @@ renotation ; le second rattache les webhooks à une entité, crée l'outbox des
 événements sortants et l'index unique partiel `overrides_one_pending_per_run`
 (une seule dérogation en attente par notation).
 
+### Remise à zéro et nouveau jeu de démonstration
+
+`npm run db:reset-seed` supprime toutes les données métier (clients, groupes, dossiers, notations, dérogations, lots, cours de change, webhooks, paramétrage hors IA) puis recharge le jeu de démonstration, calculé par le moteur sur l'échelle 1 à 10 en vigueur. Les comptes, leurs sessions, les entités, les paramètres de l'IA (clés `AI_*`) et le journal d'audit (en ajout seul) sont conservés. Sans option, le script affiche la base visée et ce qu'il supprimerait ; `-- --confirm` exécute. La suppression se fait en une seule transaction. Contre Supabase, utiliser l'adresse **directe** (`DIRECT_URL`) comme `DATABASE_URL` pour cette exécution : une transaction interactive ne passe pas par le pooler.
+
 ### Circuit de validation (novembre 2026)
 
 ```bash
@@ -155,6 +159,57 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/07-circuit-validation.sql
 ```
 
 Ajoute la fonction des comptes (`users.jobFunction`) et le circuit figé des dossiers (`rating_cases.workflow`). Idempotent et transactionnel. **Après la migration**, renseigner la fonction de chaque valideur (Administration › Utilisateurs) : le circuit par défaut exige un directeur du centre d'affaires puis la contre-étude, et un dossier soumis reste en attente tant que personne ne porte la fonction de l'étape. Le circuit se modifie dans Administration › Paramétrage ; il est enregistré dans `app_settings` (clé `WORKFLOW_CIRCUIT`). Les dossiers soumis avant la migration gardent une validation en une étape.
+
+### Format du bilan, motif des dossiers et référentiel des bilans (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/09-referentiel-bilans-motifs.sql
+```
+
+Ajoute le motif et le type de crédit des dossiers (`rating_cases.purpose`, `creditType`), la catégorie de délégation des entités (`entities.riskTier`), la table des décisions de comité (`committee_decisions` : levées de critères, watch list) et la table `financial_statements` (bilans du client par exercice), puis y reprend les bilans des notes déjà validées. Idempotent et transactionnel ; à appliquer **avant** de déployer la version correspondante. Le format du bilan est enregistré dans `app_settings` (clé `FINANCIAL_FORMAT_VERSIONS`) et les motifs sous la clé `CASE_PURPOSES` ; sans enregistrement, le format embarqué (bilan complet) et les motifs embarqués s'appliquent. Le script `08-seed-demonstration-echelle-1-10.sql` est antérieur à cette migration : il ne vide pas `financial_statements` (`npm run db:reset-seed` le fait).
+
+### Référentiel T24, crédit bureau et fiche juridique InfoRisque (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/10-t24-credit-bureau-inforisque.sql
+```
+
+Ajoute à `counterparties` le code client T24 (`coreBankingId`, unique par entité), la source de la fiche (`dataSource` : T24 ou SAISIE), la dernière synchronisation et les données rapatriées, le segment commercial (`commercialSegment`, distinct du segment du modèle), le gestionnaire (`accountOfficer`) et la fiche juridique (`legalProfile`, JSON) ; crée la table `credit_reports` (rapports de solvabilité). Idempotent, transactionnel, mêmes protections que les autres tables (RLS, aucun droit pour `anon` ni `authenticated`). À appliquer **avant** de déployer la version correspondante.
+
+Raccordements (Administration › Paramétrage › Référentiels externes) :
+
+| Raccordement | Paramètres | Secret (variable d'environnement, jamais en base) |
+|---|---|---|
+| T24 (Transact, API clients) | `T24_ENABLED`, `T24_BASE_URL`, `T24_CUSTOMER_PATH`, longueur du code client | `T24_API_TOKEN` (en-tête `Authorization: Bearer`) |
+| Crédit bureau (Creditinfo ou Quantik) | `CREDIT_BUREAU_API_ENABLED`, `CREDIT_BUREAU_PROVIDER`, `CREDIT_BUREAU_BASE_URL`, `CREDIT_BUREAU_PATH` | `CREDIT_BUREAU_API_TOKEN` |
+
+La correspondance des champs T24 (champs locaux de la banque : ICE, RC, segment commercial…) se paramètre sous la clé `T24_FIELD_MAP` de `app_settings` (JSON : pour chaque champ de la fiche, la liste des chemins dans la réponse de T24). Les adresses doivent être en https ; elles sont appelées depuis le serveur de l'application, qui doit donc atteindre le réseau interne de la banque (hébergement interne, ou passerelle). Sans raccordement, la création se fait en saisie minimale et le rapport de solvabilité se charge en PDF ou en image, lu par l'IA.
+
+### Portefeuille par chargé d'affaires (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/11-portefeuille-charge-affaires.sql
+```
+
+Ajoute `users.accountOfficerCode` (code gestionnaire T24), l'index sur `counterparties.accountOfficer`, et affecte aux clients sans gestionnaire le compte qui les a créés (journal d'audit). Idempotent et transactionnel. La restriction ne s'active qu'avec le paramètre `PORTFOLIO_SCOPE_P1 = PORTEFEUILLE` (docs/22).
+
+### Engagements ligne par ligne (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/12-engagements-ligne-par-ligne.sql
+```
+
+Crée la table `credit_facilities` (lignes d'engagement du client, T24 ou saisie), avec les mêmes protections que les autres tables. Idempotent et transactionnel. Rapatriement T24 : paramètre `T24_FACILITIES_PATH` (même adresse et même jeton que la fiche client) ; correspondance des champs et des codes produit sous la clé `T24_FACILITY_FIELD_MAP` (docs/23).
+
+### Pièces requises par motif (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/13-pieces-requises.sql
+```
+
+Ajoute `case_documents.kind` (type de la pièce). Idempotent. Listes par motif dans `CASE_PURPOSES` (champ `requiredDocs`), contrôle `DOCS_AT_SUBMISSION` (docs/24).
+
+La reprise du stock (docs/25) ne demande aucune migration : elle écrit dans les tables existantes.
 
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas

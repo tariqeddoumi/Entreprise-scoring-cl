@@ -66,11 +66,25 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Écran Clients : création, modification, suppression ou désactivation, notation depuis la fiche | Opérationnel |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
 | Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture IA ; ratios calculés, contrôles, correction motivée | Opérationnel |
+| Format du bilan paramétrable par versions datées (complet, agrégé, notation seulement ; postes propres, indicateurs et alertes par formule, seuils d'appréciation) | Opérationnel |
+| Analyse du bilan au chargement : ratios de la grille puis autres indicateurs, évolution sur trois exercices, appréciation, alertes (dont critères chiffrés 1/W/2025, à titre d'information) | Opérationnel |
+| Ouverture du dossier : motif paramétrable, reprise de la dernière note validée, passage à l'exercice suivant (N → N−1), référentiel des bilans du client, repères « repris / à saisir / anomalie » | Opérationnel |
 | Score de confiance, porte de couverture et caps de qualité | Opérationnel |
 | Caps structurels, revues obligatoires et red flags | Opérationnel |
 | Support groupe (au plus 2 crans, 4 conditions documentées) | Opérationnel |
 | Workflow dossier : saisie, soumission, circuit de validation paramétrable (directeur du centre d'affaires puis contre-étude par défaut), dérogations sous double validation | Opérationnel |
 | Couverture des critères BAM 1/W/2025 et 19/G/2002 vérifiée critère par critère (docs/14) | Diagnostic livré |
+| Profils métier et droits paramétrables ; circuit avis / décision unique de la contre-étude, niveaux selon montant, note, type de crédit et catégorie du centre | Opérationnel |
+| Critères de classement BAM dans le dossier (plafond 8 sensible, 10 pré-douteux, défaut douteux / compromis), levée par décision de comité tracée | Opérationnel |
+| Watch list par décision de comité : niveaux WL1 à WL3 (note plafonnée à 8, 9, 10), changement de niveau, sortie, historique | Opérationnel |
+| Proposition de paramétrage pour le COPIL de validation (docs/19) | Livrée, à arrêter en COPIL |
+| Fiche client T24 (code client, rapatriement, actualisation à l'ouverture du dossier), saisie minimale de repli, rapport de solvabilité (API ou IA, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
+| Portefeuille par chargé d'affaires (code gestionnaire T24, cloisonnement par portefeuille, paramétrable) (docs/22) | Livré ; à activer après renseignement des codes gestionnaires |
+| Engagements ligne par ligne (T24 ou saisie), engagement global calculé, dépassements et impayés, rapprochement crédit bureau (docs/23) | Livré ; API des limites T24 à brancher par la DSI |
+| Pièces et informations requises par motif, typage des pièces, préparation du dossier, contrôle à la soumission (docs/24) | Livré ; listes à arrêter en COPIL |
+| Mise en service des API : démarrage sans API, test de connexion, activation après test réussi (docs/26) | Livrée ; tests à faire avec la DSI |
+| Reprise du stock : clients, notes historiques validées, bilans, watch list, par classeur Excel contrôlé à blanc (docs/25) | Livrée ; extraction et correspondance des notes à fournir |
+| Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
 | Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |
 | Renotation par lot (groupe d'affaires, segment, secteur, entité), ponctuelle ou planifiée | Opérationnel |

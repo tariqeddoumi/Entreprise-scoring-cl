@@ -9,6 +9,11 @@ export interface CounterpartyRow {
   id: string;
   name: string;
   ice: string | null;
+  /** Code client T24 ; source de la fiche (T24 ou saisie minimale). */
+  coreBankingId?: string | null;
+  dataSource?: string | null;
+  /** Gestionnaire (code chargé d'affaires). */
+  accountOfficer?: string | null;
   segment: string | null;
   sectorCode: string | null;
   entityCode: string;
@@ -18,6 +23,8 @@ export interface CounterpartyRow {
   canRate: boolean;
   /** Statut du dossier en cours (brouillon ou soumis), s'il y en a un. */
   openCase: string | null;
+  /** En watch list (décision de comité en vigueur). */
+  watchlist?: boolean;
   /** Dernière notation OFFICIELLE (validée, ou antérieure au workflow). */
   ratingRuns: Array<{ finalGrade: string | null; rawScore: number | null; asOfDate: string; equivalent?: string | null }>;
 }
@@ -25,12 +32,14 @@ export interface CounterpartyRow {
 const SEGMENTS = ["TPE", "PME", "GE"] as const;
 
 function downloadCsv(rows: CounterpartyRow[]) {
-  const header = ["Nom", "Entité", "ICE", "Devise", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
+  const header = ["Nom", "Entité", "Gestionnaire", "Code T24", "ICE", "Devise", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
   const lines = rows.map((c) => {
     const last = c.ratingRuns[0];
     return csvLine([
       c.name,
       c.entityCode,
+      c.accountOfficer ?? "",
+      c.coreBankingId ?? "",
       c.ice ?? "",
       c.currency,
       c.segment ?? "",
@@ -67,6 +76,8 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
       return (
         c.name.toLowerCase().includes(q) ||
         (c.ice ?? "").toLowerCase().includes(q) ||
+        (c.coreBankingId ?? "").includes(q) ||
+        (c.accountOfficer ?? "").toLowerCase().includes(q) ||
         c.entityCode.toLowerCase().includes(q)
       );
     });
@@ -77,7 +88,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <input
           type="search"
-          placeholder="Rechercher par nom, ICE ou entité…"
+          placeholder="Rechercher par nom, code T24, ICE, gestionnaire ou entité…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{ maxWidth: 280 }}
@@ -130,8 +141,8 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
           <thead>
             <tr>
               <th>Nom</th>
-              <th>Entité</th>
-              <th>ICE</th>
+              <th>Entité · gestionnaire</th>
+              <th>Code T24 · ICE</th>
               <th>Devise</th>
               <th>Segment</th>
               <th>Secteur</th>
@@ -157,14 +168,36 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                         · désactivé
                       </span>
                     )}
+                    {c.watchlist && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "var(--bad)", borderRadius: 999, padding: "1px 6px", marginLeft: 6 }} title="Client en watch list (décision de comité)">
+                        Watch list
+                      </span>
+                    )}
+                    {c.dataSource === "SAISIE" && (
+                      <span className="muted" style={{ fontSize: 11, marginLeft: 6 }} title="Saisie minimale, à rattacher au code client T24">
+                        · en attente T24
+                      </span>
+                    )}
                     {c.openCase && (
                       <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
                         {c.openCase === "SUBMITTED" ? "· dossier en validation" : "· dossier en cours"}
                       </span>
                     )}
                   </td>
-                  <td className="muted nowrap">{c.entityCode}</td>
-                  <td className="muted nowrap">{c.ice ?? "—"}</td>
+                  <td className="muted nowrap">
+                    {c.entityCode}
+                    {c.accountOfficer ? (
+                      <>
+                        <br />
+                        <span title="Gestionnaire">{c.accountOfficer}</span>
+                      </>
+                    ) : null}
+                  </td>
+                  <td className="muted nowrap">
+                    {c.coreBankingId ? <span title="Code client T24">{c.coreBankingId}</span> : null}
+                    {c.coreBankingId && c.ice ? <br /> : null}
+                    {c.ice ?? (c.coreBankingId ? null : "—")}
+                  </td>
                   <td className="muted">{c.currency}</td>
                   <td>{c.segment ?? "—"}</td>
                   <td className="muted">{c.sectorCode ?? "—"}</td>

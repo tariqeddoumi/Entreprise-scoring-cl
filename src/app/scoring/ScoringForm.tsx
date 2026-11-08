@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { StatementFormat } from "@/financials/statement-format";
 import type { CriterionConfig, DataStatus, GroupSupportInput, ModelConfig, Segment } from "@/core/types";
 import { CAP_TRIGGER_TO_FLAG, RETIRED_CAP_OBSERVATIONS } from "@/core/structural-flags";
 import { DEFAULT_GRADES } from "@/reference/default-policy";
@@ -8,6 +9,7 @@ import {
   carriesValue,
   DATA_STATUSES,
   displaySegment,
+  confirmReprise,
   draftFinancials,
   isGatedOut,
   type CaseDraft,
@@ -26,6 +28,16 @@ interface Props {
   currency?: string;
   /** Champs remplis depuis une proposition de l'IA acceptée (repère visuel). */
   aiFields?: ReadonlySet<string>;
+  /** Format de bilan en vigueur (ratios calculés depuis le bilan). */
+  format?: StatementFormat;
+  /** Engagement global calculé sur les lignes d'engagement du client (dossier). */
+  facilityExposure?: FacilityExposure | null;
+}
+
+export interface FacilityExposure {
+  value: number;
+  lines: number;
+  positionDate: string | null;
 }
 
 /** Libellé des portes de matérialité que le modèle peut déclarer. */
@@ -44,6 +56,29 @@ const GROUP_SUPPORT_CONDITIONS = [
 ] as const;
 
 const CONFIDENCE_LEVELS = [100, 75, 50, 25, 0];
+
+/** Engagement global des lignes du client, à reporter dans le dossier. */
+function FacilityHint({ fe, current, readOnly, onApply }: { fe: FacilityExposure; current: string; readOnly: boolean; onApply: () => void }) {
+  const cur = Number(current.replace(/\s/g, "").replace(",", "."));
+  const same = current.trim() !== "" && Number.isFinite(cur) && Math.abs(cur - fe.value) <= Math.max(1, fe.value * 0.001);
+  const fmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(fe.value);
+  return (
+    <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 11, marginTop: 4 }}>
+      <span className="muted">
+        Lignes d&apos;engagement : {fmt} ({fe.lines} ligne(s){fe.positionDate ? `, position au ${fe.positionDate}` : ""})
+      </span>
+      {same ? (
+        <span style={{ color: "var(--good)" }}>✓ repris</span>
+      ) : (
+        !readOnly && (
+          <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={onApply}>
+            Reprendre ce montant
+          </button>
+        )
+      )}
+    </span>
+  );
+}
 
 const AMOUNT_FIELDS = [
   ["annualTurnover", "Chiffre d'affaires HT du dernier exercice"],
@@ -94,6 +129,24 @@ function isAnswered(criterion: CriterionConfig, state: CriterionDraft): boolean 
 }
 
 
+type FieldMark = "BILAN" | "REPRIS" | "A_SAISIR" | "ANOMALIE" | "SAISI";
+
+const FIELD_MARKS: Record<Exclude<FieldMark, "SAISI">, { label: string; color: string; title: string }> = {
+  BILAN: { label: "Calculé du bilan", color: "var(--brand)", title: "Valeur calculée à partir du bilan chargé" },
+  REPRIS: { label: "Repris — à confirmer", color: "var(--bcp-orange)", title: "Valeur reprise de la note précédente : confirmez-la ou mettez-la à jour" },
+  A_SAISIR: { label: "À saisir", color: "var(--bad)", title: "Aucune valeur : ni récupérée du bilan, ni reprise" },
+  ANOMALIE: { label: "Anomalie", color: "var(--bad)", title: "Donnée déclarée invalide ou périmée : à vérifier" },
+};
+
+function FieldMarkBadge({ mark }: { mark: Exclude<FieldMark, "SAISI"> }) {
+  const m = FIELD_MARKS[mark];
+  return (
+    <span title={m.title} style={{ fontSize: 10, fontWeight: 700, color: m.color, border: `1px solid ${m.color}`, borderRadius: 4, padding: "0 4px", marginLeft: 4, whiteSpace: "nowrap" }}>
+      {m.label}
+    </span>
+  );
+}
+
 /** Repère « proposé par l'IA » à côté d'un champ rempli depuis une proposition acceptée. */
 function AiMark({ show }: { show: boolean }) {
   if (!show) return null;
@@ -110,7 +163,7 @@ function AiMark({ show }: { show: boolean }) {
  * l'écran qui l'affiche — dossier ou simulation — pour que les propositions de
  * l'IA, l'enregistrement et l'aperçu travaillent sur la même saisie.
  */
-export function ScoringForm({ model, draft, onChange, readOnly = false, currency = "MAD", aiFields }: Props) {
+export function ScoringForm({ model, draft, onChange, readOnly = false, currency = "MAD", aiFields, format, facilityExposure = null }: Props) {
   const segment = displaySegment(draft, model);
   const ai = (key: string) => aiFields?.has(key) ?? false;
   const set = (patch: Partial<CaseDraft>) => onChange({ ...draft, ...patch });
@@ -149,7 +202,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
 
   // Ratios calculés depuis le bilan : affichés à la place de la saisie, corrigés
   // dans la section « Bilan » avec un motif.
-  const fin = useMemo(() => draftFinancials(draft, model), [draft, model]);
+  const fin = useMemo(() => draftFinancials(draft, model, format), [draft, model, format]);
   const linked = useMemo(() => {
     const m = new Map<string, string>();
     for (const g of fin.gridRatios) {
@@ -170,8 +223,32 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
   const answeredCount = applicable.filter(answered).length;
   const unansweredCritical = applicable.filter((c) => c.unavailablePolicy === "BLOCK" && !answered(c));
 
+  // Repère de chaque champ : d'où vient la valeur et ce qu'il reste à faire.
+  const pendingReprise = useMemo(() => new Set(draft.reprise?.pending ?? []), [draft.reprise]);
+  const markOf = (c: CriterionConfig): FieldMark | null => {
+    if (isGatedOut(c, draft.materiality, draft.materialityEvidence)) return null;
+    if (linked.has(c.code)) return "BILAN";
+    if (pendingReprise.has(c.code)) return "REPRIS";
+    const st = draft.criteria[c.code];
+    if (st && (st.status === "INVALID" || st.status === "STALE")) return "ANOMALIE";
+    if (!st || !isAnswered(c, st)) return "A_SAISIR";
+    return "SAISI";
+  };
+  const marks = applicable.map(markOf);
+  const todo = {
+    aSaisir: marks.filter((m) => m === "A_SAISIR").length,
+    repris: marks.filter((m) => m === "REPRIS").length + (pendingReprise.has("AMOUNTS") ? 1 : 0),
+    anomalies: marks.filter((m) => m === "ANOMALIE").length,
+    bilan: marks.filter((m) => m === "BILAN").length,
+  };
+  const [onlyTodo, setOnlyTodo] = useState(false);
+  const isTodo = (c: CriterionConfig) => {
+    const m = markOf(c);
+    return m === "A_SAISIR" || m === "REPRIS" || m === "ANOMALIE";
+  };
+
   function update(code: string, patch: Partial<CriterionDraft>) {
-    onChange({ ...draft, criteria: { ...draft.criteria, [code]: { ...draft.criteria[code], ...patch } } });
+    onChange(confirmReprise({ ...draft, criteria: { ...draft.criteria, [code]: { ...draft.criteria[code], ...patch } } }, [code]));
   }
   const groupSupport: GroupSupportInput = draft.groupSupport;
 
@@ -179,7 +256,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
     <fieldset disabled={readOnly} style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 18, minWidth: 0 }}>
       <section
         className="card no-print"
-        style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, zIndex: 5 }}
+        style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 5 }}
       >
         <div style={{ flex: 1 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4, gap: 8, flexWrap: "wrap" }}>
@@ -204,6 +281,31 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
             />
           </div>
         </div>
+        {(todo.aSaisir > 0 || todo.repris > 0 || todo.anomalies > 0 || todo.bilan > 0) && (
+          <div className="todo-bar" style={{ fontSize: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", order: 3, flexBasis: "100%" }}>
+            <span>
+              <strong>À traiter :</strong>{" "}
+              <span style={{ color: todo.aSaisir ? "var(--bad)" : "var(--muted)" }}>{todo.aSaisir} à saisir</span> ·{" "}
+              <span style={{ color: todo.repris ? "var(--bcp-orange)" : "var(--muted)" }}>{todo.repris} repris à confirmer</span> ·{" "}
+              <span style={{ color: todo.anomalies ? "var(--bad)" : "var(--muted)" }}>{todo.anomalies} anomalie(s)</span>
+              {todo.bilan > 0 ? <span className="muted"> · {todo.bilan} calculé(s) du bilan</span> : null}
+            </span>
+            <button type="button" style={buttonGhostStyle} aria-pressed={onlyTodo} onClick={() => setOnlyTodo((x) => !x)}>
+              {onlyTodo ? "Afficher tous les critères" : "Champs à traiter seulement"}
+            </button>
+            {!readOnly && todo.repris > 0 && (
+              <button
+                type="button"
+                style={buttonGhostStyle}
+                onClick={() => {
+                  if (window.confirm(`Confirmer, sans les modifier, les ${todo.repris} champ(s) repris de la note précédente ?`)) onChange(confirmReprise(draft, "ALL"));
+                }}
+              >
+                Confirmer tous les champs repris
+              </button>
+            )}
+          </div>
+        )}
         {/* Replier n'est pas une saisie : reste actif en lecture seule. */}
         <button
           type="button"
@@ -219,6 +321,24 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
 
       <section className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 12 }}>Cadrage du dossier</h2>
+        {draft.reprise && (
+          <div role="note" style={{ fontSize: 13, borderLeft: "4px solid var(--bcp-orange)", background: "var(--surface-2)", padding: "8px 10px", borderRadius: 4, marginBottom: 12 }}>
+            {draft.reprise.fromCaseId ? (
+              <>
+                Saisie reprise de la note validée{draft.reprise.fromAsOfDate ? ` arrêtée au ${draft.reprise.fromAsOfDate}` : ""}
+                {draft.reprise.fromGrade ? ` (classe ${draft.reprise.fromGrade})` : ""}.{" "}
+              </>
+            ) : (
+              <>Bilans repris du dossier du client. </>
+            )}
+            {draft.reprise.exercise === "SUIVANT"
+              ? `Passage à l'exercice suivant : ${draft.reprise.carriedYears.join(" et ") || "—"} repris en N−1${draft.reprise.carriedYears.length > 1 ? " et N−2" : ""}${draft.reprise.toLoad ? ` ; bilan ${draft.reprise.toLoad} à charger` : ""}.`
+              : `Même exercice que la note précédente : bilan ${draft.reprise.carriedYears[0] ?? ""} repris tel quel.`}{" "}
+            {draft.reprise.pending.length > 0
+              ? "Les champs repris portent le repère « Repris » : confirmez-les ou mettez-les à jour."
+              : "Tous les champs repris ont été confirmés ou mis à jour."}
+          </div>
+        )}
         <div className="grid-fields">
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
@@ -249,13 +369,22 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
             <label key={key}>
               <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
                 {label} ({currency}) <AiMark show={ai(`amounts.${key}`)} />
+                {pendingReprise.has("AMOUNTS") && draft.amounts[key].trim() !== "" ? <FieldMarkBadge mark="REPRIS" /> : null}
               </div>
               <input
                 inputMode="decimal"
                 placeholder="ex. 95 000 000"
                 value={draft.amounts[key]}
-                onChange={(e) => set({ amounts: { ...draft.amounts, [key]: e.target.value } })}
+                onChange={(e) => onChange(confirmReprise({ ...draft, amounts: { ...draft.amounts, [key]: e.target.value } }, ["AMOUNTS"]))}
               />
+              {key === "globalBankExposure" && facilityExposure && (
+                <FacilityHint
+                  fe={facilityExposure}
+                  current={draft.amounts.globalBankExposure}
+                  readOnly={readOnly}
+                  onApply={() => onChange(confirmReprise({ ...draft, amounts: { ...draft.amounts, globalBankExposure: String(facilityExposure.value) } }, ["AMOUNTS"]))}
+                />
+              )}
             </label>
           ))}
         </div>
@@ -324,8 +453,10 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
       </section>
 
       {model.domains.map((domain) => {
-        const domainCriteria = applicable.filter((c) => c.domainCode === domain.code);
-        if (domainCriteria.length === 0) return null;
+        const allDomainCriteria = applicable.filter((c) => c.domainCode === domain.code);
+        const domainCriteria = allDomainCriteria;
+        const shown = onlyTodo ? allDomainCriteria.filter(isTodo) : allDomainCriteria;
+        if (shown.length === 0) return null;
         const weight = domainCriteria.reduce((acc, c) => acc + (c.weightsBps[segment] ?? 0), 0);
         const domainAnswered = domainCriteria.filter(answered).length;
         const missingCritical = domainCriteria.filter((c) => c.unavailablePolicy === "BLOCK" && !answered(c)).length;
@@ -369,7 +500,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
             </button>
             {!isCollapsed && (
               <div style={{ display: "grid", gap: 14 }}>
-                {domainCriteria.map((c) => (
+                {shown.map((c) => (
                   <CriterionRow
                     key={c.code}
                     criterion={c}
@@ -378,6 +509,8 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
                     gatedOut={isGatedOut(c, draft.materiality, draft.materialityEvidence)}
                     aiFilled={ai(`criteria.${c.code}.value`) || ai(`criteria.${c.code}.score`) || ai(`criteria.${c.code}.status`)}
                     linked={linked.get(c.code)}
+                    mark={markOf(c)}
+                    onConfirm={() => onChange(confirmReprise(draft, [c.code]))}
                     onChange={(patch) => update(c.code, patch)}
                   />
                 ))}
@@ -680,6 +813,8 @@ function CriterionRow({
   gatedOut,
   aiFilled,
   linked,
+  mark,
+  onConfirm,
   onChange,
 }: {
   criterion: CriterionConfig;
@@ -689,6 +824,9 @@ function CriterionRow({
   aiFilled: boolean;
   /** Texte du ratio calculé depuis le bilan (remplace la saisie). */
   linked?: string;
+  /** Origine de la valeur et reste à faire. */
+  mark?: FieldMark | null;
+  onConfirm?: () => void;
   onChange: (patch: Partial<CriterionDraft>) => void;
 }) {
   const weight = (criterion.weightsBps[segment] ?? 0) / 100;
@@ -704,7 +842,12 @@ function CriterionRow({
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 13 }}>
-            {criterion.code} — {criterion.labelFr} <AiMark show={aiFilled} />
+            {criterion.code} — {criterion.labelFr} <AiMark show={aiFilled} /> {mark && mark !== "SAISI" ? <FieldMarkBadge mark={mark} /> : null}
+            {mark === "REPRIS" && onConfirm ? (
+              <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "0 6px", marginLeft: 6 }} onClick={onConfirm}>
+                Confirmer
+              </button>
+            ) : null}
             {criterion.unavailablePolicy === "BLOCK" && (
               <span style={{ color: "var(--bad)", marginLeft: 6, fontSize: 11 }}>
                 critique

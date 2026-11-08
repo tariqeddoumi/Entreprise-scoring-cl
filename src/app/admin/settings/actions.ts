@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auditWithin } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { activationBlocker, INTEGRATIONS, parseTest, testKey } from "@/lib/integrations";
 import { forgetSettings, loadSettings, SETTINGS, validateSetting } from "@/lib/settings";
 import { getPerimeter, getSessionIdentity } from "@/lib/session";
 
@@ -34,6 +35,17 @@ export async function settingsAction(
     if (checked.value !== current[def.key]) changes.push({ key: def.key, before: current[def.key], after: checked.value });
   }
   if (changes.length === 0) return { okFr: "Aucune modification." };
+
+  // Une API ne s'active qu'après un test de connexion réussi sur la cible
+  // qui sera en vigueur (Administration › Raccordements).
+  const next: Record<string, string> = { ...current };
+  for (const c of changes) next[c.key] = c.after;
+  for (const def of INTEGRATIONS) {
+    if (!changes.some((c) => c.key === def.flag && c.after === "true")) continue;
+    const row = await prisma.appSetting.findUnique({ where: { key: testKey(def.code) } }).catch(() => null);
+    const blocker = activationBlocker(def, parseTest(row?.value), next);
+    if (blocker) return { errorFr: blocker };
+  }
 
   try {
     await prisma.$transaction(async (tx) => {

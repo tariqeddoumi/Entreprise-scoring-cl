@@ -74,6 +74,17 @@ Brouillon ──abandon──▶ Abandonné
 
 La clé se trouve dans une variable d'environnement : `ANTHROPIC_API_KEY`, ou `IA_CLE_API` pour les autres fournisseurs.
 
+**Exemple : DeepSeek** (fournisseur « API compatible OpenAI ») :
+
+| Paramètre | Valeur |
+|---|---|
+| Fournisseur | API compatible OpenAI |
+| Modèle | `deepseek-flash` (rapide) ou `deepseek-v4-pro` |
+| Adresse de l'API | `https://api.deepseek.com` |
+| Variable d'environnement | `IA_CLE_API` = clé créée sur platform.deepseek.com |
+
+DeepSeek ne connaît pas la sortie contrainte par schéma : l'outil passe en mode `json_object` et donne le schéma dans les consignes. Il relance une fois si la réponse revient vide. Les PDF sont transmis en texte extrait ; un PDF scanné, sans texte, n'est donc pas lu. Les images ne sont pas lues non plus. Les pièces partent vers des serveurs hors du Maroc : à réserver aux tests sur données fictives, sauf accord de la conformité.
+
 **Dans un dossier :**
 
 1. Ajouter les pièces : états financiers, liasse, rapport de gestion, extrait RC (PDF, image, texte, CSV).

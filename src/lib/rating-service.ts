@@ -46,7 +46,7 @@ export async function simulateRating(input: RatingInput): Promise<RatingResult> 
   return computeRating(model, input, engineOptions());
 }
 
-export type RunOrigin = "API" | "CASE" | "BATCH";
+export type RunOrigin = "API" | "CASE" | "BATCH" | "REPRISE";
 
 export interface PersistedRun {
   runId: string;

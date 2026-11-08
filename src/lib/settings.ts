@@ -20,7 +20,7 @@ export type SettingKind = "boolean" | "integer" | "enum" | "text" | "url";
 
 export interface SettingDef {
   key: string;
-  group: "Workflow" | "Dérogations" | "Pièces" | "Intelligence artificielle";
+  group: "Workflow" | "Comités" | "Dérogations" | "Pièces" | "Intelligence artificielle" | "Référentiels externes";
   labelFr: string;
   helpFr: string;
   kind: SettingKind;
@@ -40,6 +40,15 @@ export const SETTINGS: readonly SettingDef[] = [
     labelFr: "Bilan exigé pour soumettre (grilles standard)",
     helpFr:
       "Un dossier noté sur une grille standard ne se soumet qu'avec le bilan et le CPC des exercices N et N−1, équilibrés et cohérents. Les grilles comportementales (TPE sans comptes exploitables) n'y sont pas soumises ; un bilan simplifié peut y être joint.",
+    kind: "boolean",
+    default: "true",
+  },
+  {
+    key: "WORKFLOW_CONFIRM_CARRIED_OVER",
+    group: "Workflow",
+    labelFr: "Confirmer les champs repris de la note précédente",
+    helpFr:
+      "À l'ouverture d'un dossier, la saisie de la dernière note validée est reprise. Activé : chaque critère et les montants repris doivent être confirmés ou modifiés avant la soumission.",
     kind: "boolean",
     default: "true",
   },
@@ -87,6 +96,80 @@ export const SETTINGS: readonly SettingDef[] = [
     max: 36,
   },
   {
+    key: "PORTFOLIO_SCOPE_P1",
+    group: "Workflow",
+    labelFr: "Visibilité des chargés d'affaires (profil 1)",
+    helpFr:
+      "Portefeuille : un chargé d'affaires ne voit que ses clients (gestionnaire T24 égal à son code gestionnaire, fiches qu'il a créées) et ceux pour lesquels il a ouvert un dossier. Centre : tous les clients de son centre. Les directeurs de centre, la contre-étude, la surveillance et les gestionnaires des risques voient toujours leur centre, leur région ou leur banque. Renseignez d'abord le code gestionnaire T24 de chaque chargé d'affaires (Administration › Utilisateurs).",
+    kind: "enum",
+    // Par défaut, comportement antérieur (tout le centre) : on passe au
+    // portefeuille une fois les codes gestionnaires renseignés sur les comptes,
+    // sans quoi les chargés d'affaires ne verraient plus leurs clients.
+    default: "CENTRE",
+    options: ["PORTEFEUILLE", "CENTRE"],
+    optionLabels: { PORTEFEUILLE: "Son portefeuille", CENTRE: "Tout son centre" },
+  },
+  {
+    key: "DOCS_AT_SUBMISSION",
+    group: "Workflow",
+    labelFr: "Pièces requises manquantes à la soumission",
+    helpFr:
+      "Pièces et informations requises par le motif du dossier (Paramétrage › Motifs) : avertissement tracé au journal, ou soumission bloquée tant qu'il en manque.",
+    kind: "enum",
+    default: "AVERTISSEMENT",
+    options: ["AVERTISSEMENT", "BLOQUANT", "AUCUN"],
+    optionLabels: { AVERTISSEMENT: "Avertissement", BLOQUANT: "Bloquant", AUCUN: "Aucun contrôle" },
+  },
+  {
+    key: "FACILITY_EXPOSURE_BASIS",
+    group: "Workflow",
+    labelFr: "Engagement global : base de calcul des lignes",
+    helpFr:
+      "Montant retenu par ligne pour l'engagement global du dossier (segmentation, délégation) : le plus grand de l'autorisé et de l'encours (prudent : un dépassement compte), l'autorisé seul, ou l'encours seul.",
+    kind: "enum",
+    default: "MAX",
+    options: ["MAX", "AUTORISE", "ENCOURS"],
+    optionLabels: { MAX: "Le plus grand de l'autorisé et de l'encours", AUTORISE: "Autorisé", ENCOURS: "Encours" },
+  },
+  {
+    key: "FACILITY_OFF_BALANCE_WEIGHT",
+    group: "Workflow",
+    labelFr: "Engagements par signature dans l'engagement global (%)",
+    helpFr: "Pondération des cautions, avals et crédits documentaires. 100 : comptés en totalité (proposition prudente, à arrêter en COPIL).",
+    kind: "integer",
+    default: "100",
+    min: 0,
+    max: 100,
+  },
+  {
+    key: "COMMITTEE_LIFT_DOUBLE_VALIDATION",
+    group: "Comités",
+    labelFr: "Levée d'un critère de classement : confirmation par une seconde personne",
+    helpFr:
+      "Désactivé : la levée enregistrée par un profil habilité (contre-étude, surveillance) prend effet immédiatement. Activé (cible) : elle prend effet lorsqu'une seconde personne habilitée la confirme.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "COMMITTEE_WL_DOUBLE_VALIDATION",
+    group: "Comités",
+    labelFr: "Décision de watch list : confirmation par une seconde personne",
+    helpFr: "Même principe pour l'entrée et la sortie de watch list décidées en comité.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "WATCHLIST_CUMUL_NOTCH",
+    group: "Comités",
+    labelFr: "Watch list et créance sensible : cran supplémentaire en cas de cumul",
+    helpFr:
+      "0 (proposé) : le plus sévère des deux plafonds s'applique, sans double comptage. 1 ou 2 : la note est dégradée d'autant de crans au-delà du plafond le plus sévère (10 au plus).",
+    kind: "integer",
+    default: "0",
+    min: 0,
+    max: 2,
+  },
+  {
     key: "OVERRIDE_MAX_NOTCHES",
     group: "Dérogations",
     labelFr: "Ampleur maximale d'une dérogation (crans)",
@@ -122,7 +205,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Intelligence artificielle",
     labelFr: "Fournisseur",
     helpFr:
-      "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (Mistral, modèle hébergé par la banque). La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou IA_CLE_API pour les autres.",
+      "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (DeepSeek, Mistral, modèle hébergé par la banque). La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou IA_CLE_API pour les autres.",
     kind: "enum",
     default: "anthropic",
     options: AI_PROVIDERS,
@@ -149,6 +232,136 @@ export const SETTINGS: readonly SettingDef[] = [
       "Vide : adresse officielle. Obligatoire pour Azure et les API compatibles. Adresse https exigée.",
     kind: "url",
     default: "",
+  },
+  {
+    key: "T24_ENABLED",
+    group: "Référentiels externes",
+    labelFr: "Rapatriement des fiches clients depuis T24",
+    helpFr:
+      "Activé : la fiche client se crée et s'actualise depuis T24 par le code client. Désactivé ou T24 indisponible : saisie minimale, à rattacher à T24 ensuite. Jeton d'accès : variable d'environnement T24_API_TOKEN.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "T24_BASE_URL",
+    group: "Référentiels externes",
+    labelFr: "Adresse de l'API T24",
+    helpFr: "Adresse https de l'API clients de T24 (Transact), réseau interne de la banque.",
+    kind: "url",
+    default: "",
+  },
+  {
+    key: "T24_CUSTOMER_PATH",
+    group: "Référentiels externes",
+    labelFr: "Chemin de la ressource client",
+    helpFr: "Ajouté à l'adresse, suivi du code client. Transact (IRIS) : /api/v1.0.0/party/customers/",
+    kind: "text",
+    default: "/api/v1.0.0/party/customers/",
+  },
+  {
+    key: "T24_CODE_MIN_DIGITS",
+    group: "Référentiels externes",
+    labelFr: "Code client T24 : chiffres au minimum",
+    helpFr: "Le code client T24 est numérique (1 à 10 chiffres selon le paramétrage de T24). À aligner sur la numérotation de la banque.",
+    kind: "integer",
+    default: "1",
+    min: 1,
+    max: 20,
+  },
+  {
+    key: "T24_CODE_MAX_DIGITS",
+    group: "Référentiels externes",
+    labelFr: "Code client T24 : chiffres au maximum",
+    helpFr: "Voir ci-dessus.",
+    kind: "integer",
+    default: "10",
+    min: 1,
+    max: 20,
+  },
+  {
+    key: "T24_FACILITIES_PATH",
+    group: "Référentiels externes",
+    labelFr: "Chemin des engagements (limites) du client",
+    helpFr: "Ajouté à l'adresse de l'API T24, suivi du code client : lignes d'autorisation et d'engagement. Vide : pas de rapatriement des engagements.",
+    kind: "text",
+    default: "/api/v1.0.0/holdings/limits/",
+  },
+  {
+    key: "T24_REFRESH_AT_OPENING",
+    group: "Référentiels externes",
+    labelFr: "Actualisation depuis T24 à l'ouverture d'un dossier",
+    helpFr:
+      "Pour un client rattaché à T24, à l'ouverture du dossier : actualiser la fiche client, et les lignes d'engagement si leur chemin est renseigné. Une panne de T24 ne bloque pas l'ouverture : le dossier part des dernières données, avec un avertissement.",
+    kind: "enum",
+    default: "FICHE_ET_ENGAGEMENTS",
+    options: ["FICHE_ET_ENGAGEMENTS", "FICHE", "AUCUNE"],
+    optionLabels: { FICHE_ET_ENGAGEMENTS: "Fiche et engagements", FICHE: "Fiche client seule", AUCUNE: "Aucune actualisation" },
+  },
+  {
+    key: "CREDIT_BUREAU_API_ENABLED",
+    group: "Référentiels externes",
+    labelFr: "Récupération du rapport de solvabilité par API",
+    helpFr:
+      "Activé : le rapport se récupère depuis la base des rapports du crédit bureau, par l'ICE. Le rafraîchissement du rapport se fait dans l'outil du crédit bureau. Jeton : variable d'environnement CREDIT_BUREAU_API_TOKEN.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "CREDIT_BUREAU_PROVIDER",
+    group: "Référentiels externes",
+    labelFr: "Crédit bureau",
+    helpFr: "Délégataire de Bank Al-Maghrib dont la banque consulte les rapports.",
+    kind: "enum",
+    default: "CREDITINFO",
+    options: ["CREDITINFO", "QUANTIK"],
+    optionLabels: { CREDITINFO: "Creditinfo Maroc", QUANTIK: "Quantik Maroc" },
+  },
+  {
+    key: "CREDIT_BUREAU_BASE_URL",
+    group: "Référentiels externes",
+    labelFr: "Adresse de l'API du crédit bureau",
+    helpFr: "Adresse https de la base des rapports de solvabilité.",
+    kind: "url",
+    default: "",
+  },
+  {
+    key: "CREDIT_BUREAU_PATH",
+    group: "Référentiels externes",
+    labelFr: "Chemin du rapport entreprise",
+    helpFr: "Ajouté à l'adresse, suivi de l'ICE de l'entreprise.",
+    kind: "text",
+    default: "/api/v1/reports/company/",
+  },
+  {
+    key: "CREDIT_REPORT_MAX_AGE_DAYS",
+    group: "Référentiels externes",
+    labelFr: "Ancienneté maximale du rapport de solvabilité (jours)",
+    helpFr:
+      "Au-delà, depuis sa date de mise à jour, le rapport est signalé ancien : l'analyste le rafraîchit dans l'outil du crédit bureau puis le récupère à nouveau. Proposition : 30 jours, à arrêter en COPIL.",
+    kind: "integer",
+    default: "30",
+    min: 1,
+    max: 365,
+  },
+  {
+    key: "CREDIT_REPORT_AT_SUBMISSION",
+    group: "Référentiels externes",
+    labelFr: "Rapport absent ou ancien à la soumission",
+    helpFr: "Avertissement : la soumission reste possible, l'alerte est tracée. Bloquant : un rapport à jour est exigé.",
+    kind: "enum",
+    default: "AVERTISSEMENT",
+    options: ["AVERTISSEMENT", "BLOQUANT", "AUCUN"],
+    optionLabels: { AVERTISSEMENT: "Avertissement", BLOQUANT: "Bloquant", AUCUN: "Aucun contrôle" },
+  },
+  {
+    key: "LEGAL_PROFILE_MAX_AGE_DAYS",
+    group: "Référentiels externes",
+    labelFr: "Ancienneté maximale de la fiche juridique (jours)",
+    helpFr: "Au-delà, depuis la date du rapport InfoRisque ou de la synchronisation T24, la fiche juridique est signalée à actualiser.",
+    kind: "integer",
+    default: "365",
+    min: 30,
+    max: 1095,
   },
 ] as const;
 
