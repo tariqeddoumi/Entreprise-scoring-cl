@@ -13,6 +13,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/settings", label: "Paramétrage" },
   { href: "/admin/raccordements", label: "Raccordements" },
   { href: "/admin/reprise", label: "Reprise du stock" },
+  { href: "/admin/journal", label: "Journal d'audit" },
 ];
 
 /** Onglets des écrans d'administration. */

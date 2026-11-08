@@ -71,6 +71,12 @@ export default async function AdminHome() {
       text: "T24, crédit bureau, IA : désactivés au démarrage, test de connexion sans enregistrement, activation après un test réussi.",
     },
     {
+      href: "/admin/journal",
+      title: "Journal d'audit",
+      value: "Lecture seule",
+      text: "Toutes les opérations tracées (dossiers, décisions, clients, comptes, connexions, paramétrage, tests des API), filtrables et exportables.",
+    },
+    {
       href: "/admin/reprise",
       title: "Reprise du stock",
       value: "Import Excel",

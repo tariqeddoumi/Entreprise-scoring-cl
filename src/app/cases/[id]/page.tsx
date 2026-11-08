@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { auditLabel } from "@/lib/audit-labels";
 import { parseOpeningRefresh } from "@/lib/opening-refresh";
 import { notFound } from "next/navigation";
 import { getScoringModel, today } from "@/lib/rating-scale";
@@ -37,19 +38,6 @@ import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/Financial
 
 export const dynamic = "force-dynamic";
 
-const ACTION_LABELS: Record<string, string> = {
-  CASE_CREATED: "Dossier ouvert",
-  CASE_REOPENED: "Dossier repris après rejet",
-  CASE_DRAFT_SAVED: "Brouillon enregistré",
-  CASE_DOCUMENT_ADDED: "Pièce ajoutée",
-  AI_PROPOSALS_GENERATED: "Analyse par l'IA",
-  AI_PROPOSAL_DECIDED: "Proposition de l'IA traitée",
-  CASE_SUBMITTED: "Soumis à validation",
-  CASE_STEP_APPROVED: "Étape de validation franchie",
-  CASE_VALIDATED: "Validation finale",
-  CASE_REJECTED: "Rejeté",
-  CASE_CANCELLED: "Abandonné",
-};
 
 function describe(action: string, detail: string | null): string {
   if (!detail) return "";
@@ -543,7 +531,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
                     {e.createdAt.toISOString().slice(0, 16).replace("T", " ")}
                   </td>
                   <td>{e.actor}</td>
-                  <td>{ACTION_LABELS[e.action] ?? e.action}</td>
+                  <td>{auditLabel(e.action)}</td>
                   <td className="muted" style={{ fontSize: 12 }}>
                     {describe(e.action, e.detail)}
                   </td>

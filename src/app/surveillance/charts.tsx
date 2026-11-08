@@ -177,7 +177,7 @@ export function LineChart({
     <div className="viz" style={{ display: "grid", gap: 6, minWidth: 0 }}>
       {series.length > 1 && <Legend items={series} shape="line" />}
       <div ref={ref} style={{ position: "relative", width: "100%", minWidth: 0 }}>
-        <svg width={width} height={height} role="img" aria-label={label} style={{ display: "block", overflow: "visible" }}>
+        <svg width={width} height={height} role="group" aria-label={label} style={{ display: "block", overflow: "visible" }}>
           {ticks.map((t) => (
             <g key={t}>
               <line x1={m.l} x2={m.l + pw} y1={y(t)} y2={y(t)} stroke="var(--viz-grid)" strokeWidth={1} />
@@ -220,6 +220,7 @@ export function LineChart({
             height={ph}
             fill="transparent"
             tabIndex={0}
+            role="img"
             aria-label={`${label} : survol ou flèches pour lire les valeurs`}
             onPointerMove={(e) => pick(e.clientX, (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect())}
             onPointerLeave={() => setIdx(null)}
@@ -286,7 +287,7 @@ export function GroupedColumns({
     <div className="viz" style={{ display: "grid", gap: 6, minWidth: 0 }}>
       {series.length > 1 && <Legend items={series} shape="rect" />}
       <div ref={ref} style={{ position: "relative", width: "100%", minWidth: 0 }}>
-        <svg width={width} height={height} role="img" aria-label={label} style={{ display: "block" }}>
+        <svg width={width} height={height} role="group" aria-label={label} style={{ display: "block" }}>
           {ticks.map((t) => (
             <g key={t}>
               <line x1={m.l} x2={m.l + pw} y1={y(t)} y2={y(t)} stroke="var(--viz-grid)" strokeWidth={1} />
@@ -313,6 +314,7 @@ export function GroupedColumns({
                   height={ph + m.b}
                   fill="transparent"
                   tabIndex={0}
+                  role="img"
                   aria-label={`${c} : ${series.map((s) => `${s.label} ${format(s.values[i])}`).join(", ")}`}
                   onPointerEnter={() => setIdx(i)}
                   onPointerLeave={() => setIdx(null)}

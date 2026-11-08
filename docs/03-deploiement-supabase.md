@@ -211,6 +211,12 @@ Ajoute `case_documents.kind` (type de la pièce). Idempotent. Listes par motif d
 
 La reprise du stock (docs/25) ne demande aucune migration : elle écrit dans les tables existantes.
 
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/14-alignement-noms-contraintes.sql
+```
+
+Renomme trois clés étrangères créées en minuscules par les premiers scripts, pour qu'elles portent le nom attendu par Prisma. Les définitions sont inchangées. Idempotent. **Appliquée en production le 8 novembre 2026** (docs/27).
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son
