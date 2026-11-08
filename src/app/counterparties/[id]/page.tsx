@@ -515,6 +515,12 @@ export default async function CounterpartyPage({
                         {r.ratingCase.status === "REJECTED" ? "(rejetée)" : "(proposée, non validée)"}
                       </span>
                     )}
+                    {r.origin === "REPRISE" && (
+                      <span className="muted" style={{ fontSize: 11 }} title="Note de l'existant, importée (reprise du stock)">
+                        {" "}
+                        (reprise du stock)
+                      </span>
+                    )}
                     {r.origin === "BATCH" && (
                       <span className="muted" style={{ fontSize: 11 }} title="Notation de surveillance d'un lot : ne fait pas foi">
                         {" "}

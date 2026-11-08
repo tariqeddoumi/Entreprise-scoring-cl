@@ -209,6 +209,8 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/13-pieces-requises.sql
 
 Ajoute `case_documents.kind` (type de la pièce). Idempotent. Listes par motif dans `CASE_PURPOSES` (champ `requiredDocs`), contrôle `DOCS_AT_SUBMISSION` (docs/24).
 
+La reprise du stock (docs/25) ne demande aucune migration : elle écrit dans les tables existantes.
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son

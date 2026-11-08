@@ -825,6 +825,17 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* listes par motif, passage au contrôle bloquant.
 
+## D-65 — Reprise du stock (clients, notes historiques, bilans, watch list) — **FORMAT À VALIDER AVEC LA DSI**
+
+*Décision :*
+- **Classeur unique** en quatre feuilles (clients, notes, bilans, watch list), avec un modèle téléchargeable.
+- **Contrôle à blanc obligatoire**, puis import en une seule transaction, tracé avec l'empreinte du fichier.
+- **Import idempotent** : rejouer le même classeur ne crée rien.
+- **Notes reprises officielles**, non recalculées. La note d'origine et le modèle d'origine sont conservés.
+- **Pas de reprise** des dossiers en cours, des pièces ni des engagements : les engagements viennent de T24.
+
+*À confirmer :* table de correspondance des anciennes notes vers l'échelle 1 à 10, profondeur historique, extraction par la DSI.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

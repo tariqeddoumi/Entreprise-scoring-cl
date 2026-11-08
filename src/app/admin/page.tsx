@@ -59,7 +59,13 @@ export default async function AdminHome() {
       href: "/admin/settings",
       title: "Paramétrage",
       value: ai.enabled ? (ai.missing ? "IA activée, non configurée" : "IA activée") : "IA désactivée",
-      text: "Circuit de validation, délégation par montant, dérogations, pièces, intelligence artificielle.",
+      text: "Circuit de validation, délégation par montant, dérogations, pièces, intelligence artificielle, référentiels externes (T24, crédit bureau).",
+    },
+    {
+      href: "/admin/reprise",
+      title: "Reprise du stock",
+      value: "Import Excel",
+      text: "Clients, notes historiques, bilans et historique de watch list de l'existant : contrôle à blanc ligne par ligne, puis import journalisé, sans écrasement.",
     },
   ];
   return (
