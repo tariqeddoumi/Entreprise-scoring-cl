@@ -8,6 +8,7 @@ import {
   setUserActive,
   setUserEntity,
   setUserFunction,
+  setUserOfficerCode,
   setUserRole,
 } from "@/lib/accounts";
 import { getPerimeter, getSessionIdentity } from "@/lib/session";
@@ -47,6 +48,7 @@ export async function adminUsersAction(
           entityId: entityOf(formData.get("entityId")),
           writeScope: String(formData.get("writeScope") ?? "ENTITY"),
           jobFunction: String(formData.get("jobFunction") ?? "") || null,
+          accountOfficerCode: String(formData.get("accountOfficerCode") ?? "") || null,
         });
         revalidatePath("/admin/users");
         return {
@@ -68,8 +70,9 @@ export async function adminUsersAction(
         return { okFr: "Rôle modifié." };
       case "function":
         await setUserFunction(actor, scope, userId, String(formData.get("jobFunction") ?? "") || null);
+        if (formData.has("accountOfficerCode")) await setUserOfficerCode(actor, scope, userId, String(formData.get("accountOfficerCode") ?? "") || null);
         revalidatePath("/admin/users");
-        return { okFr: "Fonction modifiée : elle s'applique dès la prochaine page consultée." };
+        return { okFr: "Fonction et code gestionnaire enregistrés : ils s'appliquent dès la prochaine page consultée." };
       case "deactivate":
       case "reactivate":
         await setUserActive(actor, scope, userId, op === "reactivate");

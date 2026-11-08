@@ -33,6 +33,8 @@ export interface Identity {
   entityCode?: string | null;
   /** Fonction métier dans le circuit de validation (utilisateurs seulement). */
   jobFunction?: string | null;
+  /** Code gestionnaire T24 (chargé d'affaires) : son portefeuille. */
+  accountOfficerCode?: string | null;
 }
 
 /** Longueur minimale d'une clé API, en caractères. */

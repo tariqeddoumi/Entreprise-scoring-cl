@@ -246,10 +246,12 @@ export default async function CounterpartyPage({
                   currency: counterparty.currency,
                   commercialSegment: opt(counterparty.commercialSegment),
                   coreBankingId: opt(counterparty.coreBankingId),
+                  accountOfficer: opt(counterparty.accountOfficer),
                 },
               }}
               segments={ext.segments.filter((x) => x.active)}
               fromT24={counterparty.dataSource === "T24"}
+              ownPortfolio={!!perimeter.portfolio}
             />
           )}
           {canDelete && (

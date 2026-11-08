@@ -121,7 +121,9 @@ model Counterparty {
   coreBankingData     String?   @db.Text
   // Segment commercial de la banque (T24), distinct du segment du modèle.
   commercialSegment   String?
-  // Gestionnaire du client (code chargé d'affaires T24).
+  // Gestionnaire du client (code chargé d'affaires T24, ou identifiant du
+  // compte qui a créé la fiche en saisie minimale) : portefeuille du chargé
+  // d'affaires.
   accountOfficer      String?
   // Fiche juridique : identité, dirigeants, actionnaires, bénéficiaires
   // effectifs, comptes déposés, événements légaux (InfoRisque, T24 ou saisie).
@@ -143,6 +145,7 @@ model Counterparty {
 
   @@unique([entityId, ice])
   @@unique([entityId, coreBankingId])
+  @@index([accountOfficer])
   @@index([name])
   @@index([entityId])
   @@index([economicGroupId])
@@ -358,6 +361,9 @@ model User {
   // Fonction métier (circuit de validation) : CHARGE_AFFAIRES, ANALYSTE,
   // DIRECTEUR_CA, CONTRE_ETUDE… — référentiel paramétrable, distinct du rôle.
   jobFunction        String?
+  // Code gestionnaire T24 (chargé d'affaires) : relie le compte aux clients
+  // dont il est gestionnaire (portefeuille, paramétrable).
+  accountOfficerCode String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

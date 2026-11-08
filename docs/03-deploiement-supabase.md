@@ -185,6 +185,14 @@ Raccordements (Administration › Paramétrage › Référentiels externes) :
 
 La correspondance des champs T24 (champs locaux de la banque : ICE, RC, segment commercial…) se paramètre sous la clé `T24_FIELD_MAP` de `app_settings` (JSON : pour chaque champ de la fiche, la liste des chemins dans la réponse de T24). Les adresses doivent être en https ; elles sont appelées depuis le serveur de l'application, qui doit donc atteindre le réseau interne de la banque (hébergement interne, ou passerelle). Sans raccordement, la création se fait en saisie minimale et le rapport de solvabilité se charge en PDF ou en image, lu par l'IA.
 
+### Portefeuille par chargé d'affaires (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/11-portefeuille-charge-affaires.sql
+```
+
+Ajoute `users.accountOfficerCode` (code gestionnaire T24), l'index sur `counterparties.accountOfficer`, et affecte aux clients sans gestionnaire le compte qui les a créés (journal d'audit). Idempotent et transactionnel. La restriction ne s'active qu'avec le paramètre `PORTFOLIO_SCOPE_P1 = PORTEFEUILLE` (docs/22).
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son

@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
+import { prisma as basePrisma } from "./prisma";
 import { ancestors, canWrite, entityCurrency, loadTree, OutOfScopeError, type Perimeter } from "./scope";
 import { loadSettings } from "./settings";
 import {
@@ -82,6 +83,23 @@ export async function fetchT24Customer(db: PrismaClient, rawCode: string, opts: 
   return customer;
 }
 
+/**
+ * Un code client T24 ne figure qu'une fois dans l'outil. La recherche porte sur
+ * toute la base (un chargé d'affaires ne voit que son portefeuille) ; le nom
+ * n'est donné que si la fiche est visible de la personne.
+ */
+async function assertCodeFree(db: PrismaClient, code: string, exceptId?: string) {
+  const any = await basePrisma.counterparty.findFirst({ where: { coreBankingId: code, ...(exceptId ? { id: { not: exceptId } } : {}) }, select: { id: true } });
+  if (!any) return;
+  const visible = await db.counterparty.findFirst({ where: { id: any.id }, select: { name: true } });
+  throw new CoreBankingError(
+    "CONFLIT",
+    visible
+      ? `Le client T24 ${code} existe déjà dans l'outil : ${visible.name}.`
+      : `Le client T24 ${code} existe déjà dans l'outil, hors de votre portefeuille ou de votre périmètre : voyez son gestionnaire ou le directeur du centre.`
+  );
+}
+
 /** Entité de rattachement : le centre d'affaires de T24 s'il est connu et dans le périmètre, sinon celle choisie. */
 async function resolveEntity(perimeter: Perimeter, customer: CoreBankingCustomer, fallback: string | null | undefined) {
   const tree = await loadTree();
@@ -106,8 +124,7 @@ const t24Payload = (c: CoreBankingCustomer) => JSON.stringify({ ...c, fetchedAt:
 export async function createFromT24(db: PrismaClient, perimeter: Perimeter, identity: Identity, input: { code: string; entityId?: string | null }) {
   const customer = await fetchT24Customer(db, input.code);
   const { entity, tree } = await resolveEntity(perimeter, customer, input.entityId);
-  const existing = await db.counterparty.findFirst({ where: { coreBankingId: customer.code }, select: { id: true, name: true } });
-  if (existing) throw new CoreBankingError("CONFLIT", `Le client T24 ${customer.code} existe déjà dans l'outil : ${existing.name}.`);
+  await assertCodeFree(db, customer.code);
   const fields = counterpartyFieldsFromT24(customer);
   const economicGroupId = await groupId(db, entity.id, customer.economicGroupCode);
   return db.$transaction(async (tx) => {
@@ -157,8 +174,7 @@ export async function syncFromT24(
   // non vérifié (T24 indisponible à la création), corrigé au rattachement.
   if (cp.dataSource === "T24" && cp.coreBankingId && rawCode && normalizeT24Code(rawCode) !== cp.coreBankingId)
     throw new CoreBankingError("CONFLIT", `Fiche déjà rattachée au client T24 ${cp.coreBankingId}.`);
-  const other = await db.counterparty.findFirst({ where: { coreBankingId: code, id: { not: cp.id } }, select: { name: true } });
-  if (other) throw new CoreBankingError("CONFLIT", `Le client T24 ${code} est déjà rattaché à la fiche « ${other.name} ».`);
+  await assertCodeFree(db, code, cp.id);
   const customer = await fetchT24Customer(db, code);
   const fields = counterpartyFieldsFromT24(customer);
   const changes = diffWithT24(cp, fields);

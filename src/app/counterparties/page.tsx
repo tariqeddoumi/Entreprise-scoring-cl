@@ -41,6 +41,7 @@ export default async function CounterpartiesPage() {
             ice: true,
             coreBankingId: true,
             dataSource: true,
+            accountOfficer: true,
             segment: true,
             sectorCode: true,
             entityId: true,
@@ -91,6 +92,7 @@ export default async function CounterpartiesPage() {
         ice: r.ice,
         coreBankingId: r.coreBankingId,
         dataSource: r.dataSource,
+        accountOfficer: r.accountOfficer,
         segment: r.segment,
         sectorCode: r.sectorCode,
         entityCode: code.get(r.entityId) ?? "—",
@@ -114,6 +116,7 @@ export default async function CounterpartiesPage() {
   );
   const ai = await aiStatus();
   const t24 = await t24Config();
+  const portfolio = perimeter.portfolio ?? null;
   const { data: segments } = await safeQuery((db) => loadCommercialSegments(db), DEFAULT_COMMERCIAL_SEGMENTS);
 
   return (
@@ -125,6 +128,13 @@ export default async function CounterpartiesPage() {
           client ou le supprimer.
         </p>
       </div>
+
+      {portfolio && (
+        <div className="card" role="status" style={{ padding: "10px 14px", fontSize: 13, borderLeft: "4px solid var(--brand)" }}>
+          <strong>Votre portefeuille</strong> : clients dont vous êtes gestionnaire ({portfolio.owners.join(", ")}) et clients pour lesquels vous avez
+          ouvert un dossier. Un client d&apos;un autre gestionnaire se voit par son gestionnaire ou par le directeur du centre.
+        </div>
+      )}
 
       {!dbAvailable && (
         <div className="card" style={{ padding: 14 }}>
@@ -142,6 +152,7 @@ export default async function CounterpartiesPage() {
           aiUsable={ai.enabled && !ai.missing}
           t24Enabled={t24.enabled}
           segments={segments.filter((x) => x.active)}
+          ownPortfolio={!!portfolio}
         />
       )}
 

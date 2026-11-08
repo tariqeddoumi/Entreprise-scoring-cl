@@ -757,6 +757,26 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-61 — Portefeuille par chargé d'affaires — **ACTIVATION APRÈS RENSEIGNEMENT DES CODES**
+
+*Contexte :* demande de la banque. Le chargé d'affaires ne voit que ses clients ; le directeur de centre voit son centre ; la contre-étude et la surveillance voient leur région ou toute la banque (Casablanca).
+
+*Décision :*
+- Code gestionnaire T24 sur chaque compte.
+- Portefeuille du profil 1 :
+  - clients dont il est gestionnaire (code T24, ou fiche qu'il a créée) ;
+  - clients pour lesquels il a ouvert un dossier.
+- Restriction appliquée dans le client de base de données cloisonné, à tout ce qui dépend du client.
+- Refus :
+  - création d'un client d'un autre gestionnaire ;
+  - cession d'un client ;
+  - dossier hors portefeuille.
+- Paramètre « Visibilité des chargés d'affaires » : tout le centre par défaut, pour ne pas vider les écrans avant le renseignement des codes ; à passer à « Son portefeuille » ensuite.
+
+*À confirmer :* l'inclusion des clients pour lesquels le chargé d'affaires a ouvert un dossier ; le traitement des remplacements (absence, mutation) : délégation temporaire ou réaffectation par le directeur.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

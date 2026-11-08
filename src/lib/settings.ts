@@ -96,6 +96,20 @@ export const SETTINGS: readonly SettingDef[] = [
     max: 36,
   },
   {
+    key: "PORTFOLIO_SCOPE_P1",
+    group: "Workflow",
+    labelFr: "Visibilité des chargés d'affaires (profil 1)",
+    helpFr:
+      "Portefeuille : un chargé d'affaires ne voit que ses clients (gestionnaire T24 égal à son code gestionnaire, fiches qu'il a créées) et ceux pour lesquels il a ouvert un dossier. Centre : tous les clients de son centre. Les directeurs de centre, la contre-étude, la surveillance et les gestionnaires des risques voient toujours leur centre, leur région ou leur banque. Renseignez d'abord le code gestionnaire T24 de chaque chargé d'affaires (Administration › Utilisateurs).",
+    kind: "enum",
+    // Par défaut, comportement antérieur (tout le centre) : on passe au
+    // portefeuille une fois les codes gestionnaires renseignés sur les comptes,
+    // sans quoi les chargés d'affaires ne verraient plus leurs clients.
+    default: "CENTRE",
+    options: ["PORTEFEUILLE", "CENTRE"],
+    optionLabels: { PORTEFEUILLE: "Son portefeuille", CENTRE: "Tout son centre" },
+  },
+  {
     key: "COMMITTEE_LIFT_DOUBLE_VALIDATION",
     group: "Comités",
     labelFr: "Levée d'un critère de classement : confirmation par une seconde personne",

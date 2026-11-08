@@ -20,6 +20,7 @@ interface FormState {
   currency: string;
   commercialSegment: string;
   coreBankingId: string;
+  accountOfficer: string;
 }
 
 const EMPTY: FormState = {
@@ -34,9 +35,10 @@ const EMPTY: FormState = {
   currency: "",
   commercialSegment: "",
   coreBankingId: "",
+  accountOfficer: "",
 };
 
-const TEXT_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency", "commercialSegment", "coreBankingId"] as const;
+const TEXT_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency", "commercialSegment", "coreBankingId", "accountOfficer"] as const;
 const AI_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency"] as const;
 
 /** Fiche existante à modifier (mode édition). */
@@ -68,10 +70,12 @@ interface Props {
   segments?: Array<{ code: string; labelFr: string }>;
   /** Fiche rapatriée de T24 (modification) : T24 fait foi. */
   fromT24?: boolean;
+  /** Chargé d'affaires restreint à son portefeuille : le gestionnaire est lui-même. */
+  ownPortfolio?: boolean;
 }
 
 /** Création ou modification d'une fiche client. */
-export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit, t24Enabled = false, segments = [], fromT24 = false }: Props) {
+export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit, t24Enabled = false, segments = [], fromT24 = false, ownPortfolio = false }: Props) {
   const router = useRouter();
   const initial: FormState = edit ? { ...EMPTY, ...edit.values } : EMPTY;
   const [open, setOpen] = useState(false);
@@ -413,6 +417,12 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
               {values.commercialSegment && !segments.some((x) => x.code === values.commercialSegment) && <option value={values.commercialSegment}>{values.commercialSegment}</option>}
             </select>
           </label>
+          {!ownPortfolio && (
+            <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+              Gestionnaire (code chargé d&apos;affaires)
+              <input type="text" maxLength={40} disabled={fromT24} placeholder="ex. CA0107" style={FIELD_STYLE} {...field("accountOfficer")} />
+            </label>
+          )}
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
             Code client T24 (si connu)
             <input type="text" inputMode="numeric" maxLength={20} disabled={fromT24} style={FIELD_STYLE} {...field("coreBankingId")} />
