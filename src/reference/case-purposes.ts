@@ -7,6 +7,8 @@
  * l'année, une demande de crédit d'investissement.
  */
 
+import { checkRequiredDocs } from "./required-docs";
+
 export interface CasePurpose {
   code: string;
   labelFr: string;
@@ -15,6 +17,8 @@ export interface CasePurpose {
   defaultExercise?: "SUIVANT" | "CONSERVE";
   /** Type de crédit proposé par défaut. */
   defaultCreditType?: string;
+  /** Pièces et informations requises pour soumettre (absent : liste proposée, src/reference/required-docs.ts). */
+  requiredDocs?: string[];
 }
 
 /** Élément d'une liste paramétrable simple (types de crédit, catégories de délégation). */
@@ -112,6 +116,7 @@ export function checkPurposes(list: CasePurpose[]): string[] {
     if (seen.has(p.code)) errors.push(`Motif en double : ${p.code}.`);
     seen.add(p.code);
     if (!p.labelFr.trim() || p.labelFr.length > 200) errors.push(`Motif ${p.code} : libellé de 1 à 200 caractères.`);
+    for (const e of checkRequiredDocs(p.requiredDocs)) errors.push(`Motif ${p.code} : ${e}`);
   }
   return errors;
 }

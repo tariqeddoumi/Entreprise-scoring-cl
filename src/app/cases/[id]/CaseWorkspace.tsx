@@ -12,6 +12,7 @@ import { ClassificationPanel } from "@/app/scoring/ClassificationPanel";
 import type { FacilityExposure } from "@/app/scoring/ScoringForm";
 import type { ClassificationSettings, WatchlistCap } from "@/reference/classification";
 import { DATA_STATUS_LABELS } from "@/app/ui-helpers";
+import { PIECE_KINDS } from "@/reference/required-docs";
 import type { CaseLift } from "@/lib/case-input";
 import {
   decideProposalAction,
@@ -20,6 +21,7 @@ import {
   saveDraftAction,
   submitCaseAction,
   uploadDocumentAction,
+  setDocumentKindAction,
 } from "../actions";
 
 interface DocumentRow {
@@ -29,6 +31,8 @@ interface DocumentRow {
   sizeBytes: number;
   uploadedBy: string;
   createdAt: string;
+  /** Type de la pièce (pièces requises par motif). */
+  kind?: string | null;
 }
 
 interface ProposalRow {
@@ -321,6 +325,22 @@ function AiPanel({
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }} title={d.fileName}>
                   {d.fileName}
                 </span>
+                <select
+                  aria-label={`Type de la pièce ${d.fileName}`}
+                  value={d.kind ?? ""}
+                  style={{ maxWidth: 170, fontSize: 11, padding: "2px 4px" }}
+                  onChange={async (e) => {
+                    const r = await setDocumentKindAction(caseId, d.id, e.target.value);
+                    if (r.ok) router.refresh();
+                  }}
+                >
+                  <option value="">Non typée</option>
+                  {PIECE_KINDS.map((k) => (
+                    <option key={k.code} value={k.code}>
+                      {k.labelFr}
+                    </option>
+                  ))}
+                </select>
                 <span className="muted">{Math.max(1, Math.round(d.sizeBytes / 1024))} ko</span>
               </li>
             ))}
@@ -328,6 +348,14 @@ function AiPanel({
         )}
         <form action={upload} style={{ display: "grid", gap: 6 }}>
           <input type="hidden" name="caseId" value={caseId} />
+          <select name="kind" aria-label="Type des pièces ajoutées" defaultValue="">
+            <option value="">Type de la pièce (facultatif)</option>
+            {PIECE_KINDS.map((k) => (
+              <option key={k.code} value={k.code}>
+                {k.labelFr}
+              </option>
+            ))}
+          </select>
           <input type="file" name="file" multiple aria-label="Pièces à ajouter au dossier" accept=".pdf,.png,.jpg,.jpeg,.xlsx,.txt,.csv,application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv" />
           <button type="submit" className="btn-ghost" disabled={uploading}>
             {uploading ? "Envoi…" : "Ajouter"}

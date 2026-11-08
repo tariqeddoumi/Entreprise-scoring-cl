@@ -1,5 +1,6 @@
 import { creditReportGate } from "./external-data";
 import { facilityStatus } from "./facilities";
+import { docsGate } from "./case-checklist";
 import { getScoringModel, today } from "@/lib/rating-scale";
 import { effectiveFormat } from "./statement-format";
 import type { PrismaClient } from "@/generated/prisma";
@@ -335,6 +336,10 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   // simple avertissement tracé, selon le paramétrage (circulaire 1/G/2010).
   const bureauGate = await creditReportGate(db, c.counterpartyId);
   if (bureauGate.problemFr && bureauGate.mode === "BLOQUANT") throw new CaseError(409, bureauGate.problemFr);
+  // Pièces et informations requises par le motif du dossier (paramétrable).
+  const docs = await docsGate(db, c, draft);
+  if (docs.missing.length && docs.mode === "BLOQUANT")
+    throw new CaseError(409, `Pièces requises manquantes ou périmées : ${docs.missing.map((m) => m.labelFr).join(" ; ")}. Voir « Préparation du dossier ».`);
   const { input, fx } = await buildInput(db, c, draft);
   // Un dossier se soumet pour faire valider une NOTE : un calcul sans grade
   // (donnée critique manquante, couverture insuffisante) se complète, il ne se
@@ -403,6 +408,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
           cours: fx?.rate ?? 1,
           etapes: workflow.steps.map((st) => st.code),
           ...(bureauGate.problemFr ? { alerteCreditBureau: bureauGate.problemFr } : {}),
+          ...(docs.missing.length ? { piecesManquantes: docs.missing.map((m) => `${m.code} (${m.status})`) } : {}),
         },
       });
     }, "CASE");

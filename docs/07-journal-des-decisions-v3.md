@@ -814,6 +814,19 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-64 — Pièces et informations requises par motif — **LISTES ET CONTRÔLE À ARRÊTER EN COPIL**
+
+*Décision :*
+- **Pièces jointes typées :** statuts et modèle J, attestations fiscale et CNSS, rapport du commissaire aux comptes, business plan, devis, situation intermédiaire.
+- **Éléments contrôlés sur les données :** bilan chargé, rapport de solvabilité, engagements et fiche juridique, chacun à jour.
+- **Liste requise par motif :** paramétrable, avec une liste proposée par défaut.
+- **Panneau « Préparation du dossier »** dans le dossier.
+- **À la soumission :** avertissement tracé (défaut), bloquant ou aucun contrôle.
+
+*À confirmer :* listes par motif, passage au contrôle bloquant.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

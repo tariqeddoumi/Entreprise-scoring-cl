@@ -10,8 +10,7 @@ import {
   extractFinancials,
   generateProposals,
   importFinancialsTemplate,
-  type ExtractedFinancials,
-} from "@/lib/ai-assist";
+  type ExtractedFinancials, setDocumentKind } from "@/lib/ai-assist";
 import type { CaseDraft } from "@/lib/case-input";
 import { cancelCase, CaseError, createCase, decideCase, previewCase, reopenCase, saveDraft, submitCase } from "@/lib/cases";
 import type { FxConversion } from "@/lib/fx";
@@ -161,17 +160,31 @@ export async function uploadDocumentAction(_prev: ActionResult, fd: FormData): P
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   const caseId = String(fd.get("caseId") ?? "");
   const files = fd.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  const kind = String(fd.get("kind") ?? "") || null;
   if (files.length === 0) return { ok: false, errorFr: "Choisissez au moins un fichier." };
   try {
     const db = await getDb();
     for (const f of files) {
-      await addDocument(db, session.identity, caseId, { name: f.name, type: f.type, bytes: new Uint8Array(await f.arrayBuffer()) });
+      await addDocument(db, session.identity, caseId, { name: f.name, type: f.type, bytes: new Uint8Array(await f.arrayBuffer()), kind });
     }
   } catch (e) {
     return failure(e);
   }
   revalidatePath(`/cases/${caseId}`);
   return { ok: true, okFr: files.length > 1 ? `${files.length} pièces ajoutées.` : "Pièce ajoutée." };
+}
+
+/** Type d'une pièce du dossier (pièces requises par motif). */
+export async function setDocumentKindAction(caseId: string, documentId: string, kind: string): Promise<ActionResult> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    await setDocumentKind(await getDb(), session.identity, documentId, kind || null);
+  } catch (e) {
+    return failure(e);
+  }
+  revalidatePath(`/cases/${caseId}`);
+  return { ok: true, okFr: "Type de la pièce enregistré." };
 }
 
 export async function generateProposalsAction(

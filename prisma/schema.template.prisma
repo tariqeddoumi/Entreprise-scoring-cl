@@ -447,6 +447,8 @@ model CaseDocument {
   mimeType   String
   sizeBytes  Int
   sha256     String
+  // Type de la pièce (statuts, attestation fiscale…) : pièces requises par motif.
+  kind       String?
   content    Bytes
   uploadedBy String
   createdAt  DateTime   @default(now())

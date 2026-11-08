@@ -110,6 +110,17 @@ export const SETTINGS: readonly SettingDef[] = [
     optionLabels: { PORTEFEUILLE: "Son portefeuille", CENTRE: "Tout son centre" },
   },
   {
+    key: "DOCS_AT_SUBMISSION",
+    group: "Workflow",
+    labelFr: "Pièces requises manquantes à la soumission",
+    helpFr:
+      "Pièces et informations requises par le motif du dossier (Paramétrage › Motifs) : avertissement tracé au journal, ou soumission bloquée tant qu'il en manque.",
+    kind: "enum",
+    default: "AVERTISSEMENT",
+    options: ["AVERTISSEMENT", "BLOQUANT", "AUCUN"],
+    optionLabels: { AVERTISSEMENT: "Avertissement", BLOQUANT: "Bloquant", AUCUN: "Aucun contrôle" },
+  },
+  {
     key: "FACILITY_EXPOSURE_BASIS",
     group: "Workflow",
     labelFr: "Engagement global : base de calcul des lignes",

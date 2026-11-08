@@ -29,6 +29,7 @@ export async function savePurposesAction(list: CasePurpose[]): Promise<PurposesA
     active: !!p.active,
     ...(p.defaultExercise === "SUIVANT" || p.defaultExercise === "CONSERVE" ? { defaultExercise: p.defaultExercise } : {}),
     ...(p.defaultCreditType ? { defaultCreditType: String(p.defaultCreditType).toUpperCase() } : {}),
+    ...(Array.isArray(p.requiredDocs) ? { requiredDocs: [...new Set(p.requiredDocs.map((c) => String(c).toUpperCase()))].slice(0, 20) } : {}),
   }));
   const issues = checkPurposes(clean);
   if (issues.length) return { errorFr: issues.join(" ") };

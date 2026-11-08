@@ -4,6 +4,7 @@ import { formatPostes, type StatementFormat } from "@/financials/statement-forma
 import { createHash } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma";
 import { AI_READABLE_TYPES, AiError, runAi, type AiDocument } from "./ai";
+import { PIECE_KINDS } from "@/reference/required-docs";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { normalizeProposal, proposableFields, type ProposableField } from "./case-input";
@@ -74,13 +75,36 @@ async function draftCase(db: PrismaClient, caseId: string) {
 
 // --- Pièces du dossier ------------------------------------------------------------
 
+/** Type d'une pièce du dossier (pièces requises par motif) : modifiable tant que le dossier est un brouillon. */
+export async function setDocumentKind(db: PrismaClient, identity: Identity, documentId: string, kind: string | null) {
+  const doc = await db.caseDocument.findUnique({ where: { id: documentId }, select: { id: true, caseId: true, kind: true, fileName: true } });
+  if (!doc) throw new CaseError(404, "Pièce introuvable.");
+  const c = await draftCase(db, doc.caseId);
+  if (c.status !== "DRAFT") throw new CaseError(409, "Les pièces se typent sur un brouillon.");
+  const k = kind && PIECE_KINDS.some((x) => x.code === kind) ? kind : null;
+  if ((doc.kind ?? null) === k) return;
+  await db.$transaction(async (tx) => {
+    await tx.caseDocument.update({ where: { id: doc.id }, data: { kind: k } });
+    await auditWithin(tx, {
+      actor: identity.name,
+      actorRole: identity.role,
+      action: "CASE_DOCUMENT_TYPED",
+      resourceType: "RatingCase",
+      resourceId: doc.caseId,
+      entityId: c.counterparty.entityId,
+      detail: { piece: doc.fileName, avant: doc.kind ?? null, apres: k },
+    });
+  });
+}
+
 export async function addDocument(
   db: PrismaClient,
   identity: Identity,
   caseId: string,
-  file: { name: string; type: string; bytes: Uint8Array }
+  file: { name: string; type: string; bytes: Uint8Array; kind?: string | null }
 ) {
   const c = await draftCase(db, caseId);
+  const kind = file.kind && PIECE_KINDS.some((k) => k.code === file.kind) ? file.kind : null;
   if (c.status !== "DRAFT") throw new CaseError(409, "Les pièces s'ajoutent à un brouillon.");
   const maxMb = await settingInt("DOCUMENT_MAX_MB");
   if (file.bytes.byteLength === 0) throw new CaseError(400, "Fichier vide.");
@@ -99,6 +123,7 @@ export async function addDocument(
         mimeType,
         sizeBytes: file.bytes.byteLength,
         sha256,
+        kind,
         content: Buffer.from(file.bytes),
         uploadedBy: identity.name,
       },

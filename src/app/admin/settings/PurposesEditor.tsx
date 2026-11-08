@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { checkPurposes, type CasePurpose } from "@/reference/case-purposes";
 import { savePurposesAction } from "./purposes-actions";
+import { DOC_KINDS, requiredFor } from "@/reference/required-docs";
 
 /** Motifs d'ouverture des dossiers (renouvellement annuel, investissement…). */
 export function PurposesEditor({ initial, readOnly, creditTypes = [] }: { initial: CasePurpose[]; readOnly: boolean; creditTypes?: Array<{ code: string; labelFr: string }> }) {
@@ -19,12 +20,14 @@ export function PurposesEditor({ initial, readOnly, creditTypes = [] }: { initia
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
           Motif choisi à l&apos;ouverture de chaque dossier et consigné sur celui-ci (suivi et reporting). L&apos;exercice proposé par défaut
           peut être « suivant » (ex. renouvellement annuel : passage au dernier exercice clos) ou « conserver ». Un motif déjà utilisé se
-          désactive au lieu d&apos;être supprimé.
+          désactive au lieu d&apos;être supprimé. Chaque motif liste les pièces et informations requises pour soumettre (contrôle paramétré dans
+          Workflow) ; « contrôlé » : vérifié par l&apos;outil sur les données (bilan, crédit bureau, engagements, InfoRisque).
         </p>
       </div>
       <fieldset disabled={readOnly} style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 6 }}>
         {list.map((p, i) => (
-          <div key={i} style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", alignItems: "center" }}>
+          <div key={i} className="card" style={{ padding: 10, boxShadow: "none", display: "grid", gap: 8 }}>
+          <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", alignItems: "center" }}>
             <input type="checkbox" aria-label={`Motif actif — ${p.code}`} style={{ width: 16 }} checked={p.active} onChange={(e) => set(i, { active: e.target.checked })} />
             <input aria-label="Code du motif" value={p.code} onChange={(e) => set(i, { code: e.target.value.toUpperCase() })} />
             <input aria-label="Libellé du motif" value={p.labelFr} maxLength={200} onChange={(e) => set(i, { labelFr: e.target.value })} />
@@ -44,6 +47,29 @@ export function PurposesEditor({ initial, readOnly, creditTypes = [] }: { initia
             <button type="button" className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setList((l) => l.filter((_, k) => k !== i))}>
               Retirer
             </button>
+          </div>
+          <details>
+            <summary style={{ cursor: "pointer", fontSize: 12 }}>
+              Pièces requises ({requiredFor(p).length}){p.requiredDocs ? "" : " · liste proposée"}
+            </summary>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+              {DOC_KINDS.filter((k) => k.code !== "AUTRE").map((k) => {
+                const cur = requiredFor(p);
+                return (
+                  <label key={k.code} style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 12 }} title={k.helpFr}>
+                    <input
+                      type="checkbox"
+                      style={{ width: 14 }}
+                      checked={cur.includes(k.code)}
+                      onChange={(e) => set(i, { requiredDocs: e.target.checked ? [...cur, k.code] : cur.filter((c) => c !== k.code) })}
+                    />
+                    {k.labelFr}
+                    {k.check === "SYSTEME" ? <span className="muted"> (contrôlé)</span> : null}
+                  </label>
+                );
+              })}
+            </div>
+          </details>
           </div>
         ))}
         <div>

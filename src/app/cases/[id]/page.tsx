@@ -18,6 +18,8 @@ import { CreditReportPanel } from "@/app/counterparties/[id]/ExternalPanels";
 import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
 import { FacilitiesPanel } from "@/app/counterparties/[id]/FacilitiesPanel";
 import { facilityStatus, type FacilityStatus } from "@/lib/facilities";
+import { caseChecklist } from "@/lib/case-checklist";
+import { settingText } from "@/lib/settings";
 import { parseAmount } from "@/financials/chart";
 import { loadCircuit } from "@/lib/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
@@ -94,7 +96,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         run: { select: { id: true, resultSnapshot: true, inputSnapshot: true, finalGrade: true, cappedGrade: true, outcome: true } },
         documents: {
           orderBy: { createdAt: "asc" },
-          select: { id: true, fileName: true, mimeType: true, sizeBytes: true, uploadedBy: true, createdAt: true },
+          select: { id: true, fileName: true, mimeType: true, sizeBytes: true, uploadedBy: true, createdAt: true, kind: true },
         },
         proposals: { where: { status: { in: ["PENDING", "ACCEPTED"] } }, orderBy: { createdAt: "asc" } },
       },
@@ -185,6 +187,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       }
     )
   ).data;
+  const prep = (await safeQuery((db) => caseChecklist(db, { id: c.id, counterpartyId: c.counterparty.id, purpose: c.purpose ?? null }, draft), null)).data;
+  const docsMode = await settingText("DOCS_AT_SUBMISSION");
   const externalSignals = [...(ext.report?.analysis.signals ?? []), ...(ext.legal?.analysis.signals ?? []), ...(ext.facilities?.signals ?? [])];
   const { circuit: circuitDef } = await loadCircuit();
   const liftDouble = await settingBool("COMMITTEE_LIFT_DOUBLE_VALIDATION");
@@ -366,6 +370,36 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           </Link>
           .
         </div>
+      )}
+
+      {prep && prep.items.length > 0 && (
+        <section id="preparation" className="card" style={{ padding: 16, display: "grid", gap: 8, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+            <h2 style={{ fontWeight: 600 }}>Préparation du dossier</h2>
+            <span style={{ fontSize: 13, fontWeight: 600, color: prep.missing.length ? "var(--warn)" : "var(--good)" }}>
+              {prep.missing.length
+                ? `▲ ${prep.missing.length} élément(s) à compléter sur ${prep.items.length}`
+                : `✓ Dossier complet (${prep.items.length} élément(s))`}
+            </span>
+          </div>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Pièces et informations requises pour le motif « {prep.purposeLabel ?? "non précisé"} » (Paramétrage › Motifs). À la soumission :{" "}
+            {docsMode === "BLOQUANT" ? "soumission bloquée tant qu'il en manque" : docsMode === "AUCUN" ? "pas de contrôle" : "avertissement tracé au journal"}.
+          </p>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4, fontSize: 13 }}>
+            {prep.items.map((i) => (
+              <li key={i.code} style={{ display: "flex", gap: 8 }}>
+                <span aria-hidden="true" style={{ fontWeight: 700, color: i.status === "FOURNI" ? "var(--good)" : i.status === "PERIME" ? "var(--warn)" : "var(--bad)" }}>
+                  {i.status === "FOURNI" ? "✓" : i.status === "PERIME" ? "▲" : "✕"}
+                </span>
+                <span>
+                  <strong>{i.labelFr}</strong> — {i.status === "FOURNI" ? "fourni" : i.status === "PERIME" ? "périmé" : "manquant"}
+                  {i.check === "SYSTEME" ? " (contrôlé par l'outil)" : ""}. <span className="muted">{i.detailFr}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {ext.facilities && (
