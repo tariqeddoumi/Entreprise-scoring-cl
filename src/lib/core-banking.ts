@@ -164,7 +164,8 @@ export async function syncFromT24(
   perimeter: Perimeter,
   identity: Identity,
   counterpartyId: string,
-  rawCode?: string
+  rawCode?: string,
+  opts: { timeoutMs?: number } = {}
 ): Promise<{ changes: FieldChange[]; code: string }> {
   const cp = await db.counterparty.findUnique({ where: { id: counterpartyId } });
   if (!cp) throw new CoreBankingError("INTROUVABLE", "Client introuvable.");
@@ -175,7 +176,7 @@ export async function syncFromT24(
   if (cp.dataSource === "T24" && cp.coreBankingId && rawCode && normalizeT24Code(rawCode) !== cp.coreBankingId)
     throw new CoreBankingError("CONFLIT", `Fiche déjà rattachée au client T24 ${cp.coreBankingId}.`);
   await assertCodeFree(db, code, cp.id);
-  const customer = await fetchT24Customer(db, code);
+  const customer = await fetchT24Customer(db, code, opts);
   const fields = counterpartyFieldsFromT24(customer);
   const changes = diffWithT24(cp, fields);
   const update: Record<string, string | null> = {};

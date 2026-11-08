@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { parseOpeningRefresh } from "@/lib/opening-refresh";
 import { notFound } from "next/navigation";
 import { getScoringModel, today } from "@/lib/rating-scale";
 import { effectiveFormat, formatByVersion } from "@/lib/statement-format";
@@ -187,6 +188,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       }
     )
   ).data;
+  const openingRefresh = parseOpeningRefresh(events.find((e) => e.action === "CASE_CREATED")?.detail);
   const prep = (await safeQuery((db) => caseChecklist(db, { id: c.id, counterpartyId: c.counterparty.id, purpose: c.purpose ?? null }, draft), null)).data;
   const docsMode = await settingText("DOCS_AT_SUBMISSION");
   const externalSignals = [...(ext.report?.analysis.signals ?? []), ...(ext.legal?.analysis.signals ?? []), ...(ext.facilities?.signals ?? [])];
@@ -369,6 +371,37 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
             voir l&apos;historique
           </Link>
           .
+        </div>
+      )}
+
+      {openingRefresh && (openingRefresh.fiche.status !== "IGNORE" || openingRefresh.engagements.status !== "IGNORE") && (
+        <div
+          role={openingRefresh.fiche.status === "ECHEC" || openingRefresh.engagements.status === "ECHEC" ? "alert" : "status"}
+          className="card"
+          style={{
+            padding: 12,
+            fontSize: 13,
+            display: "grid",
+            gap: 4,
+            minWidth: 0,
+            borderLeft: `4px solid ${openingRefresh.fiche.status === "ECHEC" || openingRefresh.engagements.status === "ECHEC" ? "var(--warn)" : "var(--good)"}`,
+          }}
+        >
+          <strong>Données T24 à l&apos;ouverture du dossier</strong>
+          {[openingRefresh.fiche, openingRefresh.engagements].map((p, i) => (
+            <span key={i}>
+              <span aria-hidden="true" style={{ fontWeight: 700, color: p.status === "ECHEC" ? "var(--warn)" : p.status === "ACTUALISE" ? "var(--good)" : "var(--muted)" }}>
+                {p.status === "ECHEC" ? "▲" : p.status === "ACTUALISE" ? "✓" : "–"}
+              </span>{" "}
+              {p.detailFr}
+            </span>
+          ))}
+          {(openingRefresh.fiche.status === "ECHEC" || openingRefresh.engagements.status === "ECHEC") && (
+            <span className="muted">
+              Le dossier part des dernières données enregistrées. Réessayez depuis la{" "}
+              <Link href={`/counterparties/${c.counterparty.id}`}>fiche client</Link>.
+            </span>
+          )}
         </div>
       )}
 

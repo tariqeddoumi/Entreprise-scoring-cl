@@ -836,6 +836,17 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* table de correspondance des anciennes notes vers l'échelle 1 à 10, profondeur historique, extraction par la DSI.
 
+## D-66 — Actualisation des données T24 à l'ouverture d'un dossier — **ACTIVÉE PAR DÉFAUT, PARAMÉTRABLE**
+
+*Décision :*
+- **Ce qui est relu.** Pour un client rapatrié de T24, l'ouverture d'un dossier relit la fiche client et les lignes d'engagement, puis reprend l'engagement global du jour.
+- **Pas de relecture inutile.** Une fiche relue depuis moins d'une heure, ou des engagements déjà rapatriés le jour même, ne sont pas relus.
+- **Une panne ne bloque pas.** Le dossier s'ouvre sur les dernières données, avec un avertissement daté conservé au journal.
+- **Exclus.** Pas d'actualisation d'office pour une saisie minimale, dont le code n'est pas vérifié, ni pour un client hors du périmètre d'écriture.
+- **Paramètre.** Fiche et engagements, fiche seule, ou aucune actualisation.
+
+*À confirmer :* le délai d'attente acceptable pour T24 à l'ouverture (8 secondes par appel, deux appels au plus).
+
 ---
 
 # 3. Ce qui reste à décider par la banque

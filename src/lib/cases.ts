@@ -1,4 +1,5 @@
 import { creditReportGate } from "./external-data";
+import type { OpeningRefresh } from "./opening-refresh";
 import { facilityStatus } from "./facilities";
 import { docsGate } from "./case-checklist";
 import { getScoringModel, today } from "@/lib/rating-scale";
@@ -127,7 +128,16 @@ export async function contributorsOf(db: PrismaClient, caseId: string): Promise<
 export async function createCase(
   db: PrismaClient,
   identity: Identity,
-  input: { counterpartyId: string; modelId: string; asOfDate: string; purpose?: string; exercise?: ExerciseChoice; creditType?: string }
+  input: {
+    counterpartyId: string;
+    modelId: string;
+    asOfDate: string;
+    purpose?: string;
+    exercise?: ExerciseChoice;
+    creditType?: string;
+    /** Résultat de l'actualisation T24 faite juste avant (src/lib/opening-refresh.ts), conservé au journal. */
+    openingRefresh?: OpeningRefresh | null;
+  }
 ) {
   const model = await getScoringModel(input.modelId);
   if (!model) throw new CaseError(404, `Modèle inconnu : ${input.modelId}`);
@@ -221,6 +231,7 @@ export async function createCase(
         purpose: purpose?.code ?? null,
         creditType: creditTypeCode ?? null,
         reprise: !!previous,
+        ...(input.openingRefresh ? { openingRefresh: input.openingRefresh } : {}),
         ...(reprise ? { exercise: reprise.exercise, carriedYears: reprise.carriedYears, toLoad: reprise.toLoad, fromCaseId: reprise.fromCaseId } : {}),
       },
     });

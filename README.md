@@ -78,7 +78,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Critères de classement BAM dans le dossier (plafond 8 sensible, 10 pré-douteux, défaut douteux / compromis), levée par décision de comité tracée | Opérationnel |
 | Watch list par décision de comité : niveaux WL1 à WL3 (note plafonnée à 8, 9, 10), changement de niveau, sortie, historique | Opérationnel |
 | Proposition de paramétrage pour le COPIL de validation (docs/19) | Livrée, à arrêter en COPIL |
-| Fiche client T24 (code client, rapatriement), saisie minimale de repli, rapport de solvabilité (API ou IA, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
+| Fiche client T24 (code client, rapatriement, actualisation à l'ouverture du dossier), saisie minimale de repli, rapport de solvabilité (API ou IA, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
 | Portefeuille par chargé d'affaires (code gestionnaire T24, cloisonnement par portefeuille, paramétrable) (docs/22) | Livré ; à activer après renseignement des codes gestionnaires |
 | Engagements ligne par ligne (T24 ou saisie), engagement global calculé, dépassements et impayés, rapprochement crédit bureau (docs/23) | Livré ; API des limites T24 à brancher par la DSI |
 | Pièces et informations requises par motif, typage des pièces, préparation du dossier, contrôle à la soumission (docs/24) | Livré ; listes à arrêter en COPIL |

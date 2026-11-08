@@ -169,7 +169,13 @@ export async function saveManualFacilities(db: PrismaClient, perimeter: Perimete
 }
 
 /** Rapatriement depuis T24 (limites du client) : remplace les lignes T24. */
-export async function syncFacilitiesFromT24(db: PrismaClient, perimeter: Perimeter, identity: Identity, counterpartyId: string): Promise<number> {
+export async function syncFacilitiesFromT24(
+  db: PrismaClient,
+  perimeter: Perimeter,
+  identity: Identity,
+  counterpartyId: string,
+  opts: { timeoutMs?: number } = {}
+): Promise<number> {
   const cp = await writable(db, perimeter, counterpartyId);
   const cfg = await t24Config();
   const path = (await loadSettings()).T24_FACILITIES_PATH ?? "";
@@ -180,7 +186,7 @@ export async function syncFacilitiesFromT24(db: PrismaClient, perimeter: Perimet
   if (process.env.T24_API_TOKEN) headers.Authorization = `Bearer ${process.env.T24_API_TOKEN}`;
   let res: Response;
   try {
-    res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000), cache: "no-store" });
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(opts.timeoutMs ?? 15_000), cache: "no-store" });
   } catch {
     throw new FacilityError(503, "T24 ne répond pas : saisissez les lignes ou réessayez plus tard.");
   }

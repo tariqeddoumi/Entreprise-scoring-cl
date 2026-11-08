@@ -287,6 +287,17 @@ export const SETTINGS: readonly SettingDef[] = [
     default: "/api/v1.0.0/holdings/limits/",
   },
   {
+    key: "T24_REFRESH_AT_OPENING",
+    group: "Référentiels externes",
+    labelFr: "Actualisation depuis T24 à l'ouverture d'un dossier",
+    helpFr:
+      "Pour un client rattaché à T24, à l'ouverture du dossier : actualiser la fiche client, et les lignes d'engagement si leur chemin est renseigné. Une panne de T24 ne bloque pas l'ouverture : le dossier part des dernières données, avec un avertissement.",
+    kind: "enum",
+    default: "FICHE_ET_ENGAGEMENTS",
+    options: ["FICHE_ET_ENGAGEMENTS", "FICHE", "AUCUNE"],
+    optionLabels: { FICHE_ET_ENGAGEMENTS: "Fiche et engagements", FICHE: "Fiche client seule", AUCUNE: "Aucune actualisation" },
+  },
+  {
     key: "CREDIT_BUREAU_API_ENABLED",
     group: "Référentiels externes",
     labelFr: "Récupération du rapport de solvabilité par API",

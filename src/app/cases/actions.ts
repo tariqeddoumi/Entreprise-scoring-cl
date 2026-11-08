@@ -17,7 +17,8 @@ import type { FxConversion } from "@/lib/fx";
 import { decideOverride, OverrideError, requestOverride } from "@/lib/overrides";
 import { overrideDecisionSchema, overrideRequestSchema } from "@/lib/schemas";
 import { isOutOfScope } from "@/lib/scope";
-import { getDb, getSessionIdentity } from "@/lib/session";
+import { refreshAtOpening } from "@/lib/opening-refresh";
+import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 
 /**
  * Actions serveur du workflow des dossiers de notation.
@@ -49,8 +50,17 @@ export async function createCaseAction(_prev: ActionResult, fd: FormData): Promi
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   let id: string;
   try {
-    const created = await createCase(await getDb(), session.identity, {
-      counterpartyId: String(fd.get("counterpartyId") ?? ""),
+    const db = await getDb();
+    const counterpartyId = String(fd.get("counterpartyId") ?? "");
+    // Actualisation T24 avant la création : le dossier reprend l'engagement
+    // global du jour. Une panne ne bloque pas l'ouverture.
+    const openingRefresh = await refreshAtOpening(db, await getPerimeter(), session.identity, counterpartyId).catch((e) => {
+      console.error("[ouverture] actualisation T24", e instanceof Error ? e.message : e);
+      return null;
+    });
+    const created = await createCase(db, session.identity, {
+      openingRefresh,
+      counterpartyId,
       modelId: String(fd.get("modelId") ?? ""),
       asOfDate: String(fd.get("asOfDate") ?? ""),
       purpose: String(fd.get("purpose") ?? "") || undefined,

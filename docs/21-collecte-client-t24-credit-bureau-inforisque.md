@@ -35,6 +35,22 @@ Le client est rattaché au centre d'affaires de T24 s'il est dans le périmètre
 
 Une fiche rapatriée garde son code ; T24 fait foi sur ses champs.
 
+**Actualisation à l'ouverture d'un dossier** (D-66). Pour un client rapatrié de T24, ouvrir un dossier relit d'abord, dans T24 :
+
+- la **fiche client**, sauf si elle a été relue il y a moins d'une heure ;
+- les **lignes d'engagement**, si leur chemin est paramétré et qu'elles n'ont pas déjà été rapatriées le jour même (docs/23).
+
+Le dossier reprend ainsi l'engagement global du jour. Une panne de T24 ne bloque pas l'ouverture : le dossier part des dernières données enregistrées. Un encadré en tête du dossier indique ce qui a été actualisé et ce qui a échoué, avec la date des dernières données, et le résultat est conservé au journal du dossier.
+
+Ne sont pas actualisées d'office :
+
+- une fiche en saisie minimale, dont le code n'est pas vérifié : elle se rattache depuis la fiche ;
+- un client hors du périmètre d'écriture.
+
+Paramètre `T24_REFRESH_AT_OPENING` : fiche et engagements (défaut), fiche seule, ou aucune actualisation.
+
+![T24 indisponible à l'ouverture](captures-collecte-client/ouverture-panne.png)
+
 **Segment commercial ≠ segment du modèle.** Le segment commercial (TPE, PME, GE, Professionnels, Institutionnels, liste paramétrable alignée sur T24) suit les règles commerciales de la banque. Le segment du modèle (TPE, PME, GE) est calculé par le moteur selon ses propres seuils. Les deux sont affichés côte à côte sur la fiche.
 
 **Correspondance des champs.** Les noms par défaut suivent l'API Transact (IRIS) `party/customers/{id}`. Les champs locaux de la banque (ICE, RC, segment commercial en LOCAL.REF) se déclarent dans la clé `T24_FIELD_MAP`, sans développement. **À fournir par la DSI :** l'adresse de l'API, le jeton et un exemple de réponse, pour caler cette correspondance.
@@ -113,4 +129,4 @@ Toute pièce lue par l'IA est vérifiée avant enregistrement, et toute opérati
 1. **Portefeuille par chargé d'affaires.** Le gestionnaire est désormais rapatrié de T24. Il reste à restreindre le profil 1 à ses clients (paramétrable : portefeuille ou centre entier). Les profils 2, 3 et 4 voient déjà leur centre, leur région ou leur banque selon l'arborescence.
 2. **Engagements ligne par ligne** (API du système de crédit ou saisie), qui alimenteront l'engagement global et le flux d'encours de la surveillance.
 3. **Liste de pièces obligatoires par motif**, avec contrôle à la soumission.
-4. **Actualisation automatique** du rapport de solvabilité et de la fiche T24, à l'ouverture de chaque dossier.
+4. **Actualisation automatique** à l'ouverture de chaque dossier : livrée pour la fiche T24 et les engagements (D-66). Le rapport de solvabilité reste à rafraîchir dans l'outil du crédit bureau ; son ancienneté est signalée.
