@@ -16,6 +16,9 @@ import { DEFAULT_CLASSIFICATION, type WatchlistCap } from "@/reference/classific
 import { LiftPanel } from "@/app/committee/CommitteePanels";
 import { CreditReportPanel } from "@/app/counterparties/[id]/ExternalPanels";
 import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
+import { FacilitiesPanel } from "@/app/counterparties/[id]/FacilitiesPanel";
+import { facilityStatus, type FacilityStatus } from "@/lib/facilities";
+import { parseAmount } from "@/financials/chart";
 import { loadCircuit } from "@/lib/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
 import { safeQuery } from "@/lib/safe-db";
@@ -166,14 +169,23 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const bureau = await creditReportSettings();
   const ext = (
     await safeQuery(
-      async (db) => ({
-        report: await latestCreditReport(db, c.counterparty.id, { declaredExposure: exposureOf(c.fxDetail, c.draftInput) }),
-        legal: await legalProfileStatus(db, c.counterparty),
-      }),
-      { report: null, legal: null }
+      async (db) => {
+        const report = await latestCreditReport(db, c.counterparty.id, { declaredExposure: exposureOf(c.fxDetail, c.draftInput) });
+        const declared = parseAmount(draft.amounts.globalBankExposure);
+        return {
+          report,
+          legal: await legalProfileStatus(db, c.counterparty),
+          facilities: await facilityStatus(db, c.counterparty.id, { bureauOwnOutstanding: report?.analysis.totals.ownOutstanding ?? null, declaredExposure: declared ?? null }),
+        };
+      },
+      {
+        report: null as Awaited<ReturnType<typeof latestCreditReport>>,
+        legal: null as Awaited<ReturnType<typeof legalProfileStatus>>,
+        facilities: null as FacilityStatus | null,
+      }
     )
   ).data;
-  const externalSignals = [...(ext.report?.analysis.signals ?? []), ...(ext.legal?.analysis.signals ?? [])];
+  const externalSignals = [...(ext.report?.analysis.signals ?? []), ...(ext.legal?.analysis.signals ?? []), ...(ext.facilities?.signals ?? [])];
   const { circuit: circuitDef } = await loadCircuit();
   const liftDouble = await settingBool("COMMITTEE_LIFT_DOUBLE_VALIDATION");
   const cumulNotch = await settingInt("WATCHLIST_CUMUL_NOTCH");
@@ -356,6 +368,24 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      {ext.facilities && (
+        <FacilitiesPanel
+          counterpartyId={c.counterparty.id}
+          lines={ext.facilities.lines}
+          totals={ext.facilities.totals}
+          findings={ext.facilities.findings}
+          signals={ext.facilities.signals}
+          positionDate={ext.facilities.positionDate}
+          settings={ext.facilities.settings}
+          types={ext.facilities.types}
+          currency={c.counterparty.currency}
+          today={today()}
+          canEdit={false}
+          t24Ready={false}
+          compact
+        />
+      )}
+
       <CreditReportPanel
         counterpartyId={c.counterparty.id}
         caseId={c.id}
@@ -422,6 +452,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         watchlist={committee.wlCap}
         cumulNotch={cumulNotch}
         signals={externalSignals}
+        facilityExposure={ext.facilities && ext.facilities.lines.length ? { value: ext.facilities.totals.exposure, lines: ext.facilities.totals.lines, positionDate: ext.facilities.positionDate } : null}
       />
 
       <section className="card" style={{ padding: 16 }}>

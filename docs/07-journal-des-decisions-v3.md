@@ -777,6 +777,29 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-62 — Engagements du client ligne par ligne — **BASE ET PONDÉRATION À ARRÊTER EN COPIL**
+
+*Contexte :* le dossier ne portait qu'un montant global d'engagement, saisi. La banque souhaite les lignes, par API (T24) ou saisie.
+
+*Décision :*
+- Table des lignes d'engagement par client.
+- **Sources :**
+  - T24 (limites du client), remplacées à chaque rapatriement ;
+  - saisie datée, remplacée à chaque saisie.
+- **Types paramétrables :** nature bilan ou signature, durée court terme ou moyen et long terme.
+- **Engagement global :** somme par ligne du plus grand de l'autorisé et de l'encours (paramétrable). Signature pondérée à 100 % (paramétrable). Repris à l'ouverture du dossier et proposé en saisie.
+- **Constats :** dépassements, lignes échues utilisées, impayés.
+- **Critères BAM proposés :** E04, E12, E19, jamais cochés automatiquement.
+- **Rapprochement :** avec l'encours de la banque déclaré au crédit bureau.
+
+*À confirmer :*
+- base de l'engagement global ;
+- pondération des engagements par signature ;
+- correspondance des codes produit T24 ;
+- raccordement à la surveillance (flux d'encours).
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

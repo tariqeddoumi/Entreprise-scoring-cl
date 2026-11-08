@@ -156,7 +156,7 @@ export interface ClassificationResult {
 
 /**
  * Signaux des sources externes (rapport de solvabilité du crédit bureau, fiche
- * juridique InfoRisque) qui font proposer un critère déclaratif « à vérifier ».
+ * juridique InfoRisque, lignes d'engagement de la banque) qui font proposer un critère déclaratif « à vérifier ».
  * Ils ne cochent jamais : l'analyste confirme, date et commente. Valables quel
  * que soit le paramétrage enregistré des critères (même code).
  */
@@ -164,9 +164,9 @@ export const EXTERNAL_SIGNAL_KEYS: Record<string, string[]> = {
   S03: ["BUREAU_NEGATIF"],
   S04: ["BUREAU_CHEQUES"],
   S14: ["LEGAL_DIRIGEANTS"],
-  E04: ["BUREAU_IMPAYE_90"],
-  E12: ["BUREAU_IMPAYE_180"],
-  E19: ["BUREAU_IMPAYE_360"],
+  E04: ["BUREAU_IMPAYE_90", "FAC_IMPAYE_90"],
+  E12: ["BUREAU_IMPAYE_180", "FAC_IMPAYE_180"],
+  E19: ["BUREAU_IMPAYE_360", "FAC_IMPAYE_360"],
   E26: ["BUREAU_CONTENTIEUX"],
   E15: ["LEGAL_REDRESSEMENT"],
   E28: ["LEGAL_LIQUIDATION"],

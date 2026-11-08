@@ -193,6 +193,14 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/11-portefeuille-charge-affai
 
 Ajoute `users.accountOfficerCode` (code gestionnaire T24), l'index sur `counterparties.accountOfficer`, et affecte aux clients sans gestionnaire le compte qui les a créés (journal d'audit). Idempotent et transactionnel. La restriction ne s'active qu'avec le paramètre `PORTFOLIO_SCOPE_P1 = PORTEFEUILLE` (docs/22).
 
+### Engagements ligne par ligne (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/12-engagements-ligne-par-ligne.sql
+```
+
+Crée la table `credit_facilities` (lignes d'engagement du client, T24 ou saisie), avec les mêmes protections que les autres tables. Idempotent et transactionnel. Rapatriement T24 : paramètre `T24_FACILITIES_PATH` (même adresse et même jeton que la fiche client) ; correspondance des champs et des codes produit sous la clé `T24_FACILITY_FIELD_MAP` (docs/23).
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son

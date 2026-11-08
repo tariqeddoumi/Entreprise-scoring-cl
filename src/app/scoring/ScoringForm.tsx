@@ -30,6 +30,14 @@ interface Props {
   aiFields?: ReadonlySet<string>;
   /** Format de bilan en vigueur (ratios calculés depuis le bilan). */
   format?: StatementFormat;
+  /** Engagement global calculé sur les lignes d'engagement du client (dossier). */
+  facilityExposure?: FacilityExposure | null;
+}
+
+export interface FacilityExposure {
+  value: number;
+  lines: number;
+  positionDate: string | null;
 }
 
 /** Libellé des portes de matérialité que le modèle peut déclarer. */
@@ -48,6 +56,29 @@ const GROUP_SUPPORT_CONDITIONS = [
 ] as const;
 
 const CONFIDENCE_LEVELS = [100, 75, 50, 25, 0];
+
+/** Engagement global des lignes du client, à reporter dans le dossier. */
+function FacilityHint({ fe, current, readOnly, onApply }: { fe: FacilityExposure; current: string; readOnly: boolean; onApply: () => void }) {
+  const cur = Number(current.replace(/\s/g, "").replace(",", "."));
+  const same = current.trim() !== "" && Number.isFinite(cur) && Math.abs(cur - fe.value) <= Math.max(1, fe.value * 0.001);
+  const fmt = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(fe.value);
+  return (
+    <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 11, marginTop: 4 }}>
+      <span className="muted">
+        Lignes d&apos;engagement : {fmt} ({fe.lines} ligne(s){fe.positionDate ? `, position au ${fe.positionDate}` : ""})
+      </span>
+      {same ? (
+        <span style={{ color: "var(--good)" }}>✓ repris</span>
+      ) : (
+        !readOnly && (
+          <button type="button" className="btn-ghost" style={{ fontSize: 11, padding: "2px 8px" }} onClick={onApply}>
+            Reprendre ce montant
+          </button>
+        )
+      )}
+    </span>
+  );
+}
 
 const AMOUNT_FIELDS = [
   ["annualTurnover", "Chiffre d'affaires HT du dernier exercice"],
@@ -132,7 +163,7 @@ function AiMark({ show }: { show: boolean }) {
  * l'écran qui l'affiche — dossier ou simulation — pour que les propositions de
  * l'IA, l'enregistrement et l'aperçu travaillent sur la même saisie.
  */
-export function ScoringForm({ model, draft, onChange, readOnly = false, currency = "MAD", aiFields, format }: Props) {
+export function ScoringForm({ model, draft, onChange, readOnly = false, currency = "MAD", aiFields, format, facilityExposure = null }: Props) {
   const segment = displaySegment(draft, model);
   const ai = (key: string) => aiFields?.has(key) ?? false;
   const set = (patch: Partial<CaseDraft>) => onChange({ ...draft, ...patch });
@@ -346,6 +377,14 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
                 value={draft.amounts[key]}
                 onChange={(e) => onChange(confirmReprise({ ...draft, amounts: { ...draft.amounts, [key]: e.target.value } }, ["AMOUNTS"]))}
               />
+              {key === "globalBankExposure" && facilityExposure && (
+                <FacilityHint
+                  fe={facilityExposure}
+                  current={draft.amounts.globalBankExposure}
+                  readOnly={readOnly}
+                  onApply={() => onChange(confirmReprise({ ...draft, amounts: { ...draft.amounts, globalBankExposure: String(facilityExposure.value) } }, ["AMOUNTS"]))}
+                />
+              )}
             </label>
           ))}
         </div>

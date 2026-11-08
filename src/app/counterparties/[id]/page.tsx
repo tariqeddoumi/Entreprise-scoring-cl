@@ -26,6 +26,9 @@ import { NewCaseForm } from "@/app/scoring/NewCaseForm";
 import { ClientActions } from "../ClientActions";
 import { NewCounterpartyForm, type WritableEntity } from "../NewCounterpartyForm";
 import { CreditReportPanel, LegalProfilePanel, T24Panel } from "./ExternalPanels";
+import { FacilitiesPanel } from "./FacilitiesPanel";
+import { facilityStatus, type FacilityStatus } from "@/lib/facilities";
+import { settingText } from "@/lib/settings";
 import { parseT24Data, t24Config } from "@/lib/core-banking";
 import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
 import { loadCommercialSegments } from "@/lib/financial-statements";
@@ -142,13 +145,23 @@ export default async function CounterpartyPage({
   const ai = await aiStatus();
   const aiUsable = ai.enabled && !ai.missing;
   const { data: ext } = await safeQuery(
-    async (db) => ({
-      report: await latestCreditReport(db, counterparty.id),
-      legal: await legalProfileStatus(db, counterparty),
-      segments: await loadCommercialSegments(db),
-    }),
-    { report: null, legal: null, segments: DEFAULT_COMMERCIAL_SEGMENTS }
+    async (db) => {
+      const report = await latestCreditReport(db, counterparty.id);
+      return {
+        report,
+        legal: await legalProfileStatus(db, counterparty),
+        segments: await loadCommercialSegments(db),
+        facilities: await facilityStatus(db, counterparty.id, { bureauOwnOutstanding: report?.analysis.totals.ownOutstanding ?? null }),
+      };
+    },
+    {
+      report: null as Awaited<ReturnType<typeof latestCreditReport>>,
+      legal: null as Awaited<ReturnType<typeof legalProfileStatus>>,
+      segments: DEFAULT_COMMERCIAL_SEGMENTS,
+      facilities: null as FacilityStatus | null,
+    }
   );
+  const t24FacilitiesReady = t24.enabled && !!counterparty.coreBankingId && !!(await settingText("T24_FACILITIES_PATH"));
   // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
   const master = toGradeScaleConfig(await effectiveScale());
   const equivalentOf = (grade: string | null, rawScore: unknown) => {
@@ -278,6 +291,23 @@ export default async function CounterpartyPage({
         t24Enabled={t24.enabled}
         canEdit={canEdit}
       />
+
+      {ext.facilities && (
+        <FacilitiesPanel
+          counterpartyId={counterparty.id}
+          lines={ext.facilities.lines}
+          totals={ext.facilities.totals}
+          findings={ext.facilities.findings}
+          signals={ext.facilities.signals}
+          positionDate={ext.facilities.positionDate}
+          settings={ext.facilities.settings}
+          types={ext.facilities.types}
+          currency={counterparty.currency}
+          today={today}
+          canEdit={canEdit}
+          t24Ready={t24FacilitiesReady}
+        />
+      )}
 
       <CreditReportPanel
         counterpartyId={counterparty.id}

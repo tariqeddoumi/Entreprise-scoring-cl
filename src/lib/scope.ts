@@ -264,6 +264,7 @@ export const SCOPED_MODELS: Record<string, Filter> = {
   FinancialStatement: byCounterparty,
   CommitteeDecision: byCounterparty,
   CreditReport: byCounterparty,
+  CreditFacility: byCounterparty,
   // Souscriptions et événements : une filiale ne voit ni ne reçoit ceux d'une
   // autre (diagnostic S01) ; ceux du groupe entier (entité nulle) ne sont
   // visibles que du périmètre groupe.
@@ -372,6 +373,7 @@ async function checkCreate(model: string, data: Record<string, unknown>, p: Peri
     case "FinancialStatement":
     case "CommitteeDecision":
     case "CreditReport":
+    case "CreditFacility":
       return writableCounterparty(ref(data, "counterpartyId", "counterparty"));
     case "WebhookDelivery": {
       const subId = ref(data, "subscriptionId", "subscription");

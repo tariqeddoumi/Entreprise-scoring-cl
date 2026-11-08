@@ -80,6 +80,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Proposition de paramétrage pour le COPIL de validation (docs/19) | Livrée, à arrêter en COPIL |
 | Fiche client T24 (code client, rapatriement), saisie minimale de repli, rapport de solvabilité (API ou IA, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
 | Portefeuille par chargé d'affaires (code gestionnaire T24, cloisonnement par portefeuille, paramétrable) (docs/22) | Livré ; à activer après renseignement des codes gestionnaires |
+| Engagements ligne par ligne (T24 ou saisie), engagement global calculé, dépassements et impayés, rapprochement crédit bureau (docs/23) | Livré ; API des limites T24 à brancher par la DSI |
 | Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
 | Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |

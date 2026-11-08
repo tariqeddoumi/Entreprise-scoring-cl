@@ -5,6 +5,7 @@ import { auditWithin } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { getPerimeter, getSessionIdentity } from "@/lib/session";
 import { checkClassification, checkWatchlistLevels, CLASSIFICATION_KEY, WATCHLIST_LEVELS_KEY, type ClassificationSettings, type WatchlistLevel } from "@/reference/classification";
+import { checkFacilityTypes, FACILITY_TYPES_KEY, type FacilityType } from "@/reference/facilities";
 import { checkSurveillance, KRI_CATALOG, SURVEILLANCE_KEY, type SurveillanceSettings } from "@/reference/portfolio";
 import { CASE_PURPOSES_KEY, checkPurposes, checkRefItems, COMMERCIAL_SEGMENTS_KEY, CREDIT_TYPES_KEY, ENTITY_TIERS_KEY, type CasePurpose, type RefItem } from "@/reference/case-purposes";
 
@@ -216,4 +217,37 @@ export async function saveSurveillanceAction(value: SurveillanceSettings): Promi
   revalidatePath("/admin/settings");
   revalidatePath("/surveillance");
   return { okFr: "Paramètres de la surveillance enregistrés." };
+}
+
+/** Types de lignes d'engagement (nature bilan / signature, durée). Réservé à un administrateur du groupe. */
+export async function saveFacilityTypesAction(list: FacilityType[]): Promise<PurposesActionState> {
+  const session = await getSessionIdentity("ADMIN");
+  if (!session.ok) return { errorFr: session.reasonFr };
+  if (!(await getPerimeter()).all) return { errorFr: "Réservé à un administrateur du groupe." };
+  const clean: FacilityType[] = (Array.isArray(list) ? list : []).slice(0, 40).map((t) => ({
+    code: String(t.code ?? "").trim().toUpperCase(),
+    labelFr: String(t.labelFr ?? "").trim().slice(0, 120),
+    nature: t.nature === "HORS_BILAN" ? "HORS_BILAN" : "BILAN",
+    term: t.term === "MLT" ? "MLT" : "CT",
+    active: !!t.active,
+  }));
+  const issues = checkFacilityTypes(clean);
+  if (issues.length) return { errorFr: issues.join(" ") };
+  const used = (await prisma.creditFacility.findMany({ distinct: ["typeCode"], select: { typeCode: true } })).map((u) => u.typeCode);
+  const removed = used.filter((code) => !clean.some((t) => t.code === code));
+  if (removed.length) return { errorFr: `Type déjà utilisé : ${removed.join(", ")}. Désactivez-le au lieu de le supprimer.` };
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.appSetting.upsert({
+        where: { key: FACILITY_TYPES_KEY },
+        update: { value: JSON.stringify(clean), updatedBy: session.identity.name },
+        create: { key: FACILITY_TYPES_KEY, value: JSON.stringify(clean), updatedBy: session.identity.name },
+      });
+      await auditWithin(tx, { actor: session.identity.name, actorRole: session.identity.role, action: "FACILITY_TYPES_UPDATED", resourceType: "AppSetting", resourceId: FACILITY_TYPES_KEY, detail: { list: clean } });
+    });
+  } catch {
+    return { errorFr: "Enregistrement impossible : la base de données ne répond pas." };
+  }
+  revalidatePath("/admin/settings");
+  return { okFr: "Types d'engagement enregistrés." };
 }

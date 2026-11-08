@@ -12,6 +12,9 @@ import { loadClassification, loadWatchlistLevels } from "@/lib/classification-st
 import { DEFAULT_CLASSIFICATION, DEFAULT_WATCHLIST_LEVELS } from "@/reference/classification";
 import { WatchlistLevelsEditor } from "./WatchlistLevelsEditor";
 import { SurveillanceEditor } from "./SurveillanceEditor";
+import { FacilityTypesEditor } from "./FacilityTypesEditor";
+import { loadFacilityTypes } from "@/lib/facilities";
+import { DEFAULT_FACILITY_TYPES } from "@/reference/facilities";
 import { loadSurveillanceSettings } from "@/lib/portfolio-data";
 import { DEFAULT_SURVEILLANCE } from "@/reference/portfolio";
 import { effectiveFormat } from "@/lib/statement-format";
@@ -38,6 +41,7 @@ export default async function SettingsPage() {
   );
   const format = await effectiveFormat(today());
   const { data: surveillance } = await safeQuery((db) => loadSurveillanceSettings(db), DEFAULT_SURVEILLANCE);
+  const { data: facilityTypes } = await safeQuery((db) => loadFacilityTypes(db), DEFAULT_FACILITY_TYPES);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -64,6 +68,7 @@ export default async function SettingsPage() {
       <ClassificationEditor initial={lists.classification} readOnly={!perimeter.all} alertKeys={format.alerts.map((a) => a.key)} />
       <WatchlistLevelsEditor initial={lists.wlLevels} readOnly={!perimeter.all} />
       <SurveillanceEditor initial={surveillance} readOnly={!perimeter.all} />
+      <FacilityTypesEditor initial={facilityTypes} readOnly={!perimeter.all} />
       <RefListEditor
         listKey="CREDIT_TYPES"
         title="Types de crédit"

@@ -147,6 +147,7 @@ model Counterparty {
   statements       FinancialStatement[]
   committeeDecisions CommitteeDecision[]
   creditReports    CreditReport[]
+  facilities       CreditFacility[]
 
   @@unique([entityId, ice])
   @@unique([entityId, coreBankingId])
@@ -660,4 +661,38 @@ model CreditReport {
 
   @@index([counterpartyId, reportDate])
   @@map("credit_reports")
+}
+
+// Ligne d'engagement du client chez la banque (autorisation, crédit,
+// engagement par signature) : rapatriée de T24 (limites) ou saisie. Base de
+// l'engagement global du dossier et du rapprochement avec le crédit bureau.
+model CreditFacility {
+  id             String       @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // API (T24) | SAISIE
+  source         String
+  // Référence de la ligne (identifiant de limite T24, numéro de dossier).
+  reference      String?
+  // Type de crédit (liste paramétrable : facilité de caisse, escompte, CMT…).
+  typeCode       String
+  labelFr        String?
+  // Montants dans la devise du client.
+  authorized     Decimal?     @db.Decimal(18, 2)
+  outstanding    Decimal?     @db.Decimal(18, 2)
+  overdue        Decimal?     @db.Decimal(18, 2)
+  overdueDays    Int?
+  startDate      String?
+  maturityDate   String?
+  guarantees     String?
+  guaranteeValue Decimal?     @db.Decimal(18, 2)
+  // ACTIVE | ECHUE | CLOTUREE
+  status         String       @default("ACTIVE")
+  // Date de la position (AAAA-MM-JJ).
+  asOfDate       String
+  recordedBy     String
+  createdAt      DateTime     @default(now())
+
+  @@index([counterpartyId])
+  @@map("credit_facilities")
 }

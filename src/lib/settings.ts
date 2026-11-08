@@ -110,6 +110,27 @@ export const SETTINGS: readonly SettingDef[] = [
     optionLabels: { PORTEFEUILLE: "Son portefeuille", CENTRE: "Tout son centre" },
   },
   {
+    key: "FACILITY_EXPOSURE_BASIS",
+    group: "Workflow",
+    labelFr: "Engagement global : base de calcul des lignes",
+    helpFr:
+      "Montant retenu par ligne pour l'engagement global du dossier (segmentation, délégation) : le plus grand de l'autorisé et de l'encours (prudent : un dépassement compte), l'autorisé seul, ou l'encours seul.",
+    kind: "enum",
+    default: "MAX",
+    options: ["MAX", "AUTORISE", "ENCOURS"],
+    optionLabels: { MAX: "Le plus grand de l'autorisé et de l'encours", AUTORISE: "Autorisé", ENCOURS: "Encours" },
+  },
+  {
+    key: "FACILITY_OFF_BALANCE_WEIGHT",
+    group: "Workflow",
+    labelFr: "Engagements par signature dans l'engagement global (%)",
+    helpFr: "Pondération des cautions, avals et crédits documentaires. 100 : comptés en totalité (proposition prudente, à arrêter en COPIL).",
+    kind: "integer",
+    default: "100",
+    min: 0,
+    max: 100,
+  },
+  {
     key: "COMMITTEE_LIFT_DOUBLE_VALIDATION",
     group: "Comités",
     labelFr: "Levée d'un critère de classement : confirmation par une seconde personne",
@@ -245,6 +266,14 @@ export const SETTINGS: readonly SettingDef[] = [
     default: "10",
     min: 1,
     max: 20,
+  },
+  {
+    key: "T24_FACILITIES_PATH",
+    group: "Référentiels externes",
+    labelFr: "Chemin des engagements (limites) du client",
+    helpFr: "Ajouté à l'adresse de l'API T24, suivi du code client : lignes d'autorisation et d'engagement. Vide : pas de rapatriement des engagements.",
+    kind: "text",
+    default: "/api/v1.0.0/holdings/limits/",
   },
   {
     key: "CREDIT_BUREAU_API_ENABLED",

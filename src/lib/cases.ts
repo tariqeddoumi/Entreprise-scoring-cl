@@ -1,4 +1,5 @@
 import { creditReportGate } from "./external-data";
+import { facilityStatus } from "./facilities";
 import { getScoringModel, today } from "@/lib/rating-scale";
 import { effectiveFormat } from "./statement-format";
 import type { PrismaClient } from "@/generated/prisma";
@@ -188,6 +189,10 @@ export async function createCase(
   } else {
     delete draft.reprise;
   }
+  // Engagement global : celui des lignes d'engagement du client (position
+  // courante, T24 ou saisie) prime sur le montant de la note précédente.
+  const fac = await facilityStatus(db, counterparty.id).catch(() => null);
+  if (fac && fac.lines.length > 0) draft.amounts = { ...draft.amounts, globalBankExposure: String(fac.totals.exposure) };
 
   return db.$transaction(async (tx) => {
     const created = await tx.ratingCase.create({

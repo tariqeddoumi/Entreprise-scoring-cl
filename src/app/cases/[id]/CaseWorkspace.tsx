@@ -9,6 +9,7 @@ import { ScoringForm } from "@/app/scoring/ScoringForm";
 import { FinancialsSection } from "@/app/scoring/FinancialsSection";
 import type { StatementFormat } from "@/financials/statement-format";
 import { ClassificationPanel } from "@/app/scoring/ClassificationPanel";
+import type { FacilityExposure } from "@/app/scoring/ScoringForm";
 import type { ClassificationSettings, WatchlistCap } from "@/reference/classification";
 import { DATA_STATUS_LABELS } from "@/app/ui-helpers";
 import type { CaseLift } from "@/lib/case-input";
@@ -61,6 +62,8 @@ interface Props {
   cumulNotch?: number;
   /** Signaux externes (crédit bureau, fiche juridique) : critères BAM proposés à vérifier. */
   signals?: string[];
+  /** Engagement global calculé sur les lignes d'engagement du client. */
+  facilityExposure?: FacilityExposure | null;
 }
 
 type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<string, { original: number; base: number }> } | null;
@@ -69,7 +72,7 @@ type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<st
  * Espace de travail d'un dossier : la grille (brouillon), l'aperçu du calcul,
  * l'enregistrement, la soumission, et le panneau d'assistance de l'IA.
  */
-export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts, watchlist = null, cumulNotch = 0, signals = [] }: Props) {
+export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts, watchlist = null, cumulNotch = 0, signals = [], facilityExposure = null }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<CaseDraft>(initialDraft);
   const [dirty, setDirty] = useState(false);
@@ -158,7 +161,7 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
           aiUsable={ai.enabled && !ai.missing}
           format={format}
         />
-        <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} format={format} />
+        <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} format={format} facilityExposure={facilityExposure} />
         <ClassificationPanel model={model} draft={draft} onChange={change} format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} signals={signals} />
         <div className="card no-print action-bar">
           <button type="button" className="btn-ghost" onClick={() => run("save")} disabled={busy !== null}>
