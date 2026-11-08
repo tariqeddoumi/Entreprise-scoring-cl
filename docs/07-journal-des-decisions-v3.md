@@ -847,6 +847,16 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* le délai d'attente acceptable pour T24 à l'ouverture (8 secondes par appel, deux appels au plus).
 
+## D-67 — Démarrage sans API, activation après test de connexion réussi — **ADOPTÉE**
+
+*Décision :*
+- **Démarrage sans API.** T24, le crédit bureau et l'IA sont désactivés par défaut. L'outil fonctionne en saisie.
+- **Test sans activation.** Administration › Raccordements teste chaque API, même désactivée, sur un code réel. Le test n'enregistre aucune donnée client et il est journalisé.
+- **Activation conditionnée.** Elle exige un test réussi de moins de 30 jours, sur l'adresse en vigueur.
+- **Désactivation libre.** Elle reste possible à tout moment, sans condition.
+
+*À confirmer :* procès-verbal de recette DSI par API, durée de validité du test.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

@@ -138,21 +138,7 @@ export async function fetchCreditReport(db: PrismaClient, perimeter: Perimeter, 
   const cfg = await creditReportSettings();
   if (!cfg.apiEnabled) throw new ExternalDataError(409, "Récupération par API non activée : chargez le rapport (PDF ou image), l'IA le lira.");
   if (!cp.ice) throw new ExternalDataError(400, "ICE du client requis pour interroger le crédit bureau.");
-  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/${cfg.path.replace(/^\/+/, "")}${encodeURIComponent(cp.ice)}`;
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (process.env.CREDIT_BUREAU_API_TOKEN) headers.Authorization = `Bearer ${process.env.CREDIT_BUREAU_API_TOKEN}`;
-  let res: Response;
-  try {
-    res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000), cache: "no-store" });
-  } catch {
-    throw new ExternalDataError(503, "Le crédit bureau ne répond pas. Chargez le rapport en PDF ou en image.");
-  }
-  if (res.status === 404) throw new ExternalDataError(404, `Aucun rapport pour l'ICE ${cp.ice} : demandez-le dans l'outil du crédit bureau.`);
-  if (!res.ok) throw new ExternalDataError(503, `Le crédit bureau a répondu en erreur (${res.status}).`);
-  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!json) throw new ExternalDataError(503, "Réponse du crédit bureau illisible.");
-  const reportDate = String(json.reportDate ?? json.updatedAt ?? json.lastUpdate ?? "").slice(0, 10);
-  return { bureau: cfg.provider, source: "API", reportDate, reference: String(json.reference ?? json.reportId ?? "").slice(0, 80), data: normalizeReport(json) };
+  return requestCreditBureau(cp.ice);
 }
 
 /** Lecture d'un rapport PDF ou image par l'IA : proposition à vérifier, rien n'est enregistré. */
@@ -323,3 +309,28 @@ export function wrapAiError(e: unknown): string {
   console.error("[sources externes]", e instanceof Error ? e.message : e);
   return "Opération impossible (service ou base indisponible).";
 }
+
+/**
+ * Appel de l'API du crédit bureau pour un ICE, sans rien enregistrer.
+ * ignoreEnabled : test de connexion avant activation (Administration › Raccordements).
+ */
+export async function requestCreditBureau(ice: string, opts: { ignoreEnabled?: boolean } = {}): Promise<ReportDraft> {
+  const cfg = await creditReportSettings();
+  if (opts.ignoreEnabled ? !cfg.baseUrl : !cfg.apiEnabled) throw new ExternalDataError(409, "Récupération par API non activée : chargez le rapport (PDF ou image), l'IA le lira.");
+  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/${cfg.path.replace(/^\/+/, "")}${encodeURIComponent(ice)}`;
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (process.env.CREDIT_BUREAU_API_TOKEN) headers.Authorization = `Bearer ${process.env.CREDIT_BUREAU_API_TOKEN}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000), cache: "no-store" });
+  } catch {
+    throw new ExternalDataError(503, "Le crédit bureau ne répond pas. Chargez le rapport en PDF ou en image.");
+  }
+  if (res.status === 404) throw new ExternalDataError(404, `Aucun rapport pour l'ICE ${ice} : demandez-le dans l'outil du crédit bureau.`);
+  if (!res.ok) throw new ExternalDataError(503, `Le crédit bureau a répondu en erreur (${res.status}).`);
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!json) throw new ExternalDataError(503, "Réponse du crédit bureau illisible.");
+  const reportDate = String(json.reportDate ?? json.updatedAt ?? json.lastUpdate ?? "").slice(0, 10);
+  return { bureau: cfg.provider, source: "API", reportDate, reference: String(json.reference ?? json.reportId ?? "").slice(0, 80), data: normalizeReport(json) };
+}
+

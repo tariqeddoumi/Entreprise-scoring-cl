@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
+import { integrationStates } from "@/lib/integrations";
+import { prisma } from "@/lib/prisma";
 import { loadParamVersions } from "@/lib/model-params";
 import { effectiveScale, today } from "@/lib/rating-scale";
 import { effectiveFormat } from "@/lib/statement-format";
@@ -25,6 +27,7 @@ export default async function AdminHome() {
     { users: 0, entities: 0, currencies: 0, settings: 0 }
   );
   const ai = await aiStatus();
+  const integrations = await integrationStates(prisma).catch(() => [] as Awaited<ReturnType<typeof integrationStates>>);
   const day = today();
   const [scale, paramVersions, format] = await Promise.all([
     effectiveScale(day, { fresh: true }),
@@ -60,6 +63,12 @@ export default async function AdminHome() {
       title: "Paramétrage",
       value: ai.enabled ? (ai.missing ? "IA activée, non configurée" : "IA activée") : "IA désactivée",
       text: "Circuit de validation, délégation par montant, dérogations, pièces, intelligence artificielle, référentiels externes (T24, crédit bureau).",
+    },
+    {
+      href: "/admin/raccordements",
+      title: "Raccordements",
+      value: `${integrations.filter((i) => i.enabled).length} API activée(s) sur ${integrations.length}`,
+      text: "T24, crédit bureau, IA : désactivés au démarrage, test de connexion sans enregistrement, activation après un test réussi.",
     },
     {
       href: "/admin/reprise",

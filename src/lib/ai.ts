@@ -108,6 +108,25 @@ export async function runAi(req: AiRequest): Promise<AiResponse> {
   return c.provider === "anthropic" ? runAnthropic(c, req) : runOpenAiCompatible(c, req);
 }
 
+/**
+ * Test de connexion avant activation (Administration › Raccordements) : une
+ * requête minimale, sans pièce ni donnée client, même si l'IA est désactivée.
+ */
+export async function pingAi(): Promise<AiResponse> {
+  const c = await aiConfig();
+  const missing = missingConfig(c);
+  if (missing) throw new AiError(`IA non configurée : ${missing}.`);
+  const req: AiRequest = {
+    system: "Test de connexion de l'outil de notation. Réponds uniquement selon le schéma.",
+    documents: [],
+    instruction: 'Renvoie {"ok": true}.',
+    schema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"], additionalProperties: false },
+    effort: "low",
+    timeoutMs: 30_000,
+  };
+  return c.provider === "anthropic" ? runAnthropic(c, req) : runOpenAiCompatible(c, req);
+}
+
 // --- Anthropic ------------------------------------------------------------------
 
 function anthropicBlocks(docs: AiDocument[]): Anthropic.Beta.BetaContentBlockParam[] {

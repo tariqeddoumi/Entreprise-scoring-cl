@@ -181,7 +181,20 @@ export async function syncFacilitiesFromT24(
   const path = (await loadSettings()).T24_FACILITIES_PATH ?? "";
   if (!cfg.enabled || !path) throw new FacilityError(409, "Rapatriement des engagements depuis T24 non activé : saisissez les lignes.");
   if (!cp.coreBankingId) throw new FacilityError(400, "Client non rattaché à T24 : rattachez d'abord la fiche à son code client.");
-  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}${encodeURIComponent(cp.coreBankingId)}`;
+  const lines = await fetchT24Facilities(db, cp.coreBankingId, { timeoutMs: opts.timeoutMs });
+  await replace(db, identity, cp, "API", lines, today(), "FACILITIES_SYNCED_FROM_T24");
+  return lines.length;
+}
+
+/**
+ * Lecture des lignes d'engagement d'un client dans T24, sans rien enregistrer.
+ * ignoreEnabled : test de connexion avant activation (Administration › Raccordements).
+ */
+export async function fetchT24Facilities(db: PrismaClient, code: string, opts: { timeoutMs?: number; ignoreEnabled?: boolean } = {}): Promise<Facility[]> {
+  const cfg = await t24Config();
+  const path = (await loadSettings()).T24_FACILITIES_PATH ?? "";
+  if (!path || (opts.ignoreEnabled ? !cfg.baseUrl : !cfg.enabled)) throw new FacilityError(409, "Rapatriement des engagements depuis T24 non activé : saisissez les lignes.");
+  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}${encodeURIComponent(code)}`;
   const headers: Record<string, string> = { Accept: "application/json" };
   if (process.env.T24_API_TOKEN) headers.Authorization = `Bearer ${process.env.T24_API_TOKEN}`;
   let res: Response;
@@ -190,13 +203,11 @@ export async function syncFacilitiesFromT24(
   } catch {
     throw new FacilityError(503, "T24 ne répond pas : saisissez les lignes ou réessayez plus tard.");
   }
-  if (res.status === 404) throw new FacilityError(404, `Aucun engagement pour le client T24 ${cp.coreBankingId}.`);
+  if (res.status === 404) throw new FacilityError(404, `Aucun engagement pour le client T24 ${code}.`);
   if (!res.ok) throw new FacilityError(503, `T24 a répondu en erreur (${res.status}).`);
   const json = await res.json().catch(() => null);
   if (json === null) throw new FacilityError(503, "Réponse de T24 illisible.");
   const types = await loadFacilityTypes(db);
   const mapRaw = (await db.appSetting.findUnique({ where: { key: T24_FACILITY_FIELD_MAP_KEY } }).catch(() => null))?.value;
-  const lines = mapT24Facilities(json, types, parseFacilityFieldMap(mapRaw));
-  await replace(db, identity, cp, "API", lines, today(), "FACILITIES_SYNCED_FROM_T24");
-  return lines.length;
+  return mapT24Facilities(json, types, parseFacilityFieldMap(mapRaw));
 }

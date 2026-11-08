@@ -54,12 +54,17 @@ export async function t24Config(): Promise<T24Config> {
 }
 
 /** Lecture d'un client dans T24. Toute panne se traduit par une erreur explicite qui ouvre la saisie minimale. */
-export async function fetchT24Customer(db: PrismaClient, rawCode: string, opts: { timeoutMs?: number } = {}): Promise<CoreBankingCustomer> {
+export async function fetchT24Customer(
+  db: PrismaClient,
+  rawCode: string,
+  /** ignoreEnabled : test de connexion avant activation (Administration › Raccordements). */
+  opts: { timeoutMs?: number; ignoreEnabled?: boolean } = {}
+): Promise<CoreBankingCustomer> {
   const cfg = await t24Config();
   const code = normalizeT24Code(rawCode);
   const invalid = checkT24Code(code, cfg.rule);
   if (invalid) throw new CoreBankingError("INVALIDE", invalid);
-  if (!cfg.enabled) throw new CoreBankingError("DESACTIVE", "Rapatriement T24 non activé (Paramétrage › Référentiels externes) : saisissez les informations minimales.");
+  if (opts.ignoreEnabled ? !cfg.baseUrl : !cfg.enabled) throw new CoreBankingError("DESACTIVE", "Rapatriement T24 non activé (Paramétrage › Référentiels externes) : saisissez les informations minimales.");
   const mapRaw = (await db.appSetting.findUnique({ where: { key: T24_FIELD_MAP_KEY } }).catch(() => null))?.value;
   const url = `${cfg.baseUrl.replace(/\/+$/, "")}/${cfg.path.replace(/^\/+/, "")}${encodeURIComponent(code)}`;
   const headers: Record<string, string> = { Accept: "application/json" };

@@ -82,6 +82,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Portefeuille par chargé d'affaires (code gestionnaire T24, cloisonnement par portefeuille, paramétrable) (docs/22) | Livré ; à activer après renseignement des codes gestionnaires |
 | Engagements ligne par ligne (T24 ou saisie), engagement global calculé, dépassements et impayés, rapprochement crédit bureau (docs/23) | Livré ; API des limites T24 à brancher par la DSI |
 | Pièces et informations requises par motif, typage des pièces, préparation du dossier, contrôle à la soumission (docs/24) | Livré ; listes à arrêter en COPIL |
+| Mise en service des API : démarrage sans API, test de connexion, activation après test réussi (docs/26) | Livrée ; tests à faire avec la DSI |
 | Reprise du stock : clients, notes historiques validées, bilans, watch list, par classeur Excel contrôlé à blanc (docs/25) | Livrée ; extraction et correspondance des notes à fournir |
 | Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |

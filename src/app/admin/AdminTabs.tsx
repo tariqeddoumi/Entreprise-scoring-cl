@@ -11,6 +11,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/scale", label: "Échelle de notation" },
   { href: "/admin/bilan", label: "Format du bilan" },
   { href: "/admin/settings", label: "Paramétrage" },
+  { href: "/admin/raccordements", label: "Raccordements" },
   { href: "/admin/reprise", label: "Reprise du stock" },
 ];
 
