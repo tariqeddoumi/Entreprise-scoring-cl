@@ -256,3 +256,36 @@ describe("Surveillance du portefeuille : seuils paramétrables", () => {
   });
 });
 void n;
+
+describe("Surveillance : flux d'encours (lignes d'engagement)", () => {
+  const o = [obs("A", "2026-01-10", "5", 10 * M), obs("B", "2026-01-10", "9", 10 * M)];
+  const positions = new Map([
+    ["A", { counterpartyId: "A", asOfDate: "2026-06-01", exposure: 30 * M, outstanding: 20 * M, overdue: 1 * M, maxOverdueDays: 45, overrun: true }],
+  ]);
+
+  it("la position des lignes remplace l'engagement déclaré à partir de sa date", () => {
+    const before = snapshot(o, [], "2026-05-31", S, 12, positions);
+    const after = snapshot(o, [], "2026-06-30", S, 12, positions);
+    expect(before.find((r) => r.counterpartyId === "A")).toMatchObject({ exposure: 10 * M, fromFacilities: false });
+    expect(after.find((r) => r.counterpartyId === "A")).toMatchObject({ exposure: 30 * M, fromFacilities: true });
+    expect(after.find((r) => r.counterpartyId === "B")).toMatchObject({ exposure: 10 * M, fromFacilities: false });
+  });
+
+  it("impayés rapportés à l'encours des lignes, part des clients en dépassement", () => {
+    const k = snapshotKpis(snapshot(o, [], "2026-06-30", S, 12, positions), 8);
+    expect(k.withFacilities).toBe(1);
+    expect(k.overduePct).toBeCloseTo(5);
+    expect(k.overrunPct).toBe(100);
+    // Exposition totale : 30 (lignes) + 10 (notation) ; B en risque élevé : 25 %.
+    expect(k.exposure).toBe(40 * M);
+    expect(k.highRiskPct).toBeCloseTo(25);
+  });
+
+  it("sans ligne : indicateurs sans objet", () => {
+    const k = snapshotKpis(snapshot(o, [], "2026-06-30", S, 12), 8);
+    expect([k.withFacilities, k.overduePct, k.overrunPct]).toEqual([0, null, null]);
+    const m = migrationMatrix(o, "2025-06-30", "2026-06-30", S);
+    const kris = assembleKris(DEFAULT_SURVEILLANCE, k, k, m, processKpis(o, [], "2025-06-30", "2026-06-30", S), 0);
+    expect(kris.find((x) => x.def.code === "TAUX_IMPAYES")!.rag).toBe("NA");
+  });
+});

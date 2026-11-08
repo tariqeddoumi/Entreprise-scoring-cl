@@ -8,6 +8,8 @@ import type { GradeScaleConfig } from "@/core/types";
 import { hasRole, type Role } from "@/lib/auth";
 import { loadCircuit } from "@/lib/workflow";
 import { hasPermission } from "@/reference/workflow";
+import { facilitySettings, loadFacilityTypes } from "@/lib/facilities";
+import { facilityTotals, normalizeFacility } from "@/reference/facilities";
 import {
   addMonths,
   assembleKris,
@@ -28,6 +30,7 @@ import {
   type SnapshotRow,
   type WatchlistLate,
   type ScaleInfo,
+  type FacilityPosition,
   parseSurveillance,
   SURVEILLANCE_KEY,
   type CaseTiming,
@@ -65,6 +68,8 @@ export interface PortfolioData {
   settings: SurveillanceSettings;
   wlRules: WatchlistLevelRule[];
   validityMonths: number;
+  /** Flux d'encours : position des lignes d'engagement par client. */
+  positions: Map<string, FacilityPosition>;
 }
 
 const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
@@ -98,7 +103,7 @@ export async function loadPortfolio(db: PrismaClient, filters: PortfolioFilters)
     ...(entityIds ? { entityId: { in: entityIds } } : {}),
     ...(filters.sector ? { sectorCode: filters.sector === "_" ? null : filters.sector } : {}),
   };
-  const [counterparties, runs, wlRows, caseRows, settings, levels, validityMonths] = await Promise.all([
+  const [counterparties, runs, wlRows, caseRows, settings, levels, validityMonths, facilityRows, facTypes, facSettings] = await Promise.all([
     db.counterparty.findMany({ where: cpWhere, select: { id: true, name: true, entityId: true, segment: true, sectorCode: true, createdAt: true, isActive: true } }),
     db.ratingRun.findMany({
       where: { AND: [OFFICIAL_RUN_WHERE, { counterparty: cpWhere }] },
@@ -125,6 +130,9 @@ export async function loadPortfolio(db: PrismaClient, filters: PortfolioFilters)
     loadSurveillanceSettings(db),
     loadWatchlistLevels(db),
     settingInt("RATING_VALIDITY_MONTHS"),
+    db.creditFacility.findMany({ where: { status: { not: "CLOTUREE" }, counterparty: cpWhere } }),
+    loadFacilityTypes(db),
+    facilitySettings(),
   ]);
 
   const cp = new Map(counterparties.map((c) => [c.id, c]));
@@ -158,7 +166,33 @@ export async function loadPortfolio(db: PrismaClient, filters: PortfolioFilters)
     .filter((c) => c.isActive && keep(c.id))
     .map((c) => ({ counterpartyId: c.id, name: c.name, entityId: c.entityId, segment: segmentOf(c.id), sectorCode: c.sectorCode, since: day(c.createdAt)! }));
 
+  // Positions par client : totaux des lignes (base de l'engagement global
+  // paramétrée), date = la plus ancienne position des lignes du client.
+  const byCp = new Map<string, typeof facilityRows>();
+  for (const f of facilityRows) byCp.set(f.counterpartyId, [...(byCp.get(f.counterpartyId) ?? []), f]);
+  const positions = new Map<string, FacilityPosition>();
+  for (const [id, rows] of byCp) {
+    if (!keep(id)) continue;
+    const lines = rows.map((r) =>
+      normalizeFacility(
+        { ...r, authorized: r.authorized === null ? null : Number(r.authorized), outstanding: r.outstanding === null ? null : Number(r.outstanding), overdue: r.overdue === null ? null : Number(r.overdue) },
+        facTypes
+      )
+    );
+    const t = facilityTotals(lines, facTypes, facSettings);
+    positions.set(id, {
+      counterpartyId: id,
+      asOfDate: rows.map((r) => r.asOfDate).sort()[0],
+      exposure: t.exposure,
+      outstanding: t.outstanding,
+      overdue: t.overdue,
+      maxOverdueDays: t.maxOverdueDays,
+      overrun: lines.some((l) => l.authorized !== null && l.outstanding !== null && l.authorized > 0 && l.outstanding > l.authorized * 1.1),
+    });
+  }
+
   return {
+    positions,
     obs,
     wl: wlRows.filter((w) => keep(w.counterpartyId)).map((w) => ({ counterpartyId: w.counterpartyId, kind: w.kind as WatchlistEvent["kind"], effectiveDate: w.effectiveDate, level: w.level })),
     population,
@@ -199,6 +233,8 @@ export interface SurveillanceReport {
     expired: SnapshotRow[];
     expiringSoon: SnapshotRow[];
     watchlist: Array<WatchlistLate & { name: string; grade: string | null }>;
+    /** Impayés ou dépassements sur les lignes d'engagement. */
+    facilities: SnapshotRow[];
   };
   entityName: Record<string, string>;
 }
@@ -212,8 +248,8 @@ export function scaleInfo(scale: GradeScaleConfig | null | undefined): ScaleInfo
 export function buildSurveillance(data: PortfolioData, asOf: string, horizon: number, scale: ScaleInfo = DEFAULT_SCALE_INFO, seriesMonths = 24): SurveillanceReport {
   const s = data.settings;
   const from = addMonths(asOf, -horizon);
-  const rows = snapshot(data.obs, data.wl, asOf, scale, data.validityMonths);
-  const rowsBefore = snapshot(data.obs, data.wl, from, scale, data.validityMonths);
+  const rows = snapshot(data.obs, data.wl, asOf, scale, data.validityMonths, data.positions);
+  const rowsBefore = snapshot(data.obs, data.wl, from, scale, data.validityMonths, data.positions);
   const popAt = (d: string) => data.population.filter((p) => p.since <= d).length;
   const now = snapshotKpis(rows, s.highRiskFrom, popAt(asOf));
   const before = snapshotKpis(rowsBefore, s.highRiskFrom, popAt(from));
@@ -223,7 +259,7 @@ export function buildSurveillance(data: PortfolioData, asOf: string, horizon: nu
   const wlDue = watchlistDue(data.wl, data.obs, data.wlRules, asOf);
   const late = wlDue.filter((w) => w.reviewLate || w.renotationLate);
   const kris = assembleKris(s, now, before, migration, process, late.length);
-  const series = monthlySeries(data.obs, data.wl, data.population, asOf, seriesMonths, scale, data.validityMonths, s.highRiskFrom);
+  const series = monthlySeries(data.obs, data.wl, data.population, asOf, seriesMonths, scale, data.validityMonths, s.highRiskFrom, data.positions);
 
   const labels = [...scale.performing, "D"];
   const share = (list: SnapshotRow[], i: number) => {
@@ -271,6 +307,7 @@ export function buildSurveillance(data: PortfolioData, asOf: string, horizon: nu
     top,
     rows,
     alerts: {
+      facilities: rows.filter((r) => r.position && (r.position.overdue > 0 || r.position.overrun)).sort((a, b) => (b.position!.overdue - a.position!.overdue) || (b.exposure - a.exposure)),
       strongDowngrades: migration.moves.filter((m) => m.notches >= s.strongDowngradeNotches),
       newDefaults: migration.moves.filter((m) => scale.defaults.includes(m.toGrade) && !scale.defaults.includes(m.fromGrade)),
       expired: rows.filter((r) => r.expired).sort((a, b) => b.exposure - a.exposure),

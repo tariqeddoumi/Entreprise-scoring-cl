@@ -128,6 +128,30 @@ export const KRI_CATALOG: KriDef[] = [
     ownerFr: "Surveillance des risques",
   },
   {
+    code: "TAUX_IMPAYES",
+    family: "RISQUE",
+    labelFr: "Impayés sur les lignes",
+    definitionFr: "Impayés des lignes d'engagement de la banque rapportés à leur encours (clients dotés de lignes).",
+    unit: "PCT",
+    direction: "UP_IS_WORSE",
+    amber: 1,
+    red: 3,
+    frequencyFr: "Mensuelle",
+    ownerFr: "Surveillance des risques",
+  },
+  {
+    code: "DEPASSEMENTS",
+    family: "RISQUE",
+    labelFr: "Clients en dépassement",
+    definitionFr: "Part des clients dotés de lignes dont l'encours dépasse l'autorisé de plus de 10 % sur au moins une ligne.",
+    unit: "PCT",
+    direction: "UP_IS_WORSE",
+    amber: 5,
+    red: 10,
+    frequencyFr: "Mensuelle",
+    ownerFr: "Surveillance des risques",
+  },
+  {
     code: "COUVERTURE",
     family: "PROCESSUS",
     labelFr: "Couverture de la notation",
@@ -345,6 +369,26 @@ export function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 86_400_000);
 }
 
+// --- Flux d'encours : lignes d'engagement ---------------------------------------
+
+/**
+ * Position courante d'un client d'après ses lignes d'engagement (docs/23). Elle
+ * remplace l'engagement déclaré à la notation pour toute photographie datée de
+ * la position ou après : c'est le flux d'encours de la surveillance.
+ */
+export interface FacilityPosition {
+  counterpartyId: string;
+  asOfDate: string;
+  exposure: number;
+  outstanding: number;
+  overdue: number;
+  maxOverdueDays: number;
+  /** Au moins une ligne dont l'encours dépasse l'autorisé de plus de 10 %. */
+  overrun: boolean;
+}
+
+export type Positions = ReadonlyMap<string, FacilityPosition>;
+
 // --- Photographie -------------------------------------------------------------
 
 export interface SnapshotRow {
@@ -358,6 +402,9 @@ export interface SnapshotRow {
   isDefault: boolean;
   exposure: number;
   exposureKnown: boolean;
+  /** Exposition tirée des lignes d'engagement (sinon : engagement déclaré à la notation). */
+  fromFacilities: boolean;
+  position: FacilityPosition | null;
   asOfDate: string;
   effectiveDate: string;
   expired: boolean;
@@ -386,7 +433,13 @@ export function watchlistAt(events: WatchlistEvent[], date: string): Map<string,
   return out;
 }
 
-export function snapshot(obs: RatingObs[], wl: WatchlistEvent[], date: string, scale: ScaleInfo, validityMonths: number): SnapshotRow[] {
+function exposureAt(o: RatingObs, date: string, positions?: Positions): { exposure: number; exposureKnown: boolean; fromFacilities: boolean; position: FacilityPosition | null } {
+  const p = positions?.get(o.counterpartyId);
+  if (p && p.asOfDate <= date) return { exposure: p.exposure, exposureKnown: true, fromFacilities: true, position: p };
+  return { exposure: o.exposure ?? 0, exposureKnown: o.exposure !== null, fromFacilities: false, position: null };
+}
+
+export function snapshot(obs: RatingObs[], wl: WatchlistEvent[], date: string, scale: ScaleInfo, validityMonths: number, positions?: Positions): SnapshotRow[] {
   const wlMap = watchlistAt(wl, date);
   const rows: SnapshotRow[] = [];
   for (const o of latestAt(obs, date).values()) {
@@ -401,8 +454,7 @@ export function snapshot(obs: RatingObs[], wl: WatchlistEvent[], date: string, s
       grade: o.grade,
       rank,
       isDefault: isDefault(scale, o.grade),
-      exposure: o.exposure ?? 0,
-      exposureKnown: o.exposure !== null,
+      ...exposureAt(o, date, positions),
       asOfDate: o.asOfDate,
       effectiveDate: o.effectiveDate,
       expired: addMonths(o.effectiveDate, validityMonths) < date,
@@ -419,6 +471,11 @@ export interface SnapshotKpis {
   exposure: number;
   /** Clients sans exposition connue. */
   exposureUnknown: number;
+  /** Clients dont l'exposition vient des lignes d'engagement. */
+  withFacilities: number;
+  overduePct: number | null;
+  overrunPct: number | null;
+  overrunCount: number;
   avgGrade: number | null;
   highRiskPct: number | null;
   defaultPct: number | null;
@@ -435,6 +492,8 @@ export interface SnapshotKpis {
 const pct = (n: number, d: number) => (d > 0 ? (100 * n) / d : null);
 
 export function snapshotKpis(rows: SnapshotRow[], highRiskFrom: number, population?: number | null): SnapshotKpis {
+  const withFac = rows.filter((r) => r.position !== null);
+  const facOutstanding = withFac.reduce((a, r) => a + r.position!.outstanding, 0);
   const exposure = rows.reduce((s, r) => s + r.exposure, 0);
   const performing = rows.filter((r) => !r.isDefault);
   const perfExpo = performing.reduce((s, r) => s + r.exposure, 0);
@@ -448,6 +507,10 @@ export function snapshotKpis(rows: SnapshotRow[], highRiskFrom: number, populati
     rated: rows.length,
     exposure,
     exposureUnknown: rows.filter((r) => !r.exposureKnown).length,
+    withFacilities: withFac.length,
+    overduePct: facOutstanding > 0 ? (100 * withFac.reduce((a, r) => a + r.position!.overdue, 0)) / facOutstanding : null,
+    overrunPct: withFac.length ? (100 * withFac.filter((r) => r.position!.overrun).length) / withFac.length : null,
+    overrunCount: withFac.filter((r) => r.position!.overrun).length,
     avgGrade,
     highRiskPct: pct(sumWhere((r) => !r.isDefault && r.rank >= highRiskFrom), exposure),
     defaultPct: pct(sumWhere((r) => r.isDefault), exposure),
@@ -639,10 +702,11 @@ export function monthlySeries(
   months: number,
   scale: ScaleInfo,
   validityMonths: number,
-  highRiskFrom: number
+  highRiskFrom: number,
+  positions?: Positions
 ): SeriesPoint[] {
   return monthEnds(end, months).map((date) => {
-    const rows = snapshot(obs, wl, date, scale, validityMonths);
+    const rows = snapshot(obs, wl, date, scale, validityMonths, positions);
     const pop = population ? population.filter((p) => p.since <= date).length : null;
     const monthStart = date.slice(0, 8) + "01";
     return {
@@ -784,6 +848,8 @@ export function assembleKris(
     TAUX_DEGRADATION: [migration.downgradePct, null, `${migration.downgrades} sur ${migration.cohort} client(s) de la cohorte`],
     SOLDE_MIGRATION: [migration.netPct, null, migration.avgNotch !== null ? `variation moyenne ${migration.avgNotch > 0 ? "+" : ""}${migration.avgNotch.toFixed(2)} cran` : undefined],
     CONCENTRATION_TOP10: [now.top10Pct, before.top10Pct],
+    TAUX_IMPAYES: [now.overduePct, null, now.withFacilities ? `${now.withFacilities} client(s) dotés de lignes` : "aucune ligne d'engagement"],
+    DEPASSEMENTS: [now.overrunPct, null, now.withFacilities ? `${now.overrunCount} client(s) sur ${now.withFacilities}` : "aucune ligne d'engagement"],
     COUVERTURE: [now.coveragePct, before.coveragePct, now.population !== null ? `${now.rated - now.expiredCount} sur ${now.population} client(s)` : undefined],
     NOTES_EXPIREES: [now.expiredPct, before.expiredPct, `${now.expiredCount} client(s)`],
     TAUX_DEROGATION: [proc.overridePct, null, `${proc.overrides} sur ${proc.validatedInPeriod} note(s), dont ${proc.favourableOverrides} favorable(s)`],

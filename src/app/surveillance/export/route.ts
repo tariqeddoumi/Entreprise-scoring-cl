@@ -50,10 +50,27 @@ export async function GET(req: Request) {
     ];
   } else {
     lines = [
-      csvLine(["Client", "Entité", "Segment", "Secteur", "Note", "Arrêté", "Validée le", "Exposition", "Exposition connue", "Note expirée", "Watch list"]),
+      csvLine(["Client", "Entité", "Segment", "Secteur", "Note", "Arrêté", "Validée le", "Exposition", "Source de l'exposition", "Encours des lignes", "Impayés des lignes", "Dépassement", "Note expirée", "Watch list"]),
       ...[...report.rows]
         .sort((a, b) => b.exposure - a.exposure)
-        .map((r) => csvLine([r.name, report.entityName[r.entityId] ?? r.entityId, r.segment, r.sectorCode, r.grade, r.asOfDate, r.effectiveDate, n(r.exposure, 0), r.exposureKnown ? "oui" : "non", r.expired ? "oui" : "non", r.watchlist])),
+        .map((r) =>
+          csvLine([
+            r.name,
+            report.entityName[r.entityId] ?? r.entityId,
+            r.segment,
+            r.sectorCode,
+            r.grade,
+            r.asOfDate,
+            r.effectiveDate,
+            n(r.exposure, 0),
+            r.fromFacilities ? `lignes au ${r.position!.asOfDate}` : r.exposureKnown ? "notation" : "inconnue",
+            r.position ? n(r.position.outstanding, 0) : "",
+            r.position ? n(r.position.overdue, 0) : "",
+            r.position ? (r.position.overrun ? "oui" : "non") : "",
+            r.expired ? "oui" : "non",
+            r.watchlist,
+          ])
+        ),
     ];
   }
   const file = `surveillance-${kind}-${asOf}.csv`.replace(/[^\w.\-]/g, "_");

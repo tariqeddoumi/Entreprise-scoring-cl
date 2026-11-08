@@ -28,6 +28,8 @@ La surveillance donne au comité des risques, à la surveillance (P4), à la con
 | Notes expirées | KPI | Clients notés dont la note a dépassé la validité (12 mois) | ≥ 5 % | ≥ 10 % | Mensuelle | Réseau |
 | Taux de dérogation | KPI | Notes validées sur la période dont la note finale diffère de celle du modèle (sens indiqué) | ≥ 10 % | ≥ 20 % | Trimestrielle | Validation des modèles |
 | Délai d'instruction (médiane) | KPI | Jours entre soumission et décision finale | ≥ 15 j | ≥ 30 j | Mensuelle | Contre-étude |
+| Impayés sur les lignes | KRI | Impayés des lignes d'engagement / encours des lignes | ≥ 1 % | ≥ 3 % | Mensuelle | Surveillance |
+| Clients en dépassement | KRI | Clients dont une ligne dépasse l'autorisé de plus de 10 % / clients dotés de lignes | ≥ 5 % | ≥ 10 % | Mensuelle | Surveillance |
 | Watch list en retard | KPI | Clients en watch list dont la revue ou la renotation imposée par le niveau a dépassé son délai | ≥ 1 | ≥ 5 | Hebdomadaire | Surveillance |
 
 Chaque tuile affiche la valeur, le feu (icône et libellé, jamais la couleur seule), la variation sur l'horizon, la tendance des 12 derniers mois et les seuils en vigueur.
@@ -52,7 +54,7 @@ Chaque tuile affiche la valeur, le feu (icône et libellé, jamais la couleur se
 
 ## 5. Limites et suites proposées
 
-1. **Exposition** : c'est l'engagement global déclaré au dossier (converti en devise de base), au moment de la note, pas l'encours du jour. Proposition : un **flux d'encours mensuel** du système de crédit (identifiant client, date d'arrêté, encours bilan, hors bilan, impayés, classement comptable), qui remplacera cette exposition dans tous les indicateurs et ouvrira des KRI supplémentaires (impayés à 30 / 60 / 90 jours, utilisation des autorisations, encours sensibles ou non performants au sens BAM).
+1. **Exposition** : depuis D-63, c'est la **position des lignes d'engagement** du client (T24 ou saisie, docs/23) pour toute photographie datée de la position ou après ; à défaut, l'engagement déclaré au moment de la note. Deux indicateurs de risque s'y ajoutent : **impayés sur les lignes** (impayés / encours, orange 1 %, rouge 3 %) et **clients en dépassement** (plus de 10 % de l'autorisé, orange 5 %, rouge 10 %), ainsi qu'une liste d'alertes. Reste à historiser les positions mensuelles (aujourd'hui, seule la position courante est conservée) et à recevoir les impayés à 30, 60 et 90 jours du système de crédit.
 2. **Taux de défaut observé par classe** (back-testing) : il suppose un historique de défauts daté ; il viendra avec la reprise du stock (point 4) et la calibration.
 3. **Secteurs** : affichés par code tant que le référentiel sectoriel n'est pas alimenté (docs sur le référentiel NMA 2010).
 4. **Volumétrie** : les calculs se font à la volée sur les notes du périmètre. Au-delà de quelques dizaines de milliers de notes, prévoir une photographie mensuelle stockée (table d'agrégats) produite par un traitement de fin de mois.

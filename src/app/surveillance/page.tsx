@@ -196,9 +196,9 @@ export default async function SurveillancePage({ searchParams }: { searchParams:
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Surveillance du portefeuille</h1>
         <p className="muted">
-          Photographie au {fmtDate(asOf)} des notes qui font foi (validées), comparée au {fmtDate(report.from)} ({horizon} mois). Exposition : engagement global
-          déclaré au dossier, en devise de base, jusqu&apos;au raccordement d&apos;un flux d&apos;encours. Seuils proposés, à arrêter en COPIL (Administration ›
-          Paramétrage).
+          Photographie au {fmtDate(asOf)} des notes qui font foi (validées), comparée au {fmtDate(report.from)} ({horizon} mois). Exposition : position des
+          lignes d&apos;engagement du client (T24 ou saisie) à partir de sa date, sinon engagement global déclaré à la notation. Seuils proposés, à arrêter
+          en COPIL (Administration › Paramétrage).
         </p>
       </div>
 
@@ -281,6 +281,9 @@ export default async function SurveillancePage({ searchParams }: { searchParams:
           </span>
           <span>
             <strong>{fmtInt(report.now.watchlistCount)}</strong> en watch list
+          </span>
+          <span>
+            <strong>{fmtInt(report.now.withFacilities)}</strong> exposition(s) tirée(s) des lignes d&apos;engagement
           </span>
           <span>
             <strong>{fmtInt(report.process.validatedInPeriod)}</strong> note(s) validée(s) sur {horizon} mois
@@ -556,6 +559,21 @@ export default async function SurveillancePage({ searchParams }: { searchParams:
             <GradeBadge key="g" grade={w.grade} />,
             <Due key="r" date={w.reviewDue} late={w.reviewLate} />,
             <Due key="t" date={w.renotationDue} late={w.renotationLate} done={!w.renotationLate && w.renotationDue < asOf} />,
+          ])}
+        />
+        <AlertList
+          title="Impayés et dépassements sur les lignes d'engagement"
+          empty="Aucun impayé ni dépassement sur les lignes d'engagement."
+          head={["Client", "Note", "Encours", "Impayés", "Plus ancien", "Dépassement"]}
+          rows={report.alerts.facilities.slice(0, 50).map((r) => [
+            <Link key="n" href={`/counterparties/${r.counterpartyId}#engagements`}>
+              {r.name}
+            </Link>,
+            <GradeBadge key="g" grade={r.grade} />,
+            fmtAmount(r.position!.outstanding),
+            fmtAmount(r.position!.overdue),
+            r.position!.maxOverdueDays ? `${r.position!.maxOverdueDays} j` : "—",
+            r.position!.overrun ? "▲ plus de 10 %" : "—",
           ])}
         />
         <AlertList

@@ -800,6 +800,20 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-63 — Surveillance : flux d'encours tiré des lignes d'engagement
+
+*Décision :*
+- **Exposition d'un client dans la surveillance :** la position de ses lignes d'engagement (base de l'engagement global paramétrée), pour toute photographie datée de la position ou après ; sinon, l'engagement déclaré à la notation.
+- **Deux nouveaux indicateurs de risque :**
+  - impayés sur les lignes, rapportés à leur encours (orange 1 %, rouge 3 %) ;
+  - part des clients en dépassement de plus de 10 % (orange 5 %, rouge 10 %).
+- **Liste d'alertes :** impayés et dépassements.
+- **Export :** il indique la source de l'exposition.
+
+*À confirmer :* seuils en COPIL ; historisation mensuelle des positions.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.
