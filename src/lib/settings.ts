@@ -20,7 +20,7 @@ export type SettingKind = "boolean" | "integer" | "enum" | "text" | "url";
 
 export interface SettingDef {
   key: string;
-  group: "Workflow" | "Comités" | "Dérogations" | "Pièces" | "Intelligence artificielle";
+  group: "Workflow" | "Comités" | "Dérogations" | "Pièces" | "Intelligence artificielle" | "Référentiels externes";
   labelFr: string;
   helpFr: string;
   kind: SettingKind;
@@ -186,6 +186,117 @@ export const SETTINGS: readonly SettingDef[] = [
       "Vide : adresse officielle. Obligatoire pour Azure et les API compatibles. Adresse https exigée.",
     kind: "url",
     default: "",
+  },
+  {
+    key: "T24_ENABLED",
+    group: "Référentiels externes",
+    labelFr: "Rapatriement des fiches clients depuis T24",
+    helpFr:
+      "Activé : la fiche client se crée et s'actualise depuis T24 par le code client. Désactivé ou T24 indisponible : saisie minimale, à rattacher à T24 ensuite. Jeton d'accès : variable d'environnement T24_API_TOKEN.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "T24_BASE_URL",
+    group: "Référentiels externes",
+    labelFr: "Adresse de l'API T24",
+    helpFr: "Adresse https de l'API clients de T24 (Transact), réseau interne de la banque.",
+    kind: "url",
+    default: "",
+  },
+  {
+    key: "T24_CUSTOMER_PATH",
+    group: "Référentiels externes",
+    labelFr: "Chemin de la ressource client",
+    helpFr: "Ajouté à l'adresse, suivi du code client. Transact (IRIS) : /api/v1.0.0/party/customers/",
+    kind: "text",
+    default: "/api/v1.0.0/party/customers/",
+  },
+  {
+    key: "T24_CODE_MIN_DIGITS",
+    group: "Référentiels externes",
+    labelFr: "Code client T24 : chiffres au minimum",
+    helpFr: "Le code client T24 est numérique (1 à 10 chiffres selon le paramétrage de T24). À aligner sur la numérotation de la banque.",
+    kind: "integer",
+    default: "1",
+    min: 1,
+    max: 20,
+  },
+  {
+    key: "T24_CODE_MAX_DIGITS",
+    group: "Référentiels externes",
+    labelFr: "Code client T24 : chiffres au maximum",
+    helpFr: "Voir ci-dessus.",
+    kind: "integer",
+    default: "10",
+    min: 1,
+    max: 20,
+  },
+  {
+    key: "CREDIT_BUREAU_API_ENABLED",
+    group: "Référentiels externes",
+    labelFr: "Récupération du rapport de solvabilité par API",
+    helpFr:
+      "Activé : le rapport se récupère depuis la base des rapports du crédit bureau, par l'ICE. Le rafraîchissement du rapport se fait dans l'outil du crédit bureau. Jeton : variable d'environnement CREDIT_BUREAU_API_TOKEN.",
+    kind: "boolean",
+    default: "false",
+  },
+  {
+    key: "CREDIT_BUREAU_PROVIDER",
+    group: "Référentiels externes",
+    labelFr: "Crédit bureau",
+    helpFr: "Délégataire de Bank Al-Maghrib dont la banque consulte les rapports.",
+    kind: "enum",
+    default: "CREDITINFO",
+    options: ["CREDITINFO", "QUANTIK"],
+    optionLabels: { CREDITINFO: "Creditinfo Maroc", QUANTIK: "Quantik Maroc" },
+  },
+  {
+    key: "CREDIT_BUREAU_BASE_URL",
+    group: "Référentiels externes",
+    labelFr: "Adresse de l'API du crédit bureau",
+    helpFr: "Adresse https de la base des rapports de solvabilité.",
+    kind: "url",
+    default: "",
+  },
+  {
+    key: "CREDIT_BUREAU_PATH",
+    group: "Référentiels externes",
+    labelFr: "Chemin du rapport entreprise",
+    helpFr: "Ajouté à l'adresse, suivi de l'ICE de l'entreprise.",
+    kind: "text",
+    default: "/api/v1/reports/company/",
+  },
+  {
+    key: "CREDIT_REPORT_MAX_AGE_DAYS",
+    group: "Référentiels externes",
+    labelFr: "Ancienneté maximale du rapport de solvabilité (jours)",
+    helpFr:
+      "Au-delà, depuis sa date de mise à jour, le rapport est signalé ancien : l'analyste le rafraîchit dans l'outil du crédit bureau puis le récupère à nouveau. Proposition : 30 jours, à arrêter en COPIL.",
+    kind: "integer",
+    default: "30",
+    min: 1,
+    max: 365,
+  },
+  {
+    key: "CREDIT_REPORT_AT_SUBMISSION",
+    group: "Référentiels externes",
+    labelFr: "Rapport absent ou ancien à la soumission",
+    helpFr: "Avertissement : la soumission reste possible, l'alerte est tracée. Bloquant : un rapport à jour est exigé.",
+    kind: "enum",
+    default: "AVERTISSEMENT",
+    options: ["AVERTISSEMENT", "BLOQUANT", "AUCUN"],
+    optionLabels: { AVERTISSEMENT: "Avertissement", BLOQUANT: "Bloquant", AUCUN: "Aucun contrôle" },
+  },
+  {
+    key: "LEGAL_PROFILE_MAX_AGE_DAYS",
+    group: "Référentiels externes",
+    labelFr: "Ancienneté maximale de la fiche juridique (jours)",
+    helpFr: "Au-delà, depuis la date du rapport InfoRisque ou de la synchronisation T24, la fiche juridique est signalée à actualiser.",
+    kind: "integer",
+    default: "365",
+    min: 30,
+    max: 1095,
   },
 ] as const;
 

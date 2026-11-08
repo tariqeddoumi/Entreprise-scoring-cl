@@ -59,6 +59,8 @@ interface Props {
   lifts: CaseLift[];
   watchlist?: WatchlistCap | null;
   cumulNotch?: number;
+  /** Signaux externes (crédit bureau, fiche juridique) : critères BAM proposés à vérifier. */
+  signals?: string[];
 }
 
 type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<string, { original: number; base: number }> } | null;
@@ -67,7 +69,7 @@ type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<st
  * Espace de travail d'un dossier : la grille (brouillon), l'aperçu du calcul,
  * l'enregistrement, la soumission, et le panneau d'assistance de l'IA.
  */
-export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts, watchlist = null, cumulNotch = 0 }: Props) {
+export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts, watchlist = null, cumulNotch = 0, signals = [] }: Props) {
   const router = useRouter();
   const [draft, setDraft] = useState<CaseDraft>(initialDraft);
   const [dirty, setDirty] = useState(false);
@@ -131,7 +133,7 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
   if (!editable) {
     return (
       <>
-      <ClassificationPanel model={model} draft={draft} readOnly format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} />
+      <ClassificationPanel model={model} draft={draft} readOnly format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} signals={signals} />
       <details className="card" style={{ padding: 16 }}>
         <summary style={{ cursor: "pointer", fontWeight: 600 }}>Saisie du dossier (lecture seule)</summary>
         <div style={{ marginTop: 14, display: "grid", gap: 18 }}>
@@ -157,7 +159,7 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
           format={format}
         />
         <ScoringForm model={model} draft={draft} onChange={change} currency={currency} aiFields={aiFields} format={format} />
-        <ClassificationPanel model={model} draft={draft} onChange={change} format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} />
+        <ClassificationPanel model={model} draft={draft} onChange={change} format={format} settings={classification} lifts={lifts} watchlist={watchlist} cumulNotch={cumulNotch} signals={signals} />
         <div className="card no-print action-bar">
           <button type="button" className="btn-ghost" onClick={() => run("save")} disabled={busy !== null}>
             {busy === "save" ? "Enregistrement…" : "Enregistrer le brouillon"}

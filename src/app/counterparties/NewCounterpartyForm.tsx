@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createCounterpartyAction, extractCounterpartyAction, updateCounterpartyAction } from "./actions";
+import { createFromT24Action, previewT24Action, type T24Result } from "./external-actions";
+import { checkMinimalEntry, CUSTOMER_FIELDS, CUSTOMER_FIELD_LABELS } from "@/reference/core-banking";
 
 const FIELD_STYLE = { width: "100%" } as const;
 
@@ -16,6 +18,8 @@ interface FormState {
   city: string;
   country: string;
   currency: string;
+  commercialSegment: string;
+  coreBankingId: string;
 }
 
 const EMPTY: FormState = {
@@ -28,9 +32,12 @@ const EMPTY: FormState = {
   city: "",
   country: "",
   currency: "",
+  commercialSegment: "",
+  coreBankingId: "",
 };
 
-const TEXT_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency"] as const;
+const TEXT_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency", "commercialSegment", "coreBankingId"] as const;
+const AI_FIELDS = ["ice", "rc", "fiscalId", "legalForm", "sectorCode", "city", "country", "currency"] as const;
 
 /** Fiche existante à modifier (mode édition). */
 export interface EditableCounterparty {
@@ -55,10 +62,16 @@ interface Props {
   aiUsable: boolean;
   /** Présent : la fiche s'ouvre en modification de ce client. */
   edit?: EditableCounterparty;
+  /** Rapatriement T24 activé (paramétrage). */
+  t24Enabled?: boolean;
+  /** Segments commerciaux actifs (paramétrage, alignés sur T24). */
+  segments?: Array<{ code: string; labelFr: string }>;
+  /** Fiche rapatriée de T24 (modification) : T24 fait foi. */
+  fromT24?: boolean;
 }
 
 /** Création ou modification d'une fiche client. */
-export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit }: Props) {
+export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit, t24Enabled = false, segments = [], fromT24 = false }: Props) {
   const router = useRouter();
   const initial: FormState = edit ? { ...EMPTY, ...edit.values } : EMPTY;
   const [open, setOpen] = useState(false);
@@ -77,6 +90,12 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
   const [aiNote, setAiNote] = useState<string | null>(null);
   const [aiFilled, setAiFilled] = useState<Set<string>>(new Set());
   const entity = entities.find((e) => e.id === entityId);
+  // Création : par le code client T24 (rapatriement), ou saisie minimale si le
+  // client n'est pas encore dans T24 ou si T24 ne répond pas.
+  const [mode, setMode] = useState<"T24" | "SAISIE">(t24Enabled ? "T24" : "SAISIE");
+  const [t24Code, setT24Code] = useState("");
+  const [t24, setT24] = useState<T24Result | null>(null);
+  const [t24Pending, startT24] = useTransition();
 
   function field(name: keyof FormState) {
     return {
@@ -107,7 +126,7 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
       const filled = new Set<string>();
       setValues((v) => {
         const next = { ...v };
-        for (const k of ["name", ...TEXT_FIELDS] as const) {
+        for (const k of ["name", ...AI_FIELDS] as const) {
           const val = data[k];
           if (val) {
             next[k] = val;
@@ -131,6 +150,13 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
       return;
     }
 
+    if (!edit) {
+      const issues = checkMinimalEntry({ ...values, country: values.country || entity?.country || "MA" });
+      if (issues.length) {
+        setErrorFr(`Saisie minimale incomplète : ${issues.join(" ")}`);
+        return;
+      }
+    }
     const payload: Record<string, string | null> = { name };
     if (entityId) payload.entityId = entityId;
     for (const key of TEXT_FIELDS) {
@@ -197,7 +223,114 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
         </button>
       </div>
 
-      {aiUsable && !edit && (
+      {!edit && (
+        <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13 }}>
+          <legend className="sr-only">Mode de création</legend>
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <input type="radio" name="mode" style={{ width: 16 }} checked={mode === "T24"} onChange={() => setMode("T24")} />
+            Client présent dans T24 : rapatrier par le code client
+          </label>
+          <label style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+            <input type="radio" name="mode" style={{ width: 16 }} checked={mode === "SAISIE"} onChange={() => setMode("SAISIE")} />
+            Pas encore dans T24, ou T24 indisponible : saisie minimale
+          </label>
+        </fieldset>
+      )}
+
+      {!edit && mode === "T24" && (
+        <div style={{ display: "grid", gap: 10 }}>
+          {!t24Enabled && (
+            <p className="muted" style={{ fontSize: 12 }}>
+              Rapatriement T24 non activé (Administration › Paramétrage › Référentiels externes) : utilisez la saisie minimale.
+            </p>
+          )}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setT24(null);
+              startT24(async () => setT24(await previewT24Action(t24Code)));
+            }}
+            style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}
+          >
+            <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+              Code client T24 *
+              <input inputMode="numeric" value={t24Code} onChange={(e) => setT24Code(e.target.value)} placeholder="ex. 100245" style={{ maxWidth: 200 }} />
+            </label>
+            <button type="submit" className="btn-primary" disabled={t24Pending || !t24Code.trim()}>
+              {t24Pending ? "Interrogation de T24…" : "Rapatrier depuis T24"}
+            </button>
+          </form>
+          {t24 && !t24.ok && (
+            <div role="alert" style={{ fontSize: 13, display: "grid", gap: 6 }}>
+              <span style={{ color: "var(--bad)" }}>{t24.errorFr}</span>
+              {t24.errorKind !== "CONFLIT" && t24.errorKind !== "INVALIDE" && (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ justifySelf: "start", fontSize: 13 }}
+                  onClick={() => {
+                    setMode("SAISIE");
+                    setValues((v) => ({ ...v, coreBankingId: t24.errorKind === "INTROUVABLE" ? "" : t24Code.replace(/\s/g, "") }));
+                  }}
+                >
+                  Passer à la saisie minimale
+                </button>
+              )}
+            </div>
+          )}
+          {t24?.ok && t24.customer && (
+            <div className="card" style={{ padding: 12, boxShadow: "none", display: "grid", gap: 8 }}>
+              <strong style={{ fontSize: 13 }}>Fiche T24 du client {t24.customer.code}</strong>
+              <div className="table-scroll">
+                <table className="data" style={{ minWidth: 420 }}>
+                  <tbody>
+                    {CUSTOMER_FIELDS.filter((f) => t24.customer![f]).map((f) => (
+                      <tr key={f}>
+                        <th style={{ width: "40%" }}>{CUSTOMER_FIELD_LABELS[f]}</th>
+                        <td>{t24.customer![f]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {t24.entityName ? (
+                <span style={{ fontSize: 12 }}>Rattachement : {t24.entityName} (centre d&apos;affaires de T24).</span>
+              ) : (
+                entities.length > 1 && (
+                  <label style={{ display: "grid", gap: 4, fontSize: 13, maxWidth: 360 }}>
+                    Centre d&apos;affaires non reconnu : rattacher à
+                    <select value={entityId} onChange={(e) => setEntityId(e.target.value)}>
+                      {entities.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {"— ".repeat(e.level)}
+                          {e.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )
+              )}
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ justifySelf: "start", fontSize: 13 }}
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const r = await createFromT24Action(t24.customer!.code, entityId || null);
+                    if (r.ok && r.id) router.push(`/counterparties/${r.id}`);
+                    else setT24(r);
+                  })
+                }
+              >
+                {pending ? "Création…" : "Créer la fiche depuis T24"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {aiUsable && !edit && mode === "SAISIE" && (
         <form action={extract} style={{ display: "grid", gap: 8, padding: 12, background: "var(--brand-soft)", borderRadius: 8 }}>
           <strong style={{ fontSize: 13 }}>Pré-remplir avec l&apos;IA</strong>
           <span className="muted" style={{ fontSize: 12 }}>
@@ -217,7 +350,19 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
         </form>
       )}
 
+      {(edit || mode === "SAISIE") && (
       <form onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+        {!edit && (
+          <p className="muted" style={{ fontSize: 12 }}>
+            Saisie minimale : raison sociale, ICE ou RC, forme juridique, secteur et segment commercial suffisent pour dérouler la notation. La fiche
+            sera complétée par T24 au rattachement du code client.
+          </p>
+        )}
+        {fromT24 && (
+          <p className="muted" style={{ fontSize: 12 }}>
+            Fiche rapatriée de T24 : T24 fait foi, une modification ici sera remplacée à la prochaine actualisation.
+          </p>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           {entities.length > 1 && (
             <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
@@ -237,7 +382,7 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
             <input type="text" required maxLength={300} style={FIELD_STYLE} {...field("name")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            {label("ICE", "ice")}
+            {label(edit ? "ICE" : "ICE (ou RC) *", "ice")}
             <input type="text" maxLength={20} style={FIELD_STYLE} {...field("ice")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
@@ -249,12 +394,28 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
             <input type="text" maxLength={30} style={FIELD_STYLE} {...field("fiscalId")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            {label("Forme juridique", "legalForm")}
+            {label(edit ? "Forme juridique" : "Forme juridique *", "legalForm")}
             <input type="text" maxLength={60} style={FIELD_STYLE} {...field("legalForm")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            {label("Code secteur", "sectorCode")}
+            {label(edit ? "Secteur d'activité (code)" : "Secteur d'activité (code) *", "sectorCode")}
             <input type="text" maxLength={30} style={FIELD_STYLE} {...field("sectorCode")} />
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+            {edit ? "Segment commercial" : "Segment commercial *"}
+            <select value={values.commercialSegment} onChange={(e) => setValues((v) => ({ ...v, commercialSegment: e.target.value }))} style={FIELD_STYLE}>
+              <option value="">— Choisir —</option>
+              {segments.map((x) => (
+                <option key={x.code} value={x.code}>
+                  {x.labelFr}
+                </option>
+              ))}
+              {values.commercialSegment && !segments.some((x) => x.code === values.commercialSegment) && <option value={values.commercialSegment}>{values.commercialSegment}</option>}
+            </select>
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+            Code client T24 (si connu)
+            <input type="text" inputMode="numeric" maxLength={20} disabled={fromT24} style={FIELD_STYLE} {...field("coreBankingId")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
             {label("Ville", "city")}
@@ -289,6 +450,7 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit 
           {pending ? "Enregistrement…" : "Enregistrer"}
         </button>
       </form>
+      )}
     </div>
   );
 }

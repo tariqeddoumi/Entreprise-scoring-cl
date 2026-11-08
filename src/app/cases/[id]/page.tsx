@@ -7,11 +7,15 @@ import { DEFAULT_CREDIT_TYPES, DEFAULT_PURPOSES } from "@/reference/case-purpose
 import { aiStatus } from "@/lib/ai";
 import { hasRole } from "@/lib/auth";
 import { draftClassification, draftFinancials, parseDraft, proposableFields } from "@/lib/case-input";
-import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, validationBlocker } from "@/lib/cases";
+import { CASE_STATUS_LABELS, caseWorkflow, contributorsOf, exposureOf, validationBlocker } from "@/lib/cases";
+import { canWrite } from "@/lib/scope";
+import { getPerimeter } from "@/lib/session";
 import { actorStepIndex, hasPermission, holdersOf, pendingStepIndex, WORKFLOW_ROLE_LABELS, type CaseWorkflow } from "@/reference/workflow";
 import { activeWatchlistCap, caseLifts, counterpartyLifts, loadClassification, watchlistState } from "@/lib/committee";
 import { DEFAULT_CLASSIFICATION, type WatchlistCap } from "@/reference/classification";
 import { LiftPanel } from "@/app/committee/CommitteePanels";
+import { CreditReportPanel } from "@/app/counterparties/[id]/ExternalPanels";
+import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
 import { loadCircuit } from "@/lib/workflow";
 import { formatAmount, type FxConversion } from "@/lib/fx";
 import { safeQuery } from "@/lib/safe-db";
@@ -83,7 +87,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
     const c = await db.ratingCase.findUnique({
       where: { id },
       include: {
-        counterparty: { select: { id: true, name: true, currency: true, ice: true, entityId: true } },
+        counterparty: { select: { id: true, name: true, currency: true, ice: true, rc: true, legalForm: true, legalProfile: true, entityId: true } },
         run: { select: { id: true, resultSnapshot: true, inputSnapshot: true, finalGrade: true, cappedGrade: true, outcome: true } },
         documents: {
           orderBy: { createdAt: "asc" },
@@ -157,11 +161,24 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       { classification: DEFAULT_CLASSIFICATION, lifts: [], all: [], wl: { inWatchlist: false, since: null, level: null, levelSince: null, lastExit: null, history: [] }, wlCap: null as WatchlistCap | null, lastOtherId: null, lastOtherAsOf: null }
     )
   ).data;
+  // Sources externes : rapport de solvabilité et fiche juridique du client.
+  const canWriteHere = canWrite(await getPerimeter(), c.counterparty.entityId);
+  const bureau = await creditReportSettings();
+  const ext = (
+    await safeQuery(
+      async (db) => ({
+        report: await latestCreditReport(db, c.counterparty.id, { declaredExposure: exposureOf(c.fxDetail, c.draftInput) }),
+        legal: await legalProfileStatus(db, c.counterparty),
+      }),
+      { report: null, legal: null }
+    )
+  ).data;
+  const externalSignals = [...(ext.report?.analysis.signals ?? []), ...(ext.legal?.analysis.signals ?? [])];
   const { circuit: circuitDef } = await loadCircuit();
   const liftDouble = await settingBool("COMMITTEE_LIFT_DOUBLE_VALIDATION");
   const cumulNotch = await settingInt("WATCHLIST_CUMUL_NOTCH");
   const activeCriteria = (() => {
-    const cl = draftClassification(draft, draftFinancials(draft, model, format), committee.classification, committee.lifts);
+    const cl = draftClassification(draft, draftFinancials(draft, model, format), committee.classification, committee.lifts, externalSignals);
     return cl.items.filter((i) => i.state === "COCHE").map((i) => ({ code: i.code, labelFr: i.labelFr }));
   })();
   const toRow = (d: (typeof committee.all)[number]) => ({
@@ -339,6 +356,43 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
+      <CreditReportPanel
+        counterpartyId={c.counterparty.id}
+        caseId={c.id}
+        report={ext.report}
+        apiEnabled={bureau.apiEnabled}
+        provider={bureau.provider}
+        maxAgeDays={bureau.maxAgeDays}
+        today={today()}
+        canEdit={editable && canWriteHere}
+        aiUsable={ai.enabled && !ai.missing}
+      />
+
+      {ext.legal && ext.legal.analysis.findings.some((f) => f.level !== "INFO") && (
+        <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--warn)", fontSize: 13, display: "grid", gap: 4 }}>
+          <strong>Fiche juridique (InfoRisque du {ext.legal.profile.reportDate || "—"}) : points d&apos;attention</strong>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {ext.legal.analysis.findings
+              .filter((f) => f.level !== "INFO")
+              .map((f, i) => (
+                <li key={i}>{f.textFr}</li>
+              ))}
+          </ul>
+          <Link href={`/counterparties/${c.counterparty.id}#juridique`} style={{ color: "var(--brand)" }}>
+            Voir la fiche juridique
+          </Link>
+        </div>
+      )}
+      {!ext.legal && (
+        <p className="muted" style={{ fontSize: 13 }}>
+          Fiche juridique du client non renseignée :{" "}
+          <Link href={`/counterparties/${c.counterparty.id}#juridique`} style={{ color: "var(--brand)" }}>
+            charger le rapport InfoRisque
+          </Link>
+          .
+        </p>
+      )}
+
       <LiftPanel
         caseId={c.id}
         today={today()}
@@ -367,6 +421,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         lifts={committee.lifts}
         watchlist={committee.wlCap}
         cumulNotch={cumulNotch}
+        signals={externalSignals}
       />
 
       <section className="card" style={{ padding: 16 }}>

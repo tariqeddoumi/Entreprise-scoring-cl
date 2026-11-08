@@ -25,6 +25,13 @@ import { GradeBadge, OutcomeLabel } from "@/app/ui-helpers";
 import { NewCaseForm } from "@/app/scoring/NewCaseForm";
 import { ClientActions } from "../ClientActions";
 import { NewCounterpartyForm, type WritableEntity } from "../NewCounterpartyForm";
+import { CreditReportPanel, LegalProfilePanel, T24Panel } from "./ExternalPanels";
+import { parseT24Data, t24Config } from "@/lib/core-banking";
+import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
+import { loadCommercialSegments } from "@/lib/financial-statements";
+import { aiStatus } from "@/lib/ai";
+import { DEFAULT_COMMERCIAL_SEGMENTS } from "@/reference/case-purposes";
+import type { DataSource } from "@/reference/core-banking";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +136,19 @@ export default async function CounterpartyPage({
     double: await settingBool("COMMITTEE_WL_DOUBLE_VALIDATION"),
   };
   const opt = (v: string | null) => v ?? "";
+  // Sources externes : T24, crédit bureau, fiche juridique (InfoRisque).
+  const t24 = await t24Config();
+  const bureau = await creditReportSettings();
+  const ai = await aiStatus();
+  const aiUsable = ai.enabled && !ai.missing;
+  const { data: ext } = await safeQuery(
+    async (db) => ({
+      report: await latestCreditReport(db, counterparty.id),
+      legal: await legalProfileStatus(db, counterparty),
+      segments: await loadCommercialSegments(db),
+    }),
+    { report: null, legal: null, segments: DEFAULT_COMMERCIAL_SEGMENTS }
+  );
   // Notes d'une échelle antérieure : classe équivalente sur l'échelle en vigueur.
   const master = toGradeScaleConfig(await effectiveScale());
   const equivalentOf = (grade: string | null, rawScore: unknown) => {
@@ -224,8 +244,12 @@ export default async function CounterpartyPage({
                   city: opt(counterparty.city),
                   country: opt(counterparty.country),
                   currency: counterparty.currency,
+                  commercialSegment: opt(counterparty.commercialSegment),
+                  coreBankingId: opt(counterparty.coreBankingId),
                 },
               }}
+              segments={ext.segments.filter((x) => x.active)}
+              fromT24={counterparty.dataSource === "T24"}
             />
           )}
           {canDelete && (
@@ -238,6 +262,41 @@ export default async function CounterpartyPage({
           )}
         </section>
       )}
+
+      <T24Panel
+        counterpartyId={counterparty.id}
+        source={(counterparty.dataSource as DataSource | null) ?? null}
+        code={counterparty.coreBankingId}
+        syncedAt={counterparty.coreBankingSyncedAt?.toISOString() ?? null}
+        data={parseT24Data(counterparty.coreBankingData)}
+        commercialSegment={counterparty.commercialSegment}
+        segmentLabel={ext.segments.find((x) => x.code === counterparty.commercialSegment)?.labelFr ?? null}
+        accountOfficer={counterparty.accountOfficer}
+        modelSegment={counterparty.segment}
+        t24Enabled={t24.enabled}
+        canEdit={canEdit}
+      />
+
+      <CreditReportPanel
+        counterpartyId={counterparty.id}
+        report={ext.report}
+        apiEnabled={bureau.apiEnabled}
+        provider={bureau.provider}
+        maxAgeDays={bureau.maxAgeDays}
+        today={today}
+        canEdit={canEdit}
+        aiUsable={aiUsable}
+      />
+
+      <LegalProfilePanel
+        counterpartyId={counterparty.id}
+        profile={ext.legal?.profile ?? null}
+        findings={ext.legal?.analysis.findings ?? []}
+        signals={ext.legal?.analysis.signals ?? []}
+        today={today}
+        canEdit={canEdit}
+        aiUsable={aiUsable}
+      />
 
       <WatchlistPanel
         counterpartyId={counterparty.id}

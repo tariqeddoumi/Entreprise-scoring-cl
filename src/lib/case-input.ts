@@ -94,9 +94,11 @@ export function draftClassification(
   draft: CaseDraft,
   fin: FinancialComputation,
   settings: ClassificationSettings = DEFAULT_CLASSIFICATION,
-  lifts: CaseLift[] = []
+  lifts: CaseLift[] = [],
+  /** Signaux externes (crédit bureau, fiche juridique) : critères proposés à vérifier. */
+  signals: readonly string[] = []
 ): ClassificationResult {
-  const alerts = new Set(fin.analysis.alerts.filter((a) => a.status === "DECLENCHEE").map((a) => a.key));
+  const alerts = new Set([...fin.analysis.alerts.filter((a) => a.status === "DECLENCHEE").map((a) => a.key), ...signals]);
   return computeClassification(settings, draft.classification?.declared, alerts, new Set(lifts.flatMap((l) => l.codes)));
 }
 

@@ -154,6 +154,24 @@ export interface ClassificationResult {
   lifted: string[];
 }
 
+/**
+ * Signaux des sources externes (rapport de solvabilité du crédit bureau, fiche
+ * juridique InfoRisque) qui font proposer un critère déclaratif « à vérifier ».
+ * Ils ne cochent jamais : l'analyste confirme, date et commente. Valables quel
+ * que soit le paramétrage enregistré des critères (même code).
+ */
+export const EXTERNAL_SIGNAL_KEYS: Record<string, string[]> = {
+  S03: ["BUREAU_NEGATIF"],
+  S04: ["BUREAU_CHEQUES"],
+  S14: ["LEGAL_DIRIGEANTS"],
+  E04: ["BUREAU_IMPAYE_90"],
+  E12: ["BUREAU_IMPAYE_180"],
+  E19: ["BUREAU_IMPAYE_360"],
+  E26: ["BUREAU_CONTENTIEUX"],
+  E15: ["LEGAL_REDRESSEMENT"],
+  E28: ["LEGAL_LIQUIDATION"],
+};
+
 export function computeClassification(
   settings: ClassificationSettings,
   declared: DeclaredCriteria | undefined,
@@ -170,7 +188,8 @@ export function computeClassification(
         const base = { ...x, by: byBilan ? ("BILAN" as const) : ("ANALYSTE" as const), ...(d?.date ? { date: d.date } : {}), ...(d?.comment ? { comment: d.comment } : {}) };
         return { ...base, state: lifted.has(x.code) ? ("LEVE" as const) : ("COCHE" as const) };
       }
-      const suggested = x.source === "DECLARE" && !!x.alertKey && triggeredAlerts.has(x.alertKey);
+      const keys = [x.alertKey, ...(EXTERNAL_SIGNAL_KEYS[x.code] ?? [])].filter((k): k is string => !!k);
+      const suggested = x.source === "DECLARE" && keys.some((k) => triggeredAlerts.has(k));
       return { ...x, state: suggested ? ("SUGGERE" as const) : ("NON" as const) };
     });
   const active = items.filter((i) => i.state === "COCHE");

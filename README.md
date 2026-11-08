@@ -78,6 +78,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Critères de classement BAM dans le dossier (plafond 8 sensible, 10 pré-douteux, défaut douteux / compromis), levée par décision de comité tracée | Opérationnel |
 | Watch list par décision de comité : niveaux WL1 à WL3 (note plafonnée à 8, 9, 10), changement de niveau, sortie, historique | Opérationnel |
 | Proposition de paramétrage pour le COPIL de validation (docs/19) | Livrée, à arrêter en COPIL |
+| Fiche client T24 (code client, rapatriement), saisie minimale de repli, rapport de solvabilité (API ou IA, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
 | Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
 | Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |

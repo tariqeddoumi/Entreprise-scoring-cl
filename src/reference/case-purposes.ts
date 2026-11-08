@@ -28,6 +28,20 @@ export interface RefItem {
 
 export const CREDIT_TYPES_KEY = "CREDIT_TYPES";
 export const ENTITY_TIERS_KEY = "ENTITY_TIERS";
+export const COMMERCIAL_SEGMENTS_KEY = "COMMERCIAL_SEGMENTS";
+
+/**
+ * Segmentation commerciale de la banque (T24), distincte de la segmentation
+ * du modèle (TPE, PME, GE au sens des seuils bâlois et BAM) : les règles ne
+ * sont pas les mêmes. Codes à aligner sur ceux de T24.
+ */
+export const DEFAULT_COMMERCIAL_SEGMENTS: RefItem[] = [
+  { code: "TPE", labelFr: "Très petites entreprises", active: true },
+  { code: "PME", labelFr: "Petites et moyennes entreprises", active: true },
+  { code: "GE", labelFr: "Grandes entreprises", active: true },
+  { code: "PRO", labelFr: "Professionnels", active: true },
+  { code: "INST", labelFr: "Institutionnels", active: true },
+];
 
 /** Types de crédit du dossier : condition possible des étapes du circuit. */
 export const DEFAULT_CREDIT_TYPES: RefItem[] = [

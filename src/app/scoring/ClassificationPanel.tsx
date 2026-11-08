@@ -16,7 +16,8 @@ function StateCell({ item }: { item: ClassificationItem }) {
       </span>
     );
   if (item.state === "LEVE") return <span style={{ fontWeight: 600, color: "var(--good)" }}>☑ Levé par le comité</span>;
-  if (item.state === "SUGGERE") return <span style={{ color: "var(--bcp-orange)" }}>À vérifier (signalé par le bilan)</span>;
+  if (item.state === "SUGGERE")
+    return <span style={{ color: "var(--warn)" }}>▲ À vérifier (signalé par le bilan, le crédit bureau ou la fiche juridique)</span>;
   return <span className="muted">☐ Non</span>;
 }
 
@@ -37,6 +38,7 @@ export function ClassificationPanel({
   lifts,
   watchlist = null,
   cumulNotch = 0,
+  signals = [],
 }: {
   model: ModelConfig;
   draft: CaseDraft;
@@ -47,9 +49,11 @@ export function ClassificationPanel({
   lifts: CaseLift[];
   watchlist?: WatchlistCap | null;
   cumulNotch?: number;
+  /** Signaux externes (crédit bureau, fiche juridique) : critères proposés à vérifier. */
+  signals?: string[];
 }) {
   const fin = useMemo(() => draftFinancials(draft, model, format), [draft, model, format]);
-  const cl = useMemo(() => draftClassification(draft, fin, settings, lifts), [draft, fin, settings, lifts]);
+  const cl = useMemo(() => draftClassification(draft, fin, settings, lifts, signals), [draft, fin, settings, lifts, signals]);
   const declared = draft.classification?.declared ?? {};
   const editable = !readOnly && !!onChange;
   const setDeclared = (code: string, value: { date?: string; comment?: string } | null) => {

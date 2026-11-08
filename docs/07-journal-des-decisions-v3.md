@@ -727,6 +727,36 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 ---
 
+## D-60 — Fiche client T24, saisie minimale de repli, rapport de solvabilité et fiche juridique InfoRisque — **ANCIENNETÉS ET CONTRÔLE À ARRÊTER EN COPIL**
+
+*Contexte :* clarification du processus par la banque (7 novembre 2026). Le client se crée depuis T24 par son code client, sinon en saisie minimale (client pas encore dans T24, ou API indisponible). Le rapport de solvabilité se récupère par API ou par lecture de l'IA, et sa date de mise à jour doit être contrôlée. InfoRisque est à lire et à exploiter.
+
+*Décision :*
+- **Fiche client T24 :**
+  - code client numérique, longueur paramétrable ;
+  - rapatriement du maximum d'informations, dont le segment commercial (distinct du segment du modèle), le gestionnaire, le centre et le groupe d'affaires ;
+  - correspondance des champs paramétrable (`T24_FIELD_MAP`) ; jeton en variable d'environnement.
+- **Saisie minimale** (raison sociale, ICE ou RC, forme juridique, secteur, segment commercial) proposée sur toute erreur T24 ; fiche « en attente de T24 », rattachée ensuite. Les données de T24 remplacent alors la saisie, chaque écart étant journalisé.
+- **Rapport de solvabilité :**
+  - récupéré par API ou lu par l'IA, toujours vérifié avant enregistrement ;
+  - ancienneté mesurée depuis sa date de mise à jour (30 jours proposés), avec message systématique de rafraîchissement dans l'outil du crédit bureau ;
+  - à la soumission, un rapport absent ou ancien donne un avertissement tracé (par défaut) ou bloque (paramétrable).
+- **InfoRisque :** lecture par l'IA, fiche juridique datée. Contrôles : identité, comptes déposés au greffe contre bilan remis (tolérance 5 %), événements légaux, jeune entreprise, bénéficiaires effectifs, groupe.
+- **Critères BAM proposés à vérifier** (jamais cochés automatiquement) à partir de ces sources :
+  - crédit bureau : S03, S04, E04, E12, E19, E26 ;
+  - InfoRisque : E15, E28, S14.
+
+*À confirmer :*
+- ancienneté maximale du rapport de solvabilité ;
+- contrôle à la soumission (avertissement ou bloquant) ;
+- ancienneté de la fiche juridique ;
+- tolérance d'écart avec les comptes déposés ;
+- codes de segment commercial T24 ;
+- correspondance des champs T24 (DSI) ;
+- existence d'une API entreprise du crédit bureau.
+
+---
+
 # 3. Ce qui reste à décider par la banque
 
 1. **Seuils de segmentation** — non opposables tant que le corpus Bank Al-Maghrib n'a pas été lu et validé conjointement. Première porte du programme.

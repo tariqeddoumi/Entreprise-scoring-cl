@@ -13,7 +13,7 @@ export function RefListEditor({
   readOnly,
   withHelp = false,
 }: {
-  listKey: "CREDIT_TYPES" | "ENTITY_TIERS";
+  listKey: "CREDIT_TYPES" | "ENTITY_TIERS" | "COMMERCIAL_SEGMENTS";
   title: string;
   intro: string;
   initial: RefItem[];

@@ -1,3 +1,4 @@
+import { creditReportGate } from "./external-data";
 import { getScoringModel, today } from "@/lib/rating-scale";
 import { effectiveFormat } from "./statement-format";
 import type { PrismaClient } from "@/generated/prisma";
@@ -325,6 +326,10 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
       `${n} champ(s) repris de la note précédente à confirmer ou à mettre à jour avant la soumission : ${draft.reprise.pending.slice(0, 12).join(", ")}${n > 12 ? "…" : ""}.`
     );
   }
+  // Rapport de solvabilité du crédit bureau : absent ou ancien, bloquant ou
+  // simple avertissement tracé, selon le paramétrage (circulaire 1/G/2010).
+  const bureauGate = await creditReportGate(db, c.counterpartyId);
+  if (bureauGate.problemFr && bureauGate.mode === "BLOQUANT") throw new CaseError(409, bureauGate.problemFr);
   const { input, fx } = await buildInput(db, c, draft);
   // Un dossier se soumet pour faire valider une NOTE : un calcul sans grade
   // (donnée critique manquante, couverture insuffisante) se complète, il ne se
@@ -387,7 +392,13 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
         resourceType: "RatingCase",
         resourceId: caseId,
         entityId: c.counterparty.entityId,
-        detail: { runId, devise: fx?.currency ?? BASE_CURRENCY, cours: fx?.rate ?? 1, etapes: workflow.steps.map((st) => st.code) },
+        detail: {
+          runId,
+          devise: fx?.currency ?? BASE_CURRENCY,
+          cours: fx?.rate ?? 1,
+          etapes: workflow.steps.map((st) => st.code),
+          ...(bureauGate.problemFr ? { alerteCreditBureau: bureauGate.problemFr } : {}),
+        },
       });
     }, "CASE");
   } catch (e) {

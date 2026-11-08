@@ -6,6 +6,8 @@ import {
   CREDIT_TYPES_KEY,
   DEFAULT_CREDIT_TYPES,
   DEFAULT_ENTITY_TIERS,
+  COMMERCIAL_SEGMENTS_KEY,
+  DEFAULT_COMMERCIAL_SEGMENTS,
   ENTITY_TIERS_KEY,
   nextClosing,
   parsePurposes,
@@ -53,6 +55,14 @@ export async function loadEntityTiers(db: Db): Promise<RefItem[]> {
     return parseRefItems((await db.appSetting.findUnique({ where: { key: ENTITY_TIERS_KEY } }))?.value, DEFAULT_ENTITY_TIERS);
   } catch {
     return DEFAULT_ENTITY_TIERS;
+  }
+}
+
+export async function loadCommercialSegments(db: Db): Promise<RefItem[]> {
+  try {
+    return parseRefItems((await db.appSetting.findUnique({ where: { key: COMMERCIAL_SEGMENTS_KEY } }))?.value, DEFAULT_COMMERCIAL_SEGMENTS);
+  } catch {
+    return DEFAULT_COMMERCIAL_SEGMENTS;
   }
 }
 

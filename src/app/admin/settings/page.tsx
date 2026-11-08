@@ -16,8 +16,8 @@ import { loadSurveillanceSettings } from "@/lib/portfolio-data";
 import { DEFAULT_SURVEILLANCE } from "@/reference/portfolio";
 import { effectiveFormat } from "@/lib/statement-format";
 import { today } from "@/lib/rating-scale";
-import { loadCreditTypes, loadEntityTiers, loadPurposes } from "@/lib/financial-statements";
-import { DEFAULT_CREDIT_TYPES, DEFAULT_ENTITY_TIERS, DEFAULT_PURPOSES } from "@/reference/case-purposes";
+import { loadCommercialSegments, loadCreditTypes, loadEntityTiers, loadPurposes } from "@/lib/financial-statements";
+import { DEFAULT_COMMERCIAL_SEGMENTS, DEFAULT_CREDIT_TYPES, DEFAULT_ENTITY_TIERS, DEFAULT_PURPOSES } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +33,8 @@ export default async function SettingsPage() {
   }, {} as Record<string, number>);
   const { data: purposes } = await safeQuery((db) => loadPurposes(db), DEFAULT_PURPOSES);
   const { data: lists } = await safeQuery(
-    async (db) => ({ creditTypes: await loadCreditTypes(db), tiers: await loadEntityTiers(db), classification: await loadClassification(db), wlLevels: await loadWatchlistLevels(db) }),
-    { creditTypes: DEFAULT_CREDIT_TYPES, tiers: DEFAULT_ENTITY_TIERS, classification: DEFAULT_CLASSIFICATION, wlLevels: DEFAULT_WATCHLIST_LEVELS }
+    async (db) => ({ creditTypes: await loadCreditTypes(db), tiers: await loadEntityTiers(db), classification: await loadClassification(db), wlLevels: await loadWatchlistLevels(db), segments: await loadCommercialSegments(db) }),
+    { creditTypes: DEFAULT_CREDIT_TYPES, tiers: DEFAULT_ENTITY_TIERS, classification: DEFAULT_CLASSIFICATION, wlLevels: DEFAULT_WATCHLIST_LEVELS, segments: DEFAULT_COMMERCIAL_SEGMENTS }
   );
   const format = await effectiveFormat(today());
   const { data: surveillance } = await safeQuery((db) => loadSurveillanceSettings(db), DEFAULT_SURVEILLANCE);
@@ -78,6 +78,13 @@ export default async function SettingsPage() {
         initial={lists.tiers}
         readOnly={!perimeter.all}
         withHelp
+      />
+      <RefListEditor
+        listKey="COMMERCIAL_SEGMENTS"
+        title="Segments commerciaux"
+        intro="Segmentation commerciale de la banque, rapatriée de T24 (codes à aligner sur ceux de T24) ou choisie en saisie minimale. Distincte du segment du modèle de notation (TPE, PME, GE), calculé selon ses propres seuils."
+        initial={lists.segments}
+        readOnly={!perimeter.all}
       />
       <SettingsForm
         readOnly={!perimeter.all}

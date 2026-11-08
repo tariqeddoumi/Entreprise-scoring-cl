@@ -168,6 +168,23 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/09-referentiel-bilans-motifs
 
 Ajoute le motif et le type de crédit des dossiers (`rating_cases.purpose`, `creditType`), la catégorie de délégation des entités (`entities.riskTier`), la table des décisions de comité (`committee_decisions` : levées de critères, watch list) et la table `financial_statements` (bilans du client par exercice), puis y reprend les bilans des notes déjà validées. Idempotent et transactionnel ; à appliquer **avant** de déployer la version correspondante. Le format du bilan est enregistré dans `app_settings` (clé `FINANCIAL_FORMAT_VERSIONS`) et les motifs sous la clé `CASE_PURPOSES` ; sans enregistrement, le format embarqué (bilan complet) et les motifs embarqués s'appliquent. Le script `08-seed-demonstration-echelle-1-10.sql` est antérieur à cette migration : il ne vide pas `financial_statements` (`npm run db:reset-seed` le fait).
 
+### Référentiel T24, crédit bureau et fiche juridique InfoRisque (novembre 2026)
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/10-t24-credit-bureau-inforisque.sql
+```
+
+Ajoute à `counterparties` le code client T24 (`coreBankingId`, unique par entité), la source de la fiche (`dataSource` : T24 ou SAISIE), la dernière synchronisation et les données rapatriées, le segment commercial (`commercialSegment`, distinct du segment du modèle), le gestionnaire (`accountOfficer`) et la fiche juridique (`legalProfile`, JSON) ; crée la table `credit_reports` (rapports de solvabilité). Idempotent, transactionnel, mêmes protections que les autres tables (RLS, aucun droit pour `anon` ni `authenticated`). À appliquer **avant** de déployer la version correspondante.
+
+Raccordements (Administration › Paramétrage › Référentiels externes) :
+
+| Raccordement | Paramètres | Secret (variable d'environnement, jamais en base) |
+|---|---|---|
+| T24 (Transact, API clients) | `T24_ENABLED`, `T24_BASE_URL`, `T24_CUSTOMER_PATH`, longueur du code client | `T24_API_TOKEN` (en-tête `Authorization: Bearer`) |
+| Crédit bureau (Creditinfo ou Quantik) | `CREDIT_BUREAU_API_ENABLED`, `CREDIT_BUREAU_PROVIDER`, `CREDIT_BUREAU_BASE_URL`, `CREDIT_BUREAU_PATH` | `CREDIT_BUREAU_API_TOKEN` |
+
+La correspondance des champs T24 (champs locaux de la banque : ICE, RC, segment commercial…) se paramètre sous la clé `T24_FIELD_MAP` de `app_settings` (JSON : pour chaque champ de la fiche, la liste des chemins dans la réponse de T24). Les adresses doivent être en https ; elles sont appelées depuis le serveur de l'application, qui doit donc atteindre le réseau interne de la banque (hébergement interne, ou passerelle). Sans raccordement, la création se fait en saisie minimale et le rapport de solvabilité se charge en PDF ou en image, lu par l'IA.
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son

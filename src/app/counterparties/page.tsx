@@ -11,6 +11,9 @@ import { toGradeScaleConfig } from "@/reference/rating-scale";
 import { getPerimeter, getSessionIdentity, requireSession } from "@/lib/session";
 import { CounterpartiesTable, type CounterpartyRow } from "./CounterpartiesTable";
 import { NewCounterpartyForm, type WritableEntity } from "./NewCounterpartyForm";
+import { t24Config } from "@/lib/core-banking";
+import { loadCommercialSegments } from "@/lib/financial-statements";
+import { DEFAULT_COMMERCIAL_SEGMENTS } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +39,8 @@ export default async function CounterpartiesPage() {
             id: true,
             name: true,
             ice: true,
+            coreBankingId: true,
+            dataSource: true,
             segment: true,
             sectorCode: true,
             entityId: true,
@@ -84,6 +89,8 @@ export default async function CounterpartiesPage() {
         id: r.id,
         name: r.name,
         ice: r.ice,
+        coreBankingId: r.coreBankingId,
+        dataSource: r.dataSource,
         segment: r.segment,
         sectorCode: r.sectorCode,
         entityCode: code.get(r.entityId) ?? "—",
@@ -106,6 +113,8 @@ export default async function CounterpartiesPage() {
     { items: [] as CounterpartyRow[], writable: [] as WritableEntity[] }
   );
   const ai = await aiStatus();
+  const t24 = await t24Config();
+  const { data: segments } = await safeQuery((db) => loadCommercialSegments(db), DEFAULT_COMMERCIAL_SEGMENTS);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -131,6 +140,8 @@ export default async function CounterpartiesPage() {
           entities={data.writable}
           defaultEntityId={identity.entityId ?? null}
           aiUsable={ai.enabled && !ai.missing}
+          t24Enabled={t24.enabled}
+          segments={segments.filter((x) => x.active)}
         />
       )}
 

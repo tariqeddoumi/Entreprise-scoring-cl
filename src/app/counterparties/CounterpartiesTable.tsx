@@ -9,6 +9,9 @@ export interface CounterpartyRow {
   id: string;
   name: string;
   ice: string | null;
+  /** Code client T24 ; source de la fiche (T24 ou saisie minimale). */
+  coreBankingId?: string | null;
+  dataSource?: string | null;
   segment: string | null;
   sectorCode: string | null;
   entityCode: string;
@@ -27,12 +30,13 @@ export interface CounterpartyRow {
 const SEGMENTS = ["TPE", "PME", "GE"] as const;
 
 function downloadCsv(rows: CounterpartyRow[]) {
-  const header = ["Nom", "Entité", "ICE", "Devise", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
+  const header = ["Nom", "Entité", "Code T24", "ICE", "Devise", "Segment", "Secteur", "Dernier score", "Dernier grade", "Arrêté"];
   const lines = rows.map((c) => {
     const last = c.ratingRuns[0];
     return csvLine([
       c.name,
       c.entityCode,
+      c.coreBankingId ?? "",
       c.ice ?? "",
       c.currency,
       c.segment ?? "",
@@ -69,6 +73,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
       return (
         c.name.toLowerCase().includes(q) ||
         (c.ice ?? "").toLowerCase().includes(q) ||
+        (c.coreBankingId ?? "").includes(q) ||
         c.entityCode.toLowerCase().includes(q)
       );
     });
@@ -79,7 +84,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <input
           type="search"
-          placeholder="Rechercher par nom, ICE ou entité…"
+          placeholder="Rechercher par nom, code T24, ICE ou entité…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{ maxWidth: 280 }}
@@ -133,7 +138,7 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
             <tr>
               <th>Nom</th>
               <th>Entité</th>
-              <th>ICE</th>
+              <th>Code T24 · ICE</th>
               <th>Devise</th>
               <th>Segment</th>
               <th>Secteur</th>
@@ -164,6 +169,11 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                         Watch list
                       </span>
                     )}
+                    {c.dataSource === "SAISIE" && (
+                      <span className="muted" style={{ fontSize: 11, marginLeft: 6 }} title="Saisie minimale, à rattacher au code client T24">
+                        · en attente T24
+                      </span>
+                    )}
                     {c.openCase && (
                       <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
                         {c.openCase === "SUBMITTED" ? "· dossier en validation" : "· dossier en cours"}
@@ -171,7 +181,11 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
                     )}
                   </td>
                   <td className="muted nowrap">{c.entityCode}</td>
-                  <td className="muted nowrap">{c.ice ?? "—"}</td>
+                  <td className="muted nowrap">
+                    {c.coreBankingId ? <span title="Code client T24">{c.coreBankingId}</span> : null}
+                    {c.coreBankingId && c.ice ? <br /> : null}
+                    {c.ice ?? (c.coreBankingId ? null : "—")}
+                  </td>
                   <td className="muted">{c.currency}</td>
                   <td>{c.segment ?? "—"}</td>
                   <td className="muted">{c.sectorCode ?? "—"}</td>

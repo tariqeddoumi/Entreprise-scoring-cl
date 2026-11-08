@@ -282,6 +282,12 @@ export const counterpartySchema = z
     legalForm: z.string().max(60).optional(),
     sectorCode: z.string().max(30).optional(),
     city: z.string().max(80).optional(),
+    /** Segment commercial de la banque (T24), distinct du segment du modèle. */
+    commercialSegment: z.string().max(40).optional(),
+    /** Code client T24 connu (saisie minimale quand l'API T24 est indisponible). */
+    coreBankingId: z.string().regex(/^\d{1,20}$/, "code client T24 numérique").optional(),
+    /** Gestionnaire (code chargé d'affaires T24). */
+    accountOfficer: z.string().max(40).optional(),
   })
   .strict();
 
@@ -299,6 +305,9 @@ export const counterpartyPatchSchema = counterpartySchema
     legalForm: z.string().max(60).nullable().optional(),
     sectorCode: z.string().max(30).nullable().optional(),
     city: z.string().max(80).nullable().optional(),
+    commercialSegment: z.string().max(40).nullable().optional(),
+    coreBankingId: z.string().regex(/^\d{1,20}$/, "code client T24 numérique").nullable().optional(),
+    accountOfficer: z.string().max(40).nullable().optional(),
     isActive: z.boolean().optional(),
   })
   .strict();

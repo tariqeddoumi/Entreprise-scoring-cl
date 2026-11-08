@@ -117,6 +117,20 @@ model Counterparty {
   sectorCode String? // code du référentiel sectoriel interne
   city       String?
   segment    String? // TPE | PME | GE — dernier segment calculé (indicatif)
+  // Référentiel T24 : code client (identifiant du système central), source de
+  // la fiche (T24 : rapatriée ; SAISIE : saisie minimale en attente de T24),
+  // dernière synchronisation et données rapatriées complètes (JSON).
+  coreBankingId       String?
+  dataSource          String?
+  coreBankingSyncedAt DateTime?
+  coreBankingData     String?   @db.Text
+  // Segment commercial de la banque (T24), distinct du segment du modèle.
+  commercialSegment   String?
+  // Gestionnaire du client (code chargé d'affaires T24).
+  accountOfficer      String?
+  // Fiche juridique : identité, dirigeants, actionnaires, bénéficiaires
+  // effectifs, comptes déposés, événements légaux (InfoRisque, T24 ou saisie).
+  legalProfile        String?   @db.Text
   // Groupe d'affaires (groupe économique) : sélection des renotations par lot,
   // lecture des engagements du groupe. Distinct de l'organisation de la banque.
   economicGroupId String?
@@ -130,8 +144,10 @@ model Counterparty {
   renotationItems  RenotationItem[]
   statements       FinancialStatement[]
   committeeDecisions CommitteeDecision[]
+  creditReports    CreditReport[]
 
   @@unique([entityId, ice])
+  @@unique([entityId, coreBankingId])
   @@index([name])
   @@index([entityId])
   @@index([economicGroupId])
@@ -613,4 +629,29 @@ model CommitteeDecision {
   @@index([counterpartyId, kind])
   @@index([caseId])
   @@map("committee_decisions")
+}
+
+// Rapport de solvabilité du crédit bureau (Creditinfo, Quantik) : récupéré par
+// API ou lu par l'IA dans un PDF ou une image, vérifié par l'analyste. La date
+// de mise à jour du rapport fait foi pour son ancienneté.
+model CreditReport {
+  id             String       @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // Dossier d'où le rapport a été chargé (facultatif : un rapport sert à plusieurs dossiers).
+  caseId         String?
+  bureau         String // CREDITINFO | QUANTIK | AUTRE
+  source         String // API | DOCUMENT | SAISIE
+  // Date de mise à jour du rapport (AAAA-MM-JJ), pas sa date de chargement.
+  reportDate     String
+  reference      String?
+  // Contenu structuré (JSON) : lignes par établissement, impayés, incidents.
+  data           String       @db.Text
+  documentId     String?
+  documentSha256 String?
+  recordedBy     String
+  createdAt      DateTime     @default(now())
+
+  @@index([counterpartyId, reportDate])
+  @@map("credit_reports")
 }

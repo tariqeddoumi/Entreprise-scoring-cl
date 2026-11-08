@@ -75,6 +75,7 @@ async function main() {
       await tx.ratingRun.deleteMany();
       await tx.committeeDecision.deleteMany();
       await tx.financialStatement.deleteMany();
+      await tx.creditReport.deleteMany();
       await tx.counterparty.deleteMany();
       await tx.economicGroup.deleteMany();
       await tx.webhookDelivery.deleteMany();
