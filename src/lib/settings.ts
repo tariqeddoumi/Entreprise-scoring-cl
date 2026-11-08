@@ -205,7 +205,7 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Intelligence artificielle",
     labelFr: "Fournisseur",
     helpFr:
-      "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (DeepSeek, Mistral, modèle hébergé par la banque). La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou IA_CLE_API pour les autres.",
+      "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (DeepSeek, Mistral, modèle hébergé par la banque). Gemini (Google) passe par « API compatible OpenAI ». La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou celle désignée ci-dessous pour les autres.",
     kind: "enum",
     default: "anthropic",
     options: AI_PROVIDERS,
@@ -229,9 +229,18 @@ export const SETTINGS: readonly SettingDef[] = [
     group: "Intelligence artificielle",
     labelFr: "Adresse de l'API",
     helpFr:
-      "Vide : adresse officielle. Obligatoire pour Azure et les API compatibles. Adresse https exigée.",
+      "Vide : adresse officielle (OpenAI : https://api.openai.com/v1). Obligatoire pour Azure (adresse complète du déploiement, api-version comprise) et les API compatibles (Gemini : https://generativelanguage.googleapis.com/v1beta/openai). Adresse https exigée.",
     kind: "url",
     default: "",
+  },
+  {
+    key: "AI_KEY_ENV",
+    group: "Intelligence artificielle",
+    labelFr: "Variable d'environnement de la clé",
+    helpFr:
+      "Pour OpenAI, Azure et les API compatibles : nom de la variable d'environnement qui porte la clé, commençant par IA_CLE_ (par exemple IA_CLE_OPENAI, IA_CLE_GEMINI, IA_CLE_AZURE). Une clé par fournisseur : on passe de l'un à l'autre sans redéployer. Anthropic lit toujours ANTHROPIC_API_KEY.",
+    kind: "text",
+    default: "IA_CLE_API",
   },
   {
     key: "T24_ENABLED",
@@ -401,6 +410,9 @@ export function validateSetting(key: string, raw: string): { ok: true; value: st
       }
       return { ok: true, value: v };
     case "text":
+      // Seules les variables IA_CLE_… peuvent porter une clé d'IA : aucun autre
+      // secret de l'environnement ne peut être envoyé au fournisseur paramétré.
+      if (key === "AI_KEY_ENV" && !/^IA_CLE_[A-Z0-9_]{1,40}$/.test(v)) return { ok: false, errorFr: `${def.labelFr} : nom commençant par IA_CLE_, en majuscules (ex. IA_CLE_OPENAI).` };
       if (v.length > 200) return { ok: false, errorFr: `${def.labelFr} : 200 caractères au plus.` };
       if (!/^[\w.:/@-]*$/.test(v)) return { ok: false, errorFr: `${def.labelFr} : caractères non admis.` };
       return { ok: true, value: v };
