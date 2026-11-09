@@ -11,7 +11,7 @@
  * rubriques du gabarit existent dans les deux modèles ; le détail propre au
  * modèle normal (tableau de financement) est facultatif en simplifié.
  *
- * Module PUR : partagé par l'écran, le serveur et l'IA.
+ * Module PUR : partagé par l'écran, le serveur et l'OCR intelligent.
  */
 
 export const FINANCIAL_CHART_VERSION = "BILAN-CGNC-2026.1";
@@ -48,7 +48,7 @@ export interface PosteDef {
   signed?: boolean;
   /** Renseigné pour l'exercice N seulement (données complémentaires). */
   onlyN?: boolean;
-  /** Repère pour la saisie et pour l'IA : rubrique CGNC, comptes. */
+  /** Repère pour la saisie et pour l'OCR intelligent : rubrique CGNC, comptes. */
   hintFr?: string;
   /** Total figurant sur le document, lu pour contrôle (jamais utilisé dans un calcul). */
   declared?: boolean;
@@ -213,7 +213,7 @@ export const POSTES: PosteDef[] = [
 
 export const POSTE_BY_KEY: ReadonlyMap<string, PosteDef> = new Map(POSTES.map((p) => [p.key, p]));
 
-/** Postes que l'on saisit ou que l'IA lit (les totaux sont recalculés). */
+/** Postes que l'on saisit ou que l'OCR intelligent lit (les totaux sont recalculés). */
 export const INPUT_POSTES = POSTES.filter((p) => p.kind !== "TOTAL");
 
 /** Postes « clés » restitués en tête de la fiche de notation. */

@@ -37,6 +37,8 @@ import { DEFAULT_COMMERCIAL_SEGMENTS } from "@/reference/case-purposes";
 import type { DataSource } from "@/reference/core-banking";
 
 export const dynamic = "force-dynamic";
+/** Lecture OCR d'un rapport long (plusieurs dizaines de lignes de crédit) : jusqu'à 4 minutes. */
+export const maxDuration = 300;
 
 /**
  * Fiche client : identité (modifiable), notation directe depuis la fiche,
@@ -318,6 +320,7 @@ export default async function CounterpartyPage({
         today={today}
         canEdit={canEdit}
         aiUsable={aiUsable}
+        t24={counterparty.dataSource === "T24"}
       />
 
       <LegalProfilePanel
@@ -325,6 +328,11 @@ export default async function CounterpartyPage({
         profile={ext.legal?.profile ?? null}
         findings={ext.legal?.analysis.findings ?? []}
         signals={ext.legal?.analysis.signals ?? []}
+        raw={ext.legal?.raw ?? null}
+        corrections={ext.legal?.corrections ?? []}
+        identityChecks={ext.legal?.identityChecks ?? []}
+        documentId={ext.legal?.documentId ?? null}
+        t24={counterparty.dataSource === "T24"}
         today={today}
         canEdit={canEdit}
         aiUsable={aiUsable}

@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { AI_PROVIDERS, loadSettings } from "./settings";
 
 /**
- * Intelligence artificielle d'assistance — fournisseur paramétrable.
+ * OCR intelligent d'assistance — fournisseur paramétrable.
  *
  * - « anthropic » (par défaut) : API Claude. Lit les PDF page par page (tableaux
  *   et graphiques compris) ; sortie JSON contrainte par un schéma ; repli
@@ -12,7 +12,7 @@ import { AI_PROVIDERS, loadSettings } from "./settings";
  *   banque). Les PDF y sont transmis sous forme de texte extrait.
  *
  * Le fournisseur, le modèle et l'adresse se paramètrent à l'écran ; la clé reste
- * une variable d'environnement (ANTHROPIC_API_KEY, ou IA_CLE_API). L'IA est
+ * une variable d'environnement (ANTHROPIC_API_KEY, ou IA_CLE_API). L'OCR intelligent est
  * DÉSACTIVÉE par défaut ; elle ne fait que proposer : aucune valeur n'est
  * appliquée sans décision humaine tracée.
  */
@@ -35,7 +35,7 @@ export interface AiConfig {
   keyEnv: string;
 }
 
-/** Nom de variable admis pour une clé d'IA : IA_CLE_… uniquement. */
+/** Nom de variable admis pour une clé d'OCR intelligent : IA_CLE_… uniquement. */
 export const AI_KEY_ENV_PATTERN = /^IA_CLE_[A-Z0-9_]{1,40}$/;
 
 export interface AiDocument {
@@ -63,7 +63,7 @@ export interface AiResponse {
 
 export class AiError extends Error {}
 
-/** Types de pièces lisibles par l'IA. */
+/** Types de pièces lisibles par l'OCR intelligent. */
 export const AI_READABLE_TYPES = ["application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv"] as const;
 
 export async function aiConfig(): Promise<AiConfig> {
@@ -104,12 +104,12 @@ export async function aiStatus(): Promise<{ enabled: boolean; provider: string; 
   return { enabled: c.enabled, provider: c.provider, model: c.model, missing: missingConfig(c) };
 }
 
-/** Lève AiError si l'IA n'est pas utilisable ; renvoie la configuration sinon. */
+/** Lève AiError si l'OCR intelligent n'est pas utilisable ; renvoie la configuration sinon. */
 export async function requireAi(): Promise<AiConfig> {
   const c = await aiConfig();
-  if (!c.enabled) throw new AiError("L'assistance par l'IA est désactivée (Paramétrage › Intelligence artificielle).");
+  if (!c.enabled) throw new AiError("L'OCR intelligent est désactivé (Paramétrage › OCR intelligent).");
   const missing = missingConfig(c);
-  if (missing) throw new AiError(`IA non configurée : ${missing}.`);
+  if (missing) throw new AiError(`OCR intelligent non configuré : ${missing}.`);
   return c;
 }
 
@@ -120,12 +120,12 @@ export async function runAi(req: AiRequest): Promise<AiResponse> {
 
 /**
  * Test de connexion avant activation (Administration › Raccordements) : une
- * requête minimale, sans pièce ni donnée client, même si l'IA est désactivée.
+ * requête minimale, sans pièce ni donnée client, même si l'OCR intelligent est désactivé.
  */
 export async function pingAi(): Promise<AiResponse> {
   const c = await aiConfig();
   const missing = missingConfig(c);
-  if (missing) throw new AiError(`IA non configurée : ${missing}.`);
+  if (missing) throw new AiError(`OCR intelligent non configuré : ${missing}.`);
   const req: AiRequest = {
     system: "Test de connexion de l'outil de notation. Réponds uniquement selon le schéma.",
     documents: [],
@@ -183,8 +183,8 @@ async function runAnthropic(c: AiConfig, req: AiRequest): Promise<AiResponse> {
       { timeout: req.timeoutMs, maxRetries: 1 }
     );
     const message = await stream.finalMessage();
-    if (message.stop_reason === "refusal") throw new AiError("Le fournisseur d'IA a décliné la demande.");
-    if (message.stop_reason === "max_tokens") throw new AiError("Réponse de l'IA tronquée : réduisez le nombre de pièces.");
+    if (message.stop_reason === "refusal") throw new AiError("Le fournisseur d'OCR intelligent a décliné la demande.");
+    if (message.stop_reason === "max_tokens") throw new AiError("Réponse de l'OCR intelligent tronquée : réduisez le nombre de pièces.");
     const text = message.content
       .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
       .map((b) => b.text)
@@ -197,10 +197,10 @@ async function runAnthropic(c: AiConfig, req: AiRequest): Promise<AiResponse> {
     };
   } catch (e) {
     if (e instanceof AiError) throw e;
-    if (e instanceof Anthropic.RateLimitError) throw new AiError("Fournisseur d'IA saturé : réessayez dans une minute.");
-    if (e instanceof Anthropic.AuthenticationError) throw new AiError("Clé d'API refusée par le fournisseur d'IA.");
-    if (e instanceof Anthropic.APIError) throw new AiError(`Erreur du fournisseur d'IA (${e.status ?? "réseau"}).`);
-    throw new AiError("Le fournisseur d'IA ne répond pas.");
+    if (e instanceof Anthropic.RateLimitError) throw new AiError("Fournisseur d'OCR intelligent saturé : réessayez dans une minute.");
+    if (e instanceof Anthropic.AuthenticationError) throw new AiError("Clé d'API refusée par le fournisseur d'OCR intelligent.");
+    if (e instanceof Anthropic.APIError) throw new AiError(`Erreur du fournisseur d'OCR intelligent (${e.status ?? "réseau"}).`);
+    throw new AiError("Le fournisseur d'OCR intelligent ne répond pas.");
   }
 }
 
@@ -288,27 +288,27 @@ async function runOpenAiCompatible(c: AiConfig, req: AiRequest): Promise<AiRespo
               : { type: "json_object" },
         }),
       }).catch(() => {
-        throw new AiError("Le fournisseur d'IA ne répond pas.");
+        throw new AiError("Le fournisseur d'OCR intelligent ne répond pas.");
       });
-      if (res.status === 401 || res.status === 403) throw new AiError("Clé d'API refusée par le fournisseur d'IA.");
-      if (res.status === 429) throw new AiError("Fournisseur d'IA saturé : réessayez dans une minute.");
+      if (res.status === 401 || res.status === 403) throw new AiError("Clé d'API refusée par le fournisseur d'OCR intelligent.");
+      if (res.status === 429) throw new AiError("Fournisseur d'OCR intelligent saturé : réessayez dans une minute.");
       if (res.status === 400 && mode === "json_schema") {
-        lastError = new AiError("Erreur du fournisseur d'IA (400).");
+        lastError = new AiError("Erreur du fournisseur d'OCR intelligent (400).");
         break; // l'API ne connaît pas json_schema : passage au mode json_object
       }
-      if (!res.ok) throw new AiError(`Erreur du fournisseur d'IA (${res.status}).`);
+      if (!res.ok) throw new AiError(`Erreur du fournisseur d'OCR intelligent (${res.status}).`);
       const body = (await res.json()) as {
         model?: string;
         choices?: Array<{ finish_reason?: string; message?: { content?: string | null; refusal?: string | null } }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       const choice = body.choices?.[0];
-      if (choice?.message?.refusal) throw new AiError("Le fournisseur d'IA a décliné la demande.");
-      if (choice?.finish_reason === "length") throw new AiError("Réponse de l'IA tronquée : réduisez le nombre de pièces.");
+      if (choice?.message?.refusal) throw new AiError("Le fournisseur d'OCR intelligent a décliné la demande.");
+      if (choice?.finish_reason === "length") throw new AiError("Réponse de l'OCR intelligent tronquée : réduisez le nombre de pièces.");
       const content = (choice?.message?.content ?? "").trim();
       if (!content) {
         // DeepSeek peut renvoyer un contenu vide en mode JSON : une nouvelle tentative.
-        lastError = new AiError("Réponse de l'IA vide.");
+        lastError = new AiError("Réponse de l'OCR intelligent vide.");
         continue;
       }
       return {
@@ -319,7 +319,7 @@ async function runOpenAiCompatible(c: AiConfig, req: AiRequest): Promise<AiRespo
       };
     }
   }
-  throw lastError ?? new AiError("Réponse de l'IA illisible.");
+  throw lastError ?? new AiError("Réponse de l'OCR intelligent illisible.");
 }
 
 function parseJson(text: string): unknown {
@@ -327,6 +327,6 @@ function parseJson(text: string): unknown {
   try {
     return JSON.parse(t);
   } catch {
-    throw new AiError("Réponse de l'IA illisible.");
+    throw new AiError("Réponse de l'OCR intelligent illisible.");
   }
 }

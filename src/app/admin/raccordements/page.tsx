@@ -28,7 +28,7 @@ export default async function IntegrationsPage() {
         <ol style={{ fontSize: 13, margin: "6px 0 0 18px", display: "grid", gap: 2 }}>
           <li>la DSI fournit l&apos;adresse de l&apos;API et dépose le jeton dans les variables d&apos;environnement du serveur ;</li>
           <li>
-            l&apos;adresse et les chemins se renseignent dans <Link href="/admin/settings">Paramétrage</Link> › Référentiels externes ou Intelligence artificielle ;
+            l&apos;adresse et les chemins se renseignent dans <Link href="/admin/settings">Paramétrage</Link> › Référentiels externes ou OCR intelligent ;
           </li>
           <li>le test ci-dessous appelle l&apos;API avec un code réel, sans rien enregistrer ;</li>
           <li>

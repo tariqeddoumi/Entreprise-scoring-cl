@@ -209,7 +209,7 @@ export function readXlsx(bytes: Uint8Array): Sheet[] {
   return sheets;
 }
 
-/** Texte tabulé de toutes les feuilles, pour la lecture par l'IA. */
+/** Texte tabulé de toutes les feuilles, pour la lecture par l'OCR intelligent. */
 export function xlsxToText(bytes: Uint8Array, maxChars = 200_000): string {
   const out = readXlsx(bytes)
     .map((s) => `=== Feuille « ${s.name} » ===\n${s.rows.filter((r) => r.some(Boolean)).map((r) => r.join("\t")).join("\n")}`)

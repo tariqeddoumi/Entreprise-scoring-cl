@@ -4,18 +4,20 @@
  * consulter avant tout octroi.
  *
  * Le rapport arrive soit par API (base des rapports du crédit bureau), soit lu
- * par l'IA dans un PDF ou une image, vérifié par l'analyste. Ce module, pur,
+ * par l'OCR intelligent dans un PDF ou une image, vérifié par l'analyste. Ce module, pur,
  * contrôle son contenu, mesure son ancienneté depuis sa DATE DE MISE À JOUR
  * (pas sa date de chargement) et en tire des constats et des signaux de
  * critères BAM à vérifier. Le rafraîchissement du rapport se fait dans l'outil
  * du crédit bureau, hors de l'outil de notation.
  */
 
+import { parseAmountLoose, type FieldSpec } from "./corrections";
+
 export type Bureau = "CREDITINFO" | "QUANTIK" | "AUTRE";
 export type ReportSource = "API" | "DOCUMENT" | "SAISIE";
 
 export const BUREAU_LABELS: Record<Bureau, string> = { CREDITINFO: "Creditinfo Maroc", QUANTIK: "Quantik Maroc", AUTRE: "Autre" };
-export const SOURCE_LABELS: Record<ReportSource, string> = { API: "API du crédit bureau", DOCUMENT: "Lu par l'IA (document)", SAISIE: "Saisi" };
+export const SOURCE_LABELS: Record<ReportSource, string> = { API: "API du crédit bureau", DOCUMENT: "Lu par l'OCR intelligent (document)", SAISIE: "Saisi" };
 
 export const LINE_STATUSES = ["EN_COURS", "SOLDE", "IMPAYE", "CONTENTIEUX", "RESTRUCTURE"] as const;
 export type LineStatus = (typeof LINE_STATUSES)[number];
@@ -49,6 +51,17 @@ export interface CreditLine {
   /** Ancienneté de l'impayé le plus ancien (jours). */
   overdueDays: number | null;
   status: LineStatus;
+  /** Référence ou numéro du contrat, s'il est imprimé. */
+  reference: string;
+  /** Rôle du client : titulaire, co-emprunteur, caution. */
+  role: string;
+  startDate: string;
+  maturityDate: string;
+  /** Échéance périodique. */
+  installment: number | null;
+  /** Nombre d'échéances impayées. */
+  unpaidInstallments: number | null;
+  guarantees: string;
 }
 
 export interface CreditIncident {
@@ -60,9 +73,37 @@ export interface CreditIncident {
   labelFr: string;
 }
 
+/** Signalétique de l'entreprise telle qu'imprimée sur le rapport. */
+export interface ReportIdentity {
+  companyName: string;
+  legalForm: string;
+  ice: string;
+  rc: string;
+  /** Tribunal de commerce (nom ou code) qui tient le registre. */
+  commercialCourt: string;
+  fiscalId: string;
+  cnss: string;
+  patente: string;
+  address: string;
+  city: string;
+  creationDate: string;
+  capital: number | null;
+  activity: string;
+}
+
+/** Totaux et nombre de lignes tels qu'imprimés : contrôle d'exhaustivité de la lecture. */
+export interface PrintedTotals {
+  lineCount: number | null;
+  authorized: number | null;
+  outstanding: number | null;
+  overdue: number | null;
+}
+
 export interface CreditReportData {
   companyName: string;
   ice: string;
+  identity: ReportIdentity;
+  printedTotals: PrintedTotals;
   currency: string;
   lines: CreditLine[];
   incidents: CreditIncident[];
@@ -72,12 +113,16 @@ export interface CreditReportData {
   score: string;
 }
 
-export const EMPTY_REPORT: CreditReportData = { companyName: "", ice: "", currency: "MAD", lines: [], incidents: [], inquiries12m: null, score: "" };
+export const EMPTY_IDENTITY: ReportIdentity = { companyName: "", legalForm: "", ice: "", rc: "", commercialCourt: "", fiscalId: "", cnss: "", patente: "", address: "", city: "", creationDate: "", capital: null, activity: "" };
+export const EMPTY_TOTALS: PrintedTotals = { lineCount: null, authorized: null, outstanding: null, overdue: null };
+export const EMPTY_REPORT: CreditReportData = { companyName: "", ice: "", identity: EMPTY_IDENTITY, printedTotals: EMPTY_TOTALS, currency: "MAD", lines: [], incidents: [], inquiries12m: null, score: "" };
+
+/** Libellé d'une ligne dont l'établissement n'est pas nommé (les rapports masquent souvent les confrères). */
+export const UNNAMED_INSTITUTION = "Établissement non nommé";
 
 const num = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : Number(String(v).replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : null;
+  const n = parseAmountLoose(v);
+  return n === null ? null : Math.abs(n);
 };
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : typeof v === "number" ? String(v) : "");
 const isoOr = (v: unknown) => {
@@ -88,18 +133,26 @@ const isoOr = (v: unknown) => {
 /** Lecture tolérante d'un contenu JSON (API, IA ou formulaire) ; les valeurs inconnues sont neutralisées. */
 export function normalizeReport(raw: unknown): CreditReportData {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const lines = (Array.isArray(o.lines) ? o.lines : []).slice(0, 200).map((l): CreditLine => {
+  const lines = (Array.isArray(o.lines) ? o.lines : []).slice(0, 300).map((l): CreditLine => {
     const x = (l ?? {}) as Record<string, unknown>;
     const status = str(x.status, 20).toUpperCase();
+    const ownBank = x.ownBank === true || x.ownBank === "true";
     return {
-      institution: str(x.institution, 120),
-      ownBank: x.ownBank === true || x.ownBank === "true",
+      institution: str(x.institution, 120) || (ownBank ? "La banque" : UNNAMED_INSTITUTION),
+      ownBank,
       type: str(x.type, 120),
       authorized: num(x.authorized),
       outstanding: num(x.outstanding),
       overdue: num(x.overdue),
       overdueDays: num(x.overdueDays),
       status: (LINE_STATUSES as readonly string[]).includes(status) ? (status as LineStatus) : "EN_COURS",
+      reference: str(x.reference, 80),
+      role: str(x.role, 60),
+      startDate: isoOr(x.startDate),
+      maturityDate: isoOr(x.maturityDate),
+      installment: num(x.installment),
+      unpaidInstallments: num(x.unpaidInstallments),
+      guarantees: str(x.guarantees, 200),
     };
   });
   const incidents = (Array.isArray(o.incidents) ? o.incidents : []).slice(0, 200).map((l): CreditIncident => {
@@ -114,9 +167,29 @@ export function normalizeReport(raw: unknown): CreditReportData {
       labelFr: str(x.labelFr, 300),
     };
   });
+  const id = (o.identity && typeof o.identity === "object" ? o.identity : {}) as Record<string, unknown>;
+  const pt = (o.printedTotals && typeof o.printedTotals === "object" ? o.printedTotals : {}) as Record<string, unknown>;
+  const identity: ReportIdentity = {
+    companyName: str(id.companyName, 300) || str(o.companyName, 300),
+    legalForm: str(id.legalForm, 60),
+    ice: (str(id.ice, 20) || str(o.ice, 20)).replace(/\s/g, ""),
+    rc: str(id.rc, 40),
+    commercialCourt: str(id.commercialCourt, 80),
+    fiscalId: str(id.fiscalId, 30).replace(/\s/g, ""),
+    cnss: str(id.cnss, 30).replace(/\s/g, ""),
+    patente: str(id.patente, 30).replace(/\s/g, ""),
+    address: str(id.address, 300),
+    city: str(id.city, 80),
+    creationDate: isoOr(id.creationDate),
+    capital: num(id.capital),
+    activity: str(id.activity, 200),
+  };
+  const lc = num(pt.lineCount);
   return {
-    companyName: str(o.companyName, 300),
-    ice: str(o.ice, 20).replace(/\s/g, ""),
+    companyName: identity.companyName,
+    ice: identity.ice,
+    identity,
+    printedTotals: { lineCount: lc === null ? null : Math.round(lc), authorized: num(pt.authorized), outstanding: num(pt.outstanding), overdue: num(pt.overdue) },
     currency: /^[A-Z]{3}$/.test(str(o.currency, 3).toUpperCase()) ? str(o.currency, 3).toUpperCase() : "MAD",
     lines,
     incidents,
@@ -130,7 +203,6 @@ export function checkReport(reportDate: string, data: CreditReportData, today: s
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate)) issues.push("Date de mise à jour du rapport requise (elle fait foi pour son ancienneté).");
   else if (reportDate > today) issues.push("La date de mise à jour du rapport ne peut pas être future.");
   for (const [i, l] of data.lines.entries()) {
-    if (!l.institution) issues.push(`Ligne ${i + 1} : établissement requis.`);
     for (const [k, v] of [["autorisé", l.authorized], ["encours", l.outstanding], ["impayé", l.overdue]] as const)
       if (v !== null && v < 0) issues.push(`Ligne ${i + 1} : montant ${k} négatif.`);
   }
@@ -244,32 +316,52 @@ function fmt(v: number): string {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(v);
 }
 
-/** Schéma JSON de l'extraction par l'IA (même structure que l'API). */
+/** Schéma JSON de l'extraction par l'OCR intelligent (même structure que l'API). */
+const S = { type: "string" } as const;
+const N = { type: ["number", "null"] } as const;
+
 export const REPORT_EXTRACTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["bureau", "reportDate", "reference", "companyName", "ice", "currency", "lines", "incidents", "inquiries12m", "score"],
+  required: ["bureau", "reportDate", "reference", "identity", "currency", "printedTotals", "lines", "incidents", "inquiries12m", "score"],
   properties: {
     bureau: { type: "string", enum: ["CREDITINFO", "QUANTIK", "AUTRE"] },
-    reportDate: { type: "string" },
-    reference: { type: "string" },
-    companyName: { type: "string" },
-    ice: { type: "string" },
-    currency: { type: "string" },
+    reportDate: S,
+    reference: S,
+    identity: {
+      type: "object",
+      additionalProperties: false,
+      required: ["companyName", "legalForm", "ice", "rc", "commercialCourt", "fiscalId", "cnss", "patente", "address", "city", "creationDate", "capital", "activity"],
+      properties: { companyName: S, legalForm: S, ice: S, rc: S, commercialCourt: S, fiscalId: S, cnss: S, patente: S, address: S, city: S, creationDate: S, capital: N, activity: S },
+    },
+    currency: S,
+    printedTotals: {
+      type: "object",
+      additionalProperties: false,
+      required: ["lineCount", "authorized", "outstanding", "overdue"],
+      properties: { lineCount: N, authorized: N, outstanding: N, overdue: N },
+    },
     lines: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["institution", "ownBank", "type", "authorized", "outstanding", "overdue", "overdueDays", "status"],
+        required: ["institution", "ownBank", "type", "reference", "role", "authorized", "outstanding", "overdue", "overdueDays", "unpaidInstallments", "installment", "startDate", "maturityDate", "guarantees", "status"],
         properties: {
-          institution: { type: "string" },
+          institution: S,
           ownBank: { type: "boolean" },
-          type: { type: "string" },
-          authorized: { type: ["number", "null"] },
-          outstanding: { type: ["number", "null"] },
-          overdue: { type: ["number", "null"] },
-          overdueDays: { type: ["number", "null"] },
+          type: S,
+          reference: S,
+          role: S,
+          authorized: N,
+          outstanding: N,
+          overdue: N,
+          overdueDays: N,
+          unpaidInstallments: N,
+          installment: N,
+          startDate: S,
+          maturityDate: S,
+          guarantees: S,
           status: { type: "string", enum: [...LINE_STATUSES] },
         },
       },
@@ -281,16 +373,129 @@ export const REPORT_EXTRACTION_SCHEMA = {
         additionalProperties: false,
         required: ["date", "kind", "institution", "amount", "regularized", "labelFr"],
         properties: {
-          date: { type: "string" },
+          date: S,
           kind: { type: "string", enum: [...INCIDENT_KINDS] },
-          institution: { type: "string" },
-          amount: { type: ["number", "null"] },
+          institution: S,
+          amount: N,
           regularized: { type: "boolean" },
-          labelFr: { type: "string" },
+          labelFr: S,
         },
       },
     },
-    inquiries12m: { type: ["number", "null"] },
-    score: { type: "string" },
+    inquiries12m: N,
+    score: S,
   },
 } as const;
+
+// --- Contrôles de la lecture ------------------------------------------------------------
+
+/** Exhaustivité : lignes et totaux lus comparés à ceux imprimés sur le rapport. */
+export function readingControls(data: CreditReportData): Finding[] {
+  const out: Finding[] = [];
+  const t = data.printedTotals;
+  if (t.lineCount !== null && t.lineCount !== data.lines.length)
+    out.push({ level: "ALERTE", textFr: `Lecture incomplète : ${data.lines.length} ligne(s) lue(s) sur ${t.lineCount} annoncée(s) par le rapport. Relancez la lecture ou complétez par une correction.` });
+  const all = (f: (l: CreditLine) => number | null) => data.lines.reduce((s, l) => s + (f(l) ?? 0), 0);
+  const cmp = (label: string, printed: number | null, read: number) => {
+    if (printed === null || printed === 0) return;
+    const gap = Math.abs(read - printed) / printed;
+    if (gap > 0.01) out.push({ level: "ATTENTION", textFr: `Total ${label} : ${read.toLocaleString("fr-FR")} lu ligne à ligne, ${printed.toLocaleString("fr-FR")} imprimé (écart de ${(gap * 100).toFixed(1)} %).` });
+  };
+  cmp("autorisé", t.authorized, all((l) => l.authorized));
+  cmp("des encours", t.outstanding, all((l) => l.outstanding));
+  cmp("des impayés", t.overdue, all((l) => l.overdue));
+  if (!out.length && (t.lineCount !== null || t.outstanding !== null))
+    out.push({ level: "INFO", textFr: `Lecture complète : ${data.lines.length} ligne(s), totaux concordants avec le rapport.` });
+  return out;
+}
+
+// --- Signalétique : rapport ↔ fiche client ------------------------------------------------
+
+export const IDENTITY_FIELDS = [
+  ["ice", "ICE"],
+  ["rc", "Registre de commerce"],
+  ["commercialCourt", "Tribunal de commerce"],
+  ["fiscalId", "Identifiant fiscal (IF)"],
+  ["cnss", "Numéro CNSS"],
+  ["patente", "Taxe professionnelle (patente)"],
+  ["legalForm", "Forme juridique"],
+  ["city", "Ville"],
+] as const;
+export type IdentityField = (typeof IDENTITY_FIELDS)[number][0];
+
+/** Champ de la fiche client correspondant à chaque rubrique de la signalétique. */
+export const CLIENT_FIELD: Record<IdentityField, string> = {
+  ice: "ice",
+  rc: "rc",
+  commercialCourt: "commercialCourt",
+  fiscalId: "fiscalId",
+  cnss: "cnssNumber",
+  patente: "patente",
+  legalForm: "legalForm",
+  city: "city",
+};
+
+export interface IdentityCheck {
+  field: IdentityField;
+  labelFr: string;
+  report: string;
+  client: string;
+  status: "IDENTIQUE" | "MANQUANT_FICHE" | "DIFFERENT";
+}
+
+const canon = (v: string) =>
+  v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .replace(/^0+(?=\d)/, "");
+
+/** Compare la signalétique lue sur un rapport à la fiche du client. */
+export function compareIdentity(report: Partial<Record<IdentityField, string>>, client: Partial<Record<IdentityField, string | null>>): IdentityCheck[] {
+  return IDENTITY_FIELDS.flatMap(([field, labelFr]) => {
+    const r = (report[field] ?? "").trim();
+    if (!r) return [];
+    const c = (client[field] ?? "").trim();
+    const status: IdentityCheck["status"] = !c ? "MANQUANT_FICHE" : canon(r) === canon(c) ? "IDENTIQUE" : "DIFFERENT";
+    return [{ field, labelFr, report: r, client: c, status }];
+  });
+}
+
+// --- Champs corrigibles ---------------------------------------------------------------------
+
+const LINE_FIELDS: Record<string, FieldSpec> = {
+  institution: { kind: "text", labelFr: "Établissement" },
+  type: { kind: "text", labelFr: "Type de crédit" },
+  authorized: { kind: "number", labelFr: "Autorisé" },
+  outstanding: { kind: "number", labelFr: "Encours" },
+  overdue: { kind: "number", labelFr: "Impayé" },
+  overdueDays: { kind: "number", labelFr: "Ancienneté de l'impayé (jours)" },
+  unpaidInstallments: { kind: "number", labelFr: "Échéances impayées" },
+  status: { kind: "enum", labelFr: "Statut", options: LINE_STATUSES, optionLabels: LINE_STATUS_LABELS },
+  ownBank: { kind: "boolean", labelFr: "Ligne de la banque" },
+};
+const INCIDENT_FIELDS: Record<string, FieldSpec> = {
+  regularized: { kind: "boolean", labelFr: "Régularisé" },
+  amount: { kind: "number", labelFr: "Montant" },
+  date: { kind: "date", labelFr: "Date" },
+  kind: { kind: "enum", labelFr: "Nature", options: INCIDENT_KINDS, optionLabels: INCIDENT_LABELS },
+};
+const IDENTITY_SPECS: Record<string, FieldSpec> = Object.fromEntries(IDENTITY_FIELDS.map(([f, l]) => [f, { kind: "text", labelFr: l } as FieldSpec]));
+
+/** Champs d'un rapport de solvabilité que l'analyste peut corriger, avec motif. */
+export function reportFieldSpec(path: string): FieldSpec | null {
+  const m = /^(lines|incidents)\.(\d+)\.([A-Za-z]+)$/.exec(path);
+  if (m) {
+    const spec = (m[1] === "lines" ? LINE_FIELDS : INCIDENT_FIELDS)[m[3]];
+    return spec ? { ...spec, labelFr: `${m[1] === "lines" ? "Ligne" : "Incident"} ${Number(m[2]) + 1} — ${spec.labelFr}` } : null;
+  }
+  const id = /^identity\.([A-Za-z]+)$/.exec(path);
+  if (id) return IDENTITY_SPECS[id[1]] ? { ...IDENTITY_SPECS[id[1]], labelFr: `Signalétique — ${IDENTITY_SPECS[id[1]].labelFr}` } : null;
+  if (path === "inquiries12m") return { kind: "number", labelFr: "Consultations sur 12 mois" };
+  if (path === "score") return { kind: "text", labelFr: "Score du bureau" };
+  return null;
+}
+
+export const REPORT_LINE_FIELDS = LINE_FIELDS;
+export const REPORT_INCIDENT_FIELDS = INCIDENT_FIELDS;

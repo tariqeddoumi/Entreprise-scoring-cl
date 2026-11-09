@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { CoreBankingError, createFromT24, fetchT24Customer, syncFromT24 } from "@/lib/core-banking";
-import { extractCreditReport, extractLegalProfile, fetchCreditReport, saveCreditReport, saveLegalProfile, wrapAiError, type ReportDraft } from "@/lib/external-data";
+import { correctCreditReport, correctLegalReport, extractCreditReport, extractLegalProfile, fetchCreditReport, saveCreditReport, saveLegalProfile, updateIdentityFromReport, wrapAiError, type ReportDraft } from "@/lib/external-data";
 import { canWrite, isOutOfScope, loadTree } from "@/lib/scope";
 import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 import type { CoreBankingCustomer, FieldChange } from "@/reference/core-banking";
@@ -99,8 +99,8 @@ export async function extractCreditReportAction(counterpartyId: string, fd: Form
   const file = fd.get("file");
   if (!(file instanceof File) || !file.size) return { ok: false, errorFr: "Joignez le rapport (PDF ou image)." };
   try {
-    const draft = await extractCreditReport(await getDb(), await getPerimeter(), counterpartyId, { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) });
-    return { ok: true, draft, okFr: "Rapport lu par l'IA : vérifiez la date de mise à jour, chaque ligne et chaque incident avant d'enregistrer." };
+    const draft = await extractCreditReport(await getDb(), await getPerimeter(), counterpartyId, { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) }, session.identity.name);
+    return { ok: true, draft, okFr: "Rapport lu par l'OCR intelligent et pièce conservée : vérifiez la date de mise à jour et l'exhaustivité, puis enregistrez-le tel que lu. Les corrections se font ensuite, motivées." };
   } catch (e) {
     return { ok: false, errorFr: wrapAiError(e) };
   }
@@ -135,20 +135,65 @@ export async function extractLegalProfileAction(counterpartyId: string, fd: Form
   const file = fd.get("file");
   if (!(file instanceof File) || !file.size) return { ok: false, errorFr: "Joignez le rapport InfoRisque (PDF ou image)." };
   try {
-    const profile = await extractLegalProfile(await getDb(), await getPerimeter(), counterpartyId, { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) });
-    return { ok: true, profile, okFr: "Rapport InfoRisque lu par l'IA : vérifiez avant d'enregistrer." };
+    const profile = await extractLegalProfile(await getDb(), await getPerimeter(), counterpartyId, { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) }, session.identity.name);
+    return { ok: true, profile, okFr: "Rapport InfoRisque lu par l'OCR intelligent et pièce conservée : vérifiez, puis enregistrez-le tel que lu. Les corrections se font ensuite, motivées." };
   } catch (e) {
     return { ok: false, errorFr: wrapAiError(e) };
   }
 }
 
-export async function saveLegalProfileAction(counterpartyId: string, profile: LegalProfile): Promise<ProfileResult> {
+export async function saveLegalProfileAction(counterpartyId: string, profile: LegalProfile, caseId?: string | null): Promise<ProfileResult> {
   const session = await getSessionIdentity("ANALYST");
   if (!session.ok) return { ok: false, errorFr: session.reasonFr };
   try {
-    const r = await saveLegalProfile(await getDb(), await getPerimeter(), session.identity, counterpartyId, profile);
+    await saveLegalProfile(await getDb(), await getPerimeter(), session.identity, counterpartyId, profile, caseId);
     revalidatePath(`/counterparties/${counterpartyId}`);
-    return { ok: true, filled: r.filled, okFr: `Fiche juridique enregistrée${r.filled.length ? ` ; fiche client complétée (${r.filled.join(", ")})` : ""}.` };
+    if (caseId) revalidatePath(`/cases/${caseId}`);
+    return { ok: true, okFr: "Fiche juridique enregistrée telle que lue. Vérifiez la signalétique proposée ci-dessous." };
+  } catch (e) {
+    return { ok: false, errorFr: wrapAiError(e) };
+  }
+}
+
+// --- Corrections motivées et signalétique --------------------------------------------------
+
+export interface SimpleResult {
+  ok: boolean;
+  okFr?: string;
+  errorFr?: string;
+}
+
+/** Correction motivée d'un rapport (solvabilité ou InfoRisque), avec justificatif facultatif. */
+export async function correctReportAction(kind: "CREDIT" | "LEGAL", counterpartyId: string, reportId: string, fd: FormData): Promise<SimpleResult> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  const file = fd.get("proof");
+  const proof = file instanceof File && file.size ? { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) } : null;
+  const input = { path: String(fd.get("path") ?? ""), value: fd.get("value") ?? "", motif: String(fd.get("motif") ?? "") };
+  try {
+    const db = await getDb();
+    const c =
+      kind === "CREDIT"
+        ? await correctCreditReport(db, await getPerimeter(), session.identity, reportId, input, proof)
+        : await correctLegalReport(db, await getPerimeter(), session.identity, reportId, input, proof);
+    revalidatePath(`/counterparties/${counterpartyId}`);
+    revalidatePath("/cases", "layout");
+    return { ok: true, okFr: `Correction enregistrée : ${c.labelFr}. La valeur lue reste consultable.` };
+  } catch (e) {
+    return { ok: false, errorFr: wrapAiError(e) };
+  }
+}
+
+/** Reprise, champ par champ, de la signalétique d'un rapport dans la fiche client. */
+export async function updateIdentityAction(counterpartyId: string, kind: "CREDIT_REPORT" | "LEGAL_REPORT", reportId: string, fields: string[]): Promise<SimpleResult> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    const r = await updateIdentityFromReport(await getDb(), await getPerimeter(), session.identity, counterpartyId, { kind, reportId }, fields);
+    revalidatePath(`/counterparties/${counterpartyId}`);
+    revalidatePath("/cases", "layout");
+    const parts = [r.updated.length ? `Fiche client mise à jour : ${r.updated.map((u) => u.field).join(", ")}.` : "Aucun champ mis à jour.", ...r.skipped];
+    return { ok: r.updated.length > 0, okFr: r.updated.length ? parts.join(" ") : undefined, errorFr: r.updated.length ? undefined : parts.join(" ") };
   } catch (e) {
     return { ok: false, errorFr: wrapAiError(e) };
   }

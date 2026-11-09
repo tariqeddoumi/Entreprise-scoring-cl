@@ -26,7 +26,7 @@ interface Props {
   readOnly?: boolean;
   /** Devise de saisie des montants (celle de la contrepartie). */
   currency?: string;
-  /** Champs remplis depuis une proposition de l'IA acceptée (repère visuel). */
+  /** Champs remplis depuis une proposition de l'OCR intelligent acceptée (repère visuel). */
   aiFields?: ReadonlySet<string>;
   /** Format de bilan en vigueur (ratios calculés depuis le bilan). */
   format?: StatementFormat;
@@ -147,12 +147,12 @@ function FieldMarkBadge({ mark }: { mark: Exclude<FieldMark, "SAISI"> }) {
   );
 }
 
-/** Repère « proposé par l'IA » à côté d'un champ rempli depuis une proposition acceptée. */
+/** Repère « proposé par l'OCR intelligent » à côté d'un champ rempli depuis une proposition acceptée. */
 function AiMark({ show }: { show: boolean }) {
   if (!show) return null;
   return (
-    <span className="ai-mark" title="Valeur reprise d'une proposition de l'IA, acceptée par l'analyste">
-      IA
+    <span className="ai-mark" title="Valeur reprise d'une proposition de l'OCR intelligent, acceptée par l'analyste">
+      OCR
     </span>
   );
 }
@@ -161,7 +161,7 @@ function AiMark({ show }: { show: boolean }) {
  * Grille de saisie d'un dossier de notation, générée depuis la version de
  * modèle publiée. Composant contrôlé : l'état (le brouillon) appartient à
  * l'écran qui l'affiche — dossier ou simulation — pour que les propositions de
- * l'IA, l'enregistrement et l'aperçu travaillent sur la même saisie.
+ * l'OCR intelligent, l'enregistrement et l'aperçu travaillent sur la même saisie.
  */
 export function ScoringForm({ model, draft, onChange, readOnly = false, currency = "MAD", aiFields, format, facilityExposure = null }: Props) {
   const segment = displaySegment(draft, model);

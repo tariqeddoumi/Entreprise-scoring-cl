@@ -65,7 +65,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Paramétrage des grilles à l'écran (poids, barèmes, repères, critères, exceptions, revues, couverture, confiance) par versions datées | Opérationnel |
 | Écran Clients : création, modification, suppression ou désactivation, notation depuis la fiche | Opérationnel |
 | Segmentation TPE / PME / GE versionnée | Opérationnel |
-| Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture IA ; ratios calculés, contrôles, correction motivée | Opérationnel |
+| Bilan CGNC (modèles normal et simplifié) : saisie, gabarit Excel, lecture OCR intelligent ; ratios calculés, contrôles, correction motivée | Opérationnel |
 | Format du bilan paramétrable par versions datées (complet, agrégé, notation seulement ; postes propres, indicateurs et alertes par formule, seuils d'appréciation) | Opérationnel |
 | Analyse du bilan au chargement : ratios de la grille puis autres indicateurs, évolution sur trois exercices, appréciation, alertes (dont critères chiffrés 1/W/2025, à titre d'information) | Opérationnel |
 | Ouverture du dossier : motif paramétrable, reprise de la dernière note validée, passage à l'exercice suivant (N → N−1), référentiel des bilans du client, repères « repris / à saisir / anomalie » | Opérationnel |
@@ -78,18 +78,19 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Critères de classement BAM dans le dossier (plafond 8 sensible, 10 pré-douteux, défaut douteux / compromis), levée par décision de comité tracée | Opérationnel |
 | Watch list par décision de comité : niveaux WL1 à WL3 (note plafonnée à 8, 9, 10), changement de niveau, sortie, historique | Opérationnel |
 | Proposition de paramétrage pour le COPIL de validation (docs/19) | Livrée, à arrêter en COPIL |
-| Fiche client T24 (code client, rapatriement, actualisation à l'ouverture du dossier), saisie minimale de repli, rapport de solvabilité (API ou IA, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
+| Fiche client T24 (code client, rapatriement, actualisation à l'ouverture du dossier), saisie minimale de repli, rapport de solvabilité (API ou OCR intelligent, ancienneté), fiche juridique InfoRisque (docs/21) | Livrée ; raccordements T24 et crédit bureau à brancher par la DSI |
 | Portefeuille par chargé d'affaires (code gestionnaire T24, cloisonnement par portefeuille, paramétrable) (docs/22) | Livré ; à activer après renseignement des codes gestionnaires |
 | Engagements ligne par ligne (T24 ou saisie), engagement global calculé, dépassements et impayés, rapprochement crédit bureau (docs/23) | Livré ; API des limites T24 à brancher par la DSI |
 | Pièces et informations requises par motif, typage des pièces, préparation du dossier, contrôle à la soumission (docs/24) | Livré ; listes à arrêter en COPIL |
 | Mise en service des API : démarrage sans API, test de connexion, activation après test réussi (docs/26) | Livrée ; tests à faire avec la DSI |
 | Journal d'audit consultable (filtres, export) ; diagnostic complet écrans, front, back et base (docs/27) | Livré ; base de production alignée (migration 14) |
-| IA : OpenAI, Gemini, Azure OpenAI ou Claude, une clé par fournisseur, comparaison sans redéploiement (docs/28) | Livré ; clés à déposer sur Vercel |
+| OCR intelligent : OpenAI, Gemini, Azure OpenAI ou Claude, une clé par fournisseur, comparaison sans redéploiement (docs/28) | Livré ; clés à déposer sur Vercel |
 | Guide méthodologique complet (Word) : de l'ancien modèle au modèle expert, du modèle expert au statistique (docs/29) | Livré ; à valider en comité modèles |
+| Rapport brut intact et corrections motivées (solvabilité, InfoRisque, bilan) ; lecture complète des rapports à plusieurs crédits ; signalétique comparée à la fiche ; dossier figé à la soumission (docs/30) | Livré ; migration 15 en production ; rapport réel anonymisé attendu pour calibrer la lecture |
 | Reprise du stock : clients, notes historiques validées, bilans, watch list, par classeur Excel contrôlé à blanc (docs/25) | Livrée ; extraction et correspondance des notes à fournir |
 | Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |
-| Assistance IA à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |
+| Assistance OCR intelligent à la saisie (propositions sourcées, jamais appliquées sans accord) | Opérationnel |
 | Renotation par lot (groupe d'affaires, segment, secteur, entité), ponctuelle ou planifiée | Opérationnel |
 | Interface REST v1 + événements sortants signés | Opérationnel |
 | Persistance multi-dialecte | Schéma validé sur 4 dialectes |
@@ -338,7 +339,7 @@ Les tests couvrent :
 | [`docs/01-note-methodologique.md`](./docs/01-note-methodologique.md) | Note méthodologique — modèle et outil (corps rédigé) |
 | `docs/01-note-methodologique-complete.md` | Note complète, grilles incluses (générée) |
 | `dist/Note_methodologique_notation_entreprises.docx` | Version Word au design Groupe BCP |
-| [`docs/02-prompt-maitre-v2.md`](./docs/02-prompt-maitre-v2.md) | Prompt maître V2 à remettre à une IA de développement |
+| [`docs/02-prompt-maitre-v2.md`](./docs/02-prompt-maitre-v2.md) | Prompt maître V2 à remettre à une OCR intelligent de développement |
 | [`docs/03-deploiement-supabase.md`](./docs/03-deploiement-supabase.md) | Raccordement Supabase, durcissement, migrations, migration vers PostgreSQL autonome |
 | `docs/04` à `docs/12` | Diagnostics, rapports de calibration synthétique, journal des décisions, workflow multi-entités, diagnostic d'alignement de novembre 2026 |
 | [`docs/13-modelisation-statistique.md`](./docs/13-modelisation-statistique.md) | Méthode de modélisation statistique de la PD ; Word : `docs/modelisation/Guide_modelisation_statistique.docx` |

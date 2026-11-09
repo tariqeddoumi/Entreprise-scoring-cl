@@ -2,6 +2,7 @@ import { creditReportGate } from "./external-data";
 import type { OpeningRefresh } from "./opening-refresh";
 import { facilityStatus } from "./facilities";
 import { docsGate } from "./case-checklist";
+import { collectEvidence, freezePieces } from "./case-evidence";
 import { getScoringModel, today } from "@/lib/rating-scale";
 import { effectiveFormat } from "./statement-format";
 import type { PrismaClient } from "@/generated/prisma";
@@ -45,7 +46,7 @@ import {
  *  - la notation est calculée par le serveur à la soumission, à partir du
  *    brouillon enregistré, et figée (RatingRun immuable) ;
  *  - le valideur est distinct de l'auteur et de TOUT contributeur du dossier
- *    (enregistrements, soumission, décisions sur les propositions de l'IA) ;
+ *    (enregistrements, soumission, décisions sur les propositions de l'OCR intelligent) ;
  *  - une même personne ne décide que d'une étape ; chaque étape exige la
  *    fonction et le rôle paramétrés ; la délégation par montant relève le
  *    rôle de la dernière étape au-delà du seuil (devise de base) ;
@@ -387,11 +388,16 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
         (check.blockingReasonsFr.length > 0 ? ` À compléter : ${check.blockingReasonsFr.slice(0, 6).join(" ; ")}` : "")
     );
   }
+  // Éléments au jour de la décision (rapports, engagements, fiche T24,
+  // corrections) : lus avant, figés dans la même transaction que la soumission.
+  const evidence = await collectEvidence(db, caseId, draft, identity.name, fx?.amounts.globalBankExposure?.base ?? input.segmentationData?.globalBankExposure ?? null);
   try {
     return await executeRatingRun(db, identity, input, c.counterparty.id, undefined, undefined, async (tx, runId) => {
+      const frozen = await freezePieces(tx, caseId, c.counterparty.id, evidence);
       const updated = await tx.ratingCase.updateMany({
         where: { id: caseId, status: "DRAFT" },
         data: {
+          evidence: JSON.stringify(frozen),
           status: "SUBMITTED",
           runId,
           draftInput: serializeDraft(draft),
@@ -420,6 +426,13 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
           etapes: workflow.steps.map((st) => st.code),
           ...(bureauGate.problemFr ? { alerteCreditBureau: bureauGate.problemFr } : {}),
           ...(docs.missing.length ? { piecesManquantes: docs.missing.map((m) => `${m.code} (${m.status})`) } : {}),
+          elementsFiges: {
+            rapportSolvabilite: frozen.creditReport ? `${frozen.creditReport.reportDate} (${frozen.creditReport.corrections.length} correction(s))` : null,
+            ficheJuridique: frozen.legal ? `${frozen.legal.reportDate} (${frozen.legal.corrections.length} correction(s))` : null,
+            engagements: frozen.facilities.positionDate,
+            correctionsBilan: frozen.bilan.corrections.length,
+            pieces: frozen.pieces.map((p) => p.fileName),
+          },
         },
       });
     }, "CASE");

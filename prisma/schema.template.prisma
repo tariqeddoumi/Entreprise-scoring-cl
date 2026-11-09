@@ -108,6 +108,9 @@ model Counterparty {
   ice        String? // Identifiant Commun de l'Entreprise (unique par entité)
   rc         String? // Registre de commerce
   fiscalId   String? // Identifiant fiscal
+  commercialCourt String? // Tribunal de commerce (nom ou code) qui tient le RC
+  cnssNumber String? // Numéro d'affiliation CNSS
+  patente    String? // Taxe professionnelle (patente)
   legalForm  String?
   sectorCode String? // code du référentiel sectoriel interne
   city       String?
@@ -142,6 +145,8 @@ model Counterparty {
   statements       FinancialStatement[]
   committeeDecisions CommitteeDecision[]
   creditReports    CreditReport[]
+  legalReports     LegalReport[]
+  documents        CounterpartyDocument[]
   facilities       CreditFacility[]
 
   @@unique([entityId, ice])
@@ -422,6 +427,9 @@ model RatingCase {
   // Circuit de validation figé à la soumission (étapes applicables, décisions).
   // Nul : dossier antérieur au circuit, validé en une étape.
   workflow        String?      @db.Text
+  // Éléments au jour de la décision (JSON), figés à la soumission : rapport de
+  // solvabilité, fiche juridique, engagements, fiche T24, pièces sources.
+  evidence        String?      @db.Text
   // Motif du dossier (renouvellement annuel, investissement…), liste paramétrable.
   purpose         String?
   // Type de crédit (fonctionnement, investissement…) : condition du circuit.
@@ -651,6 +659,8 @@ model CreditReport {
   reference      String?
   // Contenu structuré (JSON) : lignes par établissement, impayés, incidents.
   data           String       @db.Text
+  // Corrections motivées (JSON) : le contenu lu ci-dessus reste intact.
+  corrections    String?      @db.Text
   documentId     String?
   documentSha256 String?
   recordedBy     String
@@ -692,4 +702,47 @@ model CreditFacility {
 
   @@index([counterpartyId])
   @@map("credit_facilities")
+}
+
+// Rapport InfoRisque (fiche juridique) tel que lu, historisé ; corrections
+// motivées à part. La fiche courante du client (counterparties.legalProfile)
+// en est la version corrigée la plus récente.
+model LegalReport {
+  id             String       @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  caseId         String?
+  // INFORISK | T24 | SAISIE
+  source         String
+  reportDate     String
+  data           String       @db.Text
+  corrections    String?      @db.Text
+  documentId     String?
+  documentSha256 String?
+  recordedBy     String
+  createdAt      DateTime     @default(now())
+
+  @@index([counterpartyId, reportDate])
+  @@map("legal_reports")
+}
+
+// Pièce source rattachée au client (PDF du rapport de solvabilité, du rapport
+// InfoRisque, justificatif d'une correction). Immuable ; copiée dans le
+// dossier à la soumission pour qu'il se suffise à lui-même.
+model CounterpartyDocument {
+  id             String       @id @default(cuid())
+  counterpartyId String
+  counterparty   Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // RAPPORT_SOLVABILITE | FICHE_JURIDIQUE | JUSTIFICATIF
+  kind           String
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  content        Bytes
+  uploadedBy     String
+  createdAt      DateTime     @default(now())
+
+  @@index([counterpartyId])
+  @@map("counterparty_documents")
 }

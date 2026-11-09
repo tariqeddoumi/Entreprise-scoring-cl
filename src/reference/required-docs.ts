@@ -34,6 +34,7 @@ export const DOC_KINDS: DocKind[] = [
   { code: "BUSINESS_PLAN", labelFr: "Business plan et prévisionnels", check: "PIECE", helpFr: "Plan de financement, comptes prévisionnels." },
   { code: "DEVIS", labelFr: "Devis ou factures pro forma", check: "PIECE", helpFr: "Pour un investissement : devis des équipements ou travaux." },
   { code: "SITUATION_INTERMEDIAIRE", labelFr: "Situation comptable intermédiaire", check: "PIECE", helpFr: "Si le dernier bilan a plus de 9 mois." },
+  { code: "JUSTIFICATIF_CORRECTION", labelFr: "Justificatif de correction d'un rapport", check: "PIECE", helpFr: "Mainlevée, attestation de régularisation, courrier : appuie une correction motivée." },
   { code: "AUTRE", labelFr: "Autre pièce", check: "PIECE", helpFr: "" },
 ];
 
@@ -86,7 +87,7 @@ export function checklist(required: string[], ctx: ChecklistContext): ChecklistI
         case "BILANS":
           return ctx.financialYears > 0
             ? { ...base, status: "FOURNI", detailFr: `${ctx.financialYears} exercice(s) chargé(s).` }
-            : { ...base, status: "MANQUANT", detailFr: "Bilan à charger dans le dossier (saisie, Excel ou lecture par l'IA)." };
+            : { ...base, status: "MANQUANT", detailFr: "Bilan à charger dans le dossier (saisie, Excel ou lecture par l'OCR intelligent)." };
         case "RAPPORT_SOLVABILITE":
           if (!ctx.creditReport) return { ...base, status: "MANQUANT", detailFr: "Aucun rapport : récupérez-le (API) ou chargez-le (PDF, image)." };
           return ctx.creditReport.stale

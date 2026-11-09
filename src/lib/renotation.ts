@@ -195,7 +195,7 @@ export interface RefreshParse {
 }
 
 /**
- * Champs admis dans une mise à jour d'un modèle : ceux que l'IA peut proposer,
+ * Champs admis dans une mise à jour d'un modèle : ceux que l'OCR intelligent peut proposer,
  * plus l'engagement global, rafraîchi chaque mois par les systèmes de la
  * banque (il alimente la segmentation et la délégation).
  */
@@ -242,7 +242,7 @@ function splitLine(line: string, sep: string): string[] {
  * Première colonne : « ice » ou « id ». Colonnes suivantes : clés de champ du
  * dossier, par exemple `criteria.D3.1.value` (retards en jours),
  * `criteria.D1.5.value`, `amounts.globalBankExposure`, `redFlags.RF07`. Chaque
- * valeur est contrôlée comme une proposition de l'IA : une valeur hors grille
+ * valeur est contrôlée comme une proposition de l'OCR intelligent : une valeur hors grille
  * est refusée avec sa ligne, jamais appliquée.
  */
 export function parseRefreshCsv(text: string, maxRows = 20_000): RefreshParse {

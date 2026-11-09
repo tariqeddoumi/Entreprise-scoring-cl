@@ -73,7 +73,7 @@ export interface ExtractionResult {
 }
 
 /**
- * Pré-remplissage de la fiche par l'IA, depuis un extrait (RC, attestation ICE,
+ * Pré-remplissage de la fiche par l'OCR intelligent, depuis un extrait (RC, attestation ICE,
  * statuts) ou un texte collé. Rien n'est enregistré : l'analyste relit et
  * enregistre lui-même.
  */

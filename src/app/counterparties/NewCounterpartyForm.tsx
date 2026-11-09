@@ -112,7 +112,7 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
     return (
       <>
         {text}
-        {aiFilled.has(name) && <span className="ai-mark">IA</span>}
+        {aiFilled.has(name) && <span className="ai-mark">OCR</span>}
       </>
     );
   }
@@ -336,13 +336,13 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
 
       {aiUsable && !edit && mode === "SAISIE" && (
         <form action={extract} style={{ display: "grid", gap: 8, padding: 12, background: "var(--brand-soft)", borderRadius: 8 }}>
-          <strong style={{ fontSize: 13 }}>Pré-remplir avec l&apos;IA</strong>
+          <strong style={{ fontSize: 13 }}>Pré-remplir avec l&apos;OCR intelligent</strong>
           <span className="muted" style={{ fontSize: 12 }}>
             Joignez un extrait du registre de commerce, une attestation ICE ou les statuts, ou collez un texte : la fiche est
             remplie, vous la relisez avant d&apos;enregistrer.
           </span>
-          <textarea name="text" rows={3} maxLength={20000} placeholder="Texte collé (facultatif)" aria-label="Texte à lire par l'IA" />
-          <input type="file" name="file" aria-label="Pièce à lire par l'IA" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" />
+          <textarea name="text" rows={3} maxLength={20000} placeholder="Texte collé (facultatif)" aria-label="Texte à lire par l'OCR intelligent" />
+          <input type="file" name="file" aria-label="Pièce à lire par l'OCR intelligent" accept=".pdf,.png,.jpg,.jpeg,.txt,application/pdf,image/png,image/jpeg,text/plain" />
           <button type="submit" className="btn-ghost" disabled={extracting} style={{ justifySelf: "start" }}>
             {extracting ? "Lecture en cours…" : "Pré-remplir"}
           </button>

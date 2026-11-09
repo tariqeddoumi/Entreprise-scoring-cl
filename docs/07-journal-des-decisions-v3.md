@@ -866,6 +866,16 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* durée de conservation du journal, accès de l'inspection et de l'audit interne (profil de consultation dédié).
 
+## D-69 — Rapport brut intact, corrections motivées, dossier figé, « OCR intelligent » — **ADOPTÉE**
+
+*Décision :*
+- **Rapport brut intact.** Le rapport lu (crédit bureau, InfoRisque) n'est jamais modifié. Une correction est un ajout daté, attribué et motivé, avec un justificatif si possible. Il en va de même pour une valeur lue du bilan, dont le motif est exigé avant la soumission.
+- **Lecture complète.** Toutes les lignes, les incidents, la signalétique et les totaux imprimés sont lus. Un contrôle d'exhaustivité compare la lecture aux totaux, et un confrère anonymisé est admis. La signalétique est comparée à la fiche client, avec reprise tracée ; un client T24 se corrige dans T24.
+- **Dossier figé.** À la soumission, le dossier fige les éléments qui ont fondé la note et copie dans ses pièces les PDF lus et les justificatifs.
+- **Renommage.** « IA » devient « OCR intelligent » dans l'outil et la documentation. Migration 15, appliquée en production le 9 novembre 2026 (docs/30).
+
+*À confirmer :* rapport réel anonymisé pour calibrer la lecture ; durée de conservation des pièces sources.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

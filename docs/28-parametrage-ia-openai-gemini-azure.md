@@ -1,4 +1,4 @@
-# 28 — Paramétrage de l'IA : OpenAI (GPT), Google Gemini, Azure OpenAI
+# 28 — Paramétrage de l'OCR intelligent : OpenAI (GPT), Google Gemini, Azure OpenAI
 
 > Pour comparer les fournisseurs sur les mêmes dossiers. Une clé par fournisseur, dans sa propre variable d'environnement : on passe de l'un à l'autre depuis l'écran, sans redéployer.
 
@@ -17,7 +17,7 @@ Une clé ne s'écrit jamais dans l'outil ni dans le dépôt. L'écran Raccordeme
 
 ## 2. Le paramétrage par fournisseur
 
-Administration › Paramétrage › Intelligence artificielle :
+Administration › Paramétrage › OCR intelligent :
 
 | Paramètre | OpenAI (GPT) | Google Gemini | Azure OpenAI |
 |---|---|---|---|
@@ -30,11 +30,11 @@ Les noms de modèle évoluent. Prenez le nom exact dans la liste du fournisseur 
 
 ## 3. Tester puis activer
 
-1. Enregistrez le paramétrage du fournisseur, en laissant l'assistance par l'IA **désactivée**.
-2. Administration › Raccordements › Intelligence artificielle › **Tester la connexion**. Le test envoie une requête minimale, sans donnée client.
-3. Si le test est réussi, activez l'assistance par l'IA dans Paramétrage.
+1. Enregistrez le paramétrage du fournisseur, en laissant l'assistance par l'OCR intelligent **désactivée**.
+2. Administration › Raccordements › OCR intelligent › **Tester la connexion**. Le test envoie une requête minimale, sans donnée client.
+3. Si le test est réussi, activez l'assistance par l'OCR intelligent dans Paramétrage.
 4. Pour passer au fournisseur suivant :
-   1. désactivez l'IA ;
+   1. désactivez l'OCR intelligent ;
    2. changez les quatre paramètres ;
    3. testez de nouveau ;
    4. réactivez.

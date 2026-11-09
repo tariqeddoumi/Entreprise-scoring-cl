@@ -146,13 +146,13 @@
       "Coller un texte (extrait RC, attestation ICE) ou joindre la pièce.",
       "Cliquer sur « Pré-remplir »."
      ],
-     "aSavoir": "Rubrique visible uniquement si l'administrateur a activé l'IA. Sans IA, la fiche se saisit à la main."
+     "aSavoir": "Rubrique visible uniquement si l'administrateur a activé l'OCR intelligent. Sans OCR intelligent, la fiche se saisit à la main."
     },
     {
      "img": "06-contrepartie-preremplie",
      "titre": "Relire et enregistrer la fiche",
      "actions": [
-      "Relire chaque champ marqué « IA » et corriger si besoin.",
+      "Relire chaque champ marqué « OCR intelligent » et corriger si besoin.",
       "Choisir la banque ou filiale de rattachement.",
       "Compléter le pays et la devise des comptes si l'entreprise n'est pas au Maroc.",
       "Cliquer sur « Enregistrer »."
@@ -214,7 +214,7 @@
      "titre": "Le rapport de solvabilité (crédit bureau)",
      "actions": [
       "Rafraîchir d'abord le rapport dans l'outil du crédit bureau.",
-      "Puis, sur la fiche : « Récupérer le rapport » (API) ou charger le PDF / l'image et « Lire le rapport » (IA), ou « Saisir manuellement ».",
+      "Puis, sur la fiche : « Récupérer le rapport » (API) ou charger le PDF / l'image et « Lire le rapport » (OCR intelligent), ou « Saisir manuellement ».",
       "Vérifier le rapport proposé, puis « Enregistrer le rapport vérifié »."
      ],
      "aSavoir": "L'outil contrôle la date de mise à jour du rapport : au-delà de la limite d'ancienneté, une alerte demande de le rafraîchir dans l'outil du crédit bureau. Les incidents proposent des critères BAM à vérifier."
@@ -224,7 +224,7 @@
      "titre": "La fiche juridique (InfoRisque)",
      "actions": [
       "Charger le rapport InfoRisque (PDF ou image) dans le bloc « Fiche juridique ».",
-      "« Lire le rapport InfoRisque » : l'IA extrait l'identité légale, les dirigeants, les actionnaires, les comptes déposés et les événements.",
+      "« Lire le rapport InfoRisque » : l'OCR intelligent extrait l'identité légale, les dirigeants, les actionnaires, les comptes déposés et les événements.",
       "Vérifier, puis « Enregistrer la fiche vérifiée »."
      ],
      "aSavoir": "L'outil rapproche les comptes déposés au greffe du bilan saisi (écart de plus de 5 % signalé) et signale les événements juridiques (procédure, nantissement, changement de dirigeant)."
@@ -264,7 +264,7 @@
   },
   {
    "titre": "Noter une entreprise",
-   "intro": "Le rôle du chargé d'affaires : ouvrir le dossier selon son motif, rassembler les pièces requises, l'instruire avec ou sans l'IA, déclarer les critères de classement, vérifier le calcul, soumettre.",
+   "intro": "Le rôle du chargé d'affaires : ouvrir le dossier selon son motif, rassembler les pièces requises, l'instruire avec ou sans l'OCR intelligent, déclarer les critères de classement, vérifier le calcul, soumettre.",
    "etapes": [
     {
      "img": "07-ouvrir-dossier",
@@ -281,7 +281,7 @@
      "titre": "Le dossier en brouillon",
      "actions": [
       "À gauche : la grille de notation, domaine par domaine.",
-      "À droite : les pièces et l'assistance de l'IA.",
+      "À droite : les pièces et l'assistance de l'OCR intelligent.",
       "En bas : les boutons Enregistrer, Aperçu et Soumettre."
      ],
      "aSavoir": "La barre de progression indique les critères renseignés et signale en rouge les données critiques manquantes (cinq sur la grille standard)."
@@ -343,7 +343,7 @@
       "Ajouter au besoin des éléments : compte rendu de visite, faits récents.",
       "Cliquer sur « Proposer des valeurs » (jusqu'à deux minutes)."
      ],
-     "aSavoir": "L'IA ne propose plus les ratios calculés depuis le bilan (fonds propres, levier, liquidité, DSCR…) : ils sont calculés par l'outil. Elle propose les autres critères et le chiffre d'affaires."
+     "aSavoir": "L'OCR intelligent ne propose plus les ratios calculés depuis le bilan (fonds propres, levier, liquidité, DSCR…) : ils sont calculés par l'outil. Il propose les autres critères et le chiffre d'affaires."
     },
     {
      "img": "12-propositions",
@@ -359,7 +359,7 @@
      "img": "13-grille-ia",
      "titre": "Contrôler la grille",
      "actions": [
-      "Les valeurs acceptées portent le repère « IA ».",
+      "Les valeurs acceptées portent le repère « OCR ».",
       "Vérifier chaque valeur ; la modifier si nécessaire.",
       "Compléter les critères restants."
      ],
@@ -434,7 +434,7 @@
      "titre": "La section Bilan",
      "actions": [
       "Ouvrir le dossier : la section « Bilan et compte de produits et charges » est en tête.",
-      "Trois façons de charger : lire le bilan avec l'IA, importer le gabarit Excel de la banque, ou saisir.",
+      "Trois façons de charger : lire le bilan avec l'OCR intelligent, importer le gabarit Excel de la banque, ou saisir.",
       "Préciser le modèle (normal ou simplifié) et si les comptes sont certifiés."
      ],
      "aSavoir": "Le modèle simplifié (TPE, CA ≤ 10 MDH) utilise les mêmes rubriques, sans tableau de financement. Montants en unités de la devise du client."
@@ -444,11 +444,11 @@
      "titre": "Lire le bilan avec l'IA",
      "actions": [
       "Ajouter le bilan aux pièces : PDF, photo ou Excel.",
-      "Cocher la pièce dans « Lire le bilan avec l'IA », puis cliquer sur « Lire le bilan ».",
+      "Cocher la pièce dans « Lire le bilan avec l'OCR intelligent », puis cliquer sur « Lire le bilan ».",
       "Relire le tableau : les cellules surlignées sont les moins sûres ; survoler une cellule montre sa source.",
       "Corriger au besoin, puis enregistrer le brouillon."
      ],
-     "aSavoir": "L'IA recopie les postes du bilan et du CPC, jamais les ratios. Rien n'est enregistré sans votre relecture ; enregistrer vous rend contributeur du dossier."
+     "aSavoir": "L'OCR intelligent recopie les postes du bilan et du CPC, jamais les ratios. Rien n'est enregistré sans votre relecture ; enregistrer vous rend contributeur du dossier."
     },
     {
      "img": "48-bilan-excel",
@@ -458,7 +458,7 @@
       "Choisir le fichier rempli, puis « Importer le gabarit rempli ».",
       "Vérifier le tableau, puis enregistrer."
      ],
-     "aSavoir": "Le gabarit est relu par code de poste, sans IA. Le fichier est conservé dans les pièces du dossier avec son empreinte numérique."
+     "aSavoir": "Le gabarit est relu par code de poste, sans OCR intelligent. Le fichier est conservé dans les pièces du dossier avec son empreinte numérique."
     },
     {
      "img": "49-bilan-controles",
@@ -916,7 +916,7 @@
      "img": "76-admin-raccordements",
      "titre": "Mettre en service les API (raccordements)",
      "actions": [
-      "Administration › Raccordements : état de T24, du crédit bureau et de l'IA, adresse, présence du jeton, dernier test.",
+      "Administration › Raccordements : état de T24, du crédit bureau et de l'OCR intelligent, adresse, présence du jeton, dernier test.",
       "Saisir un code réel (code client T24, ICE) et « Tester la connexion » : l'API est appelée sans rien enregistrer.",
       "Si le test est réussi, activer l'API dans Paramétrage."
      ],
@@ -946,7 +946,7 @@
   }
  ],
  "regles": [
-  "Au démarrage, les API (T24, crédit bureau, IA) sont désactivées : tout se saisit. Une API ne s'active qu'après un test de connexion réussi.",
+  "Au démarrage, les API (T24, crédit bureau, OCR intelligent) sont désactivées : tout se saisit. Une API ne s'active qu'après un test de connexion réussi.",
   "Un client se crée depuis son code T24 ; à défaut, en saisie minimale, à rattacher à T24 ensuite.",
   "Une seule échelle de notation pour toutes les grilles : classe 1 (meilleur risque) à 10, défaut hors échelle.",
   "La note devient officielle au terme du circuit : avis du directeur du centre, puis décision de la contre-étude au niveau requis.",
@@ -957,7 +957,7 @@
   "La watch list est décidée en comité ; elle plafonne la note (8, 9 ou 10).",
   "Sans les données critiques (grille standard), aucune note n'est produite ; une donnée manquante vaut 0.",
   "Sur une grille standard, pas de soumission sans bilan N et N−1 conforme ; les ratios ne se corrigent qu'avec un motif.",
-  "L'IA propose ; l'analyste décide, et chaque décision est tracée.",
+  "L'OCR intelligent propose ; l'analyste décide, et chaque décision est tracée.",
   "Une dérogation est limitée à deux crans et exige une seconde validation.",
   "Une renotation par lot produit une note de surveillance : seule la validation d'un dossier change la note officielle.",
   "Toute opération est tracée dans le journal d'audit."

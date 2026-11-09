@@ -74,7 +74,7 @@ type Fx = { currency: string; rate: number; rateDate: string; amounts: Record<st
 
 /**
  * Espace de travail d'un dossier : la grille (brouillon), l'aperçu du calcul,
- * l'enregistrement, la soumission, et le panneau d'assistance de l'IA.
+ * l'enregistrement, la soumission, et le panneau d'assistance de l'OCR intelligent.
  */
 export function CaseWorkspace({ caseId, model, initialDraft, currency, editable, documents, proposals, ai, maxMb, format, classification, lifts, watchlist = null, cumulNotch = 0, signals = [], facilityExposure = null }: Props) {
   const router = useRouter();
@@ -366,17 +366,17 @@ function AiPanel({
       </section>
 
       <section className="card" style={{ padding: 14, display: "grid", gap: 10 }}>
-        <h2 style={{ fontWeight: 600 }}>Assistance de l&apos;IA</h2>
+        <h2 style={{ fontWeight: 600 }}>Assistance de l&apos;OCR intelligent</h2>
         {!ai.enabled ? (
           <p className="muted" style={{ fontSize: 12 }}>
-            Désactivée. Un administrateur l&apos;active dans Paramétrage › Intelligence artificielle.
+            Désactivé. Un administrateur l&apos;active dans Paramétrage › OCR intelligent.
           </p>
         ) : ai.missing ? (
           <p style={{ fontSize: 12, color: "var(--warn)" }}>Activée mais non configurée : {ai.missing}.</p>
         ) : (
           <>
             <p className="muted" style={{ fontSize: 12 }}>
-              L&apos;IA lit les pièces cochées et propose des valeurs pour la grille, avec leur source. Rien n&apos;est appliqué sans votre accord.
+              L&apos;OCR intelligent lit les pièces cochées et propose des valeurs pour la grille, avec leur source. Rien n&apos;est appliqué sans votre accord.
               Fournisseur : {ai.provider} · {ai.model}.
             </p>
             <textarea
@@ -432,7 +432,7 @@ function AiPanel({
             </article>
           ))}
           <p className="muted" style={{ fontSize: 11 }}>
-            Accepter applique la valeur à la grille (repère « IA ») ; enregistrez ensuite le brouillon. Accepter ou refuser vous rend contributeur du dossier.
+            Accepter applique la valeur à la grille (repère « OCR ») ; enregistrez ensuite le brouillon. Accepter ou refuser vous rend contributeur du dossier.
           </p>
         </section>
       )}

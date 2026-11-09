@@ -50,7 +50,7 @@ export default async function ScoringPage({ searchParams }: { searchParams: Prom
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 700 }}>Nouvelle notation</h1>
         <p className="muted">
-          Une notation enregistrée passe par un dossier : saisie (assistée par l&apos;IA si elle est activée), soumission, puis
+          Une notation enregistrée passe par un dossier : saisie (assistée par l&apos;OCR intelligent s&apos;il est activé), soumission, puis
           validation par une seconde personne. La simulation ci-dessous calcule sans rien enregistrer.
         </p>
       </div>

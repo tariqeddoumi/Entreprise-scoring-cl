@@ -61,14 +61,14 @@ export default async function AdminHome() {
     {
       href: "/admin/settings",
       title: "Paramétrage",
-      value: ai.enabled ? (ai.missing ? "IA activée, non configurée" : "IA activée") : "IA désactivée",
+      value: ai.enabled ? (ai.missing ? "OCR intelligent activé, non configuré" : "OCR intelligent activé") : "OCR intelligent désactivé",
       text: "Circuit de validation, délégation par montant, dérogations, pièces, intelligence artificielle, référentiels externes (T24, crédit bureau).",
     },
     {
       href: "/admin/raccordements",
       title: "Raccordements",
       value: `${integrations.filter((i) => i.enabled).length} API activée(s) sur ${integrations.length}`,
-      text: "T24, crédit bureau, IA : désactivés au démarrage, test de connexion sans enregistrement, activation après un test réussi.",
+      text: "T24, crédit bureau, OCR intelligent : désactivés au démarrage, test de connexion sans enregistrement, activation après un test réussi.",
     },
     {
       href: "/admin/journal",

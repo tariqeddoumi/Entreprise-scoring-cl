@@ -233,7 +233,7 @@ export async function decideProposalAction(
 
 // --- Bilan ------------------------------------------------------------------------
 
-/** Lecture du bilan par l'IA : remplit le tableau à l'écran, rien n'est enregistré. */
+/** Lecture du bilan par l'OCR intelligent : remplit le tableau à l'écran, rien n'est enregistré. */
 export async function extractFinancialsAction(
   caseId: string,
   documentIds: string[]

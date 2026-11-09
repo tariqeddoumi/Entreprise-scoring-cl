@@ -54,7 +54,7 @@ export default async function SettingsPage() {
         </p>
       </div>
       <div className="card" role="status" style={{ padding: "12px 16px", fontSize: 13 }}>
-        <strong>État de l&apos;IA :</strong> {ai.enabled ? (ai.missing ? `activée, mais ${ai.missing}` : `active (${ai.provider}, ${ai.model})`) : "désactivée"}.
+        <strong>État de l&apos;OCR intelligent :</strong> {ai.enabled ? (ai.missing ? `activé, mais ${ai.missing}` : `actif (${ai.provider}, ${ai.model})`) : "désactivé"}.
       </div>
       <CircuitEditor
         circuit={circuit}
