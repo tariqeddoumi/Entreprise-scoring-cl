@@ -42,3 +42,21 @@ describe("activation d'un raccordement", () => {
     expect(parseTest(JSON.stringify({ foo: 1 }))).toBeNull();
   });
 });
+
+describe("journal d'audit", async () => {
+  const { parseJournalFilters, journalWhere, summarizeDetail } = await import("../src/lib/audit-journal");
+  const { auditLabel } = await import("../src/lib/audit-labels");
+  it("filtres validés, dates bornées", () => {
+    const f = parseJournalFilters({ type: "User", action: "LOGIN_FAILED", acteur: " ana ", du: "2026-11-01", au: "2026-11-08", page: "3" });
+    expect(f).toMatchObject({ resourceType: "User", action: "LOGIN_FAILED", actor: "ana", page: 3 });
+    const w = journalWhere(f) as { createdAt: { gte: Date; lt: Date } };
+    expect(w.createdAt.lt.toISOString()).toBe("2026-11-09T00:00:00.000Z");
+    expect(parseJournalFilters({ type: "x;drop", action: "a b", du: "01/11/2026", page: "-4" })).toMatchObject({ resourceType: "", action: "", from: "", page: 1 });
+  });
+  it("résumé du détail et libellés", () => {
+    expect(summarizeDetail(JSON.stringify([{ key: "T24_ENABLED", before: "false", after: "true" }]))).toBe("T24_ENABLED : false → true");
+    expect(summarizeDetail(JSON.stringify({ code: "T24", ok: true, target: { a: 1 } }))).toBe("code : T24 · ok : true · target : {…}");
+    expect(auditLabel("INTEGRATION_TESTED")).toBe("Test de connexion d'une API");
+    expect(auditLabel("SOME_NEW_ACTION")).toBe("Some new action");
+  });
+});

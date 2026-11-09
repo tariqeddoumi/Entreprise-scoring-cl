@@ -10,7 +10,7 @@
  */
 import type { PrismaClient } from "@/generated/prisma";
 
-import { pingAi, aiConfig, missingConfig } from "./ai";
+import { AI_KEY_ENV_PATTERN, aiConfig, missingConfig, pingAi } from "./ai";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
 import { fetchT24Customer } from "./core-banking";
@@ -57,8 +57,8 @@ export const INTEGRATIONS: IntegrationDef[] = [
     code: "AI",
     labelFr: "Intelligence artificielle — lecture des pièces",
     flag: "AI_ENABLED",
-    targetKeys: ["AI_PROVIDER", "AI_MODEL", "AI_BASE_URL"],
-    tokenEnv: ["ANTHROPIC_API_KEY", "IA_CLE_API"],
+    targetKeys: ["AI_PROVIDER", "AI_MODEL", "AI_BASE_URL", "AI_KEY_ENV"],
+    tokenEnv: ["ANTHROPIC_API_KEY"],
     sampleLabelFr: null,
     helpFr: "Envoie une requête minimale, sans pièce ni donnée client.",
   },
@@ -212,7 +212,8 @@ export async function integrationStates(db: PrismaClient, now: Date = new Date()
   const aiProvider = settings.AI_PROVIDER ?? "anthropic";
   return INTEGRATIONS.map((def) => {
     const lastTest = parseTest(rows.find((r) => r.key === testKey(def.code))?.value);
-    const tokenEnv = def.code === "AI" ? [aiProvider === "anthropic" ? "ANTHROPIC_API_KEY" : "IA_CLE_API"] : def.tokenEnv;
+    const aiKeyEnv = AI_KEY_ENV_PATTERN.test(settings.AI_KEY_ENV ?? "") ? settings.AI_KEY_ENV! : "IA_CLE_API";
+    const tokenEnv = def.code === "AI" ? [aiProvider === "anthropic" ? "ANTHROPIC_API_KEY" : aiKeyEnv] : def.tokenEnv;
     return {
       def,
       enabled: settings[def.flag] === "true",

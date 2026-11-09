@@ -2,8 +2,9 @@
 
 **Objet :** spécifier, écran par écran et règle par règle, l'outil de notation interne des entreprises (TPE, PME, grandes entreprises), pour permettre sa prise en charge par une équipe de développement.
 **Destinataires :** DSI, équipe de développement, maîtrise d'ouvrage (Risques, Engagements, contre-étude), Conformité, sécurité des systèmes d'information.
-**Version :** 2.0 — novembre 2026. Remplace l'expression de besoin version 1.2.
-**Référence fonctionnelle :** prototype opérationnel (moteur 3.2.0), note méthodologique 3.2, journal des décisions (D-01 à D-55), couverture des critères Bank Al-Maghrib.
+**Version :** 3.0 — novembre 2026. Remplace la version 2.0.
+**Référence fonctionnelle :** prototype opérationnel (moteur 3.3.0), guide méthodologique complet, note méthodologique, journal des décisions (D-01 à D-68), couverture des critères Bank Al-Maghrib, proposition de paramétrage COPIL.
+**Nouveautés de la version 3.0 :** fiche client T24 et saisie minimale ; engagements ligne par ligne ; rapport de solvabilité (API ou lecture) ; fiche juridique InfoRisque ; portefeuille par chargé d'affaires ; ouverture du dossier par motif et actualisation T24 ; pièces requises par motif ; critères de classement BAM, plafonds et levée par comité ; watch list ; circuit avis / décision à niveaux ; module de surveillance du portefeuille ; mise en service des API ; reprise du stock ; journal d'audit consultable.
 
 > Les captures d'écran proviennent du prototype, sur des clients et des montants fictifs. Elles constituent la maquette de référence : l'ergonomie peut être adaptée à la charte et aux composants de la DSI, mais chaque information, chaque contrôle et chaque règle décrits ici doivent être conservés. La lecture automatique des documents est désignée dans ce document par « OCR intelligent » ; les maquettes affichent encore l'ancien libellé « IA », à remplacer dans l'interface (exigence EF-OCR-09).
 
@@ -16,18 +17,22 @@
 3. Garantir la gouvernance : une note ne devient officielle qu'au terme du circuit de validation (par défaut : directeur du centre d'affaires, puis contre-étude), décidé par des personnes distinctes des contributeurs du dossier.
 4. Tout tracer : saisies, pièces, lectures par l'OCR intelligent, calculs, décisions, versions du modèle, de l'échelle et des paramètres ; toute notation se rejoue à l'identique.
 5. Couvrir les banques et filiales du groupe, en plusieurs devises, avec un cloisonnement strict par entité.
-6. Permettre le pilotage du portefeuille : tableau de bord, renotation par lot ponctuelle ou périodique, revue des dégradations.
+6. Permettre le pilotage du portefeuille : tableau de bord, module de surveillance (indicateurs de risque, migrations, concentration, alertes), renotation par lot ponctuelle ou périodique, revue des dégradations.
+7. Appliquer la circulaire 1/W/2025 dans la note : les critères de classement plafonnent la note ou imposent le défaut, ne se lèvent que par une décision de comité tracée ; la watch list, décidée en comité, plafonne la note.
+8. S'alimenter aux systèmes de la banque (T24, crédit bureau, InfoRisque), tout en fonctionnant entièrement en saisie tant que ces raccordements ne sont pas recettés.
 
 ### 1.2 Périmètre
 
 | Dans le périmètre | Hors périmètre (lots ultérieurs ou autres systèmes) |
 |---|---|
 | Référentiel des clients entreprises, groupes d'affaires | Notation des particuliers et des professionnels personnes physiques |
-| Dossier de notation, pièces, lecture des états financiers par OCR intelligent, gabarit Excel | Classification réglementaire des créances (lot C de la couverture BAM) et provisionnement |
+| Dossier de notation, pièces requises par motif, lecture des états financiers par OCR intelligent, gabarit Excel | Classification réglementaire officielle des créances et provisionnement (alimentés par les critères restitués avec la note) |
 | Grilles de notation (standard et TPE comportementale), échelle 1 à 10, moteur de calcul | Calcul des fonds propres réglementaires, IFRS 9 |
 | Circuit de validation paramétrable, dérogations | Décision d'octroi du crédit et tarification |
 | Renotation par lot, tableau de bord, exports | Financements de projets (outil Project Finance) et portefeuille titres |
-| Administration : comptes, entités, devises, paramétrage, grilles, échelle, circuit | Reprise de l'historique de l'outil actuel (chantier distinct) |
+| Administration : comptes, entités, devises, paramétrage, grilles, échelle, circuit, raccordements, reprise du stock, journal d'audit | |
+| Fiche client T24, engagements, rapport de solvabilité, fiche juridique InfoRisque | |
+| Critères de classement BAM dans la note, levée par comité, watch list, surveillance du portefeuille | |
 | API REST et webhooks pour les systèmes de la banque | |
 
 ### 1.3 Conventions
@@ -50,38 +55,41 @@ Le rôle fixe ce qu'un utilisateur peut faire ; il est attribué par un administ
 | Gestionnaire des risques | En plus : demander une dérogation et décider de celles des autres ; supprimer ou désactiver un client ; lancer et planifier une renotation par lot |
 | Administrateur | En plus : gérer les comptes de son périmètre. Administrateur du groupe (sans entité de rattachement) : entités, devises, paramétrage, grilles, échelle, circuit, pour tout le groupe |
 
-### 2.2 Fonctions (circuit de validation)
+### 2.2 Profils et fonctions
 
-La fonction est un attribut métier du compte, distinct du rôle ; elle désigne qui décide de chaque étape du circuit. Référentiel par défaut, modifiable (EF-ADM-05) :
+La fonction est un attribut métier du compte, distinct du rôle ; elle désigne le profil de l'utilisateur et qui décide de chaque étape du circuit. Référentiel par défaut, modifiable (EF-ADM-05) :
 
-| Code | Libellé | Usage par défaut |
+| Profil | Fonctions par défaut | Ce qu'il fait |
 |---|---|---|
-| CHARGE_AFFAIRES | Chargé d'affaires | Instruit et soumet |
-| ANALYSTE | Analyste crédit | Instruit et soumet |
-| DIRECTEUR_CA | Directeur du centre d'affaires | Étape 1 du circuit |
-| CONTRE_ETUDE | Contre-étude (Risques) | Étape 2, validation finale |
-| COMITE_CREDIT | Comité de crédit | Étape facultative au-delà d'un seuil |
+| P1 — Saisie | CHARGE_AFFAIRES (chargé d'affaires), ANALYSTE (analyste crédit) | Crée les clients, tient leur fiche (T24, engagements, solvabilité, juridique), ouvre et instruit les dossiers, déclare les critères BAM, soumet |
+| P2 — Validation commerciale | DIRECTEUR_CA (directeur du centre d'affaires) | Avis favorable ou défavorable ; non bloquant, ou bloquant selon la catégorie de délégation du centre |
+| P3 — Contre-étude | CONTRE_ETUDE, RESPONSABLE_CE, DIRECTEUR_RISQUES ; COMITE_CREDIT (décision enregistrée) | Instruit ; un seul niveau décide selon le montant, la note et le type de crédit ; enregistre la levée d'un critère décidée en comité ; dérogations, renotation |
+| P4 — Surveillance des risques | SURVEILLANCE | Module de surveillance ; décisions de watch list ; levée de critère ; ne saisit ni ne valide une note |
+| P5 — Consultation, audit | — (rôle Lecture seule) | Lecture |
+| P6 — Administration | — (rôle Administrateur) | Paramétrage, comptes, raccordements, reprise du stock, journal d'audit |
 
 ### 2.3 Entités et périmètre
 
 - L'organisation est un arbre : groupe, banques, filiales, éventuellement sous-filiales. Chaque compte est rattaché à une entité (sauf l'administrateur du groupe).
 - **Lecture** : un utilisateur voit les données de son entité et de sa descendance. **Écriture** : portée « son entité » ou « toute sa branche », fixée par compte.
 - Une donnée hors périmètre est introuvable (réponse 404), jamais « interdite » : l'outil ne révèle pas son existence.
+- **Hiérarchie du réseau** : chargé d'affaires → son portefeuille ; directeur du centre → son centre ; région → ses centres ; banque → toutes ses régions ; siège → tout.
+- **EF-PTF-01 — Portefeuille par chargé d'affaires.** Paramètre « Portée des chargés d'affaires » : centre entier (défaut) ou portefeuille. En mode portefeuille, un compte de fonction chargé d'affaires ne voit et ne modifie que les clients dont il est gestionnaire (code gestionnaire T24 du compte, EF-ADM-02) ou dont il a ouvert un dossier. Le contrôle des doublons T24 porte sur toute la base, sans révéler le nom d'un client hors portefeuille.
 
 ## 3. Parcours général
 
 | Étape | Qui | Écran | Résultat |
 |---|---|---|---|
-| 1. Client | Chargé d'affaires | Clients | Client existant ou créé (saisie ou OCR intelligent) |
-| 2. Dossier | Chargé d'affaires | Nouvelle notation | Dossier en brouillon, modèle et date d'arrêté fixés |
-| 3. Pièces et bilan | Chargé d'affaires | Dossier › Pièces, Bilan | Bilan N et N−1 lu par OCR intelligent ou importé, contrôlé |
-| 4. Grille | Chargé d'affaires | Dossier › Grille | Critères renseignés, ratios calculés |
-| 5. Aperçu | Chargé d'affaires | Dossier › Aperçu | Note calculée, non enregistrée |
-| 6. Soumission | Chargé d'affaires | Dossier | Notation calculée par le serveur et figée ; circuit figé |
-| 7. Validation | Directeur du centre d'affaires | Dossier › Circuit | Étape validée avec avis, ou rejet motivé |
-| 8. Validation finale | Contre-étude | Dossier › Circuit | Note officielle, ou rejet motivé |
-| 9. Note officielle | Outil | Fiche de notation, fiche client | Note historisée et restituée |
-| 10. Suivi | Gestionnaire des risques | Tableau de bord, Renotation | Renotation, revue des dégradations |
+| 1. Client | Chargé d'affaires | Clients | Client créé depuis son code T24, ou en saisie minimale ; engagements, rapport de solvabilité et fiche juridique à jour |
+| 2. Dossier | Chargé d'affaires | Fiche client › Noter ce client | Dossier en brouillon : motif, type de crédit, modèle, date d'arrêté, exercice ; fiche et engagements T24 actualisés |
+| 3. Préparation | Chargé d'affaires | Dossier › Préparation, Pièces, Bilan | Pièces requises par le motif fournies ; bilan N et N−1 lu ou importé, contrôlé |
+| 4. Grille et critères BAM | Chargé d'affaires | Dossier › Grille, Critères de classement | Critères renseignés, ratios calculés, critères BAM cochés ou déclarés |
+| 5. Aperçu | Chargé d'affaires | Dossier › Aperçu | Note calculée (plafonds compris), non enregistrée |
+| 6. Soumission | Chargé d'affaires | Dossier | Notation calculée par le serveur et figée ; circuit figé selon le montant, la note, le type de crédit et la catégorie du centre |
+| 7. Avis | Directeur du centre d'affaires | Dossier › Circuit | Avis favorable ou défavorable (bloquant ou non selon la catégorie du centre) |
+| 8. Décision | Contre-étude au niveau requis | Dossier › Circuit | Note officielle, ou rejet motivé ; levée éventuelle d'un critère sur décision de comité |
+| 9. Note officielle | Outil | Fiche de notation, fiche client | Note historisée et restituée, critères BAM figés |
+| 10. Suivi | Surveillance, contre-étude | Surveillance, fiche client, Renotation | Indicateurs, migrations, watch list, renotation, revue des dégradations |
 
 **États d'un dossier.** Brouillon → En validation (étape 1 … étape n) → Validé. Un rejet, à n'importe quelle étape, mène à Rejeté ; un dossier rejeté se reprend en un nouveau brouillon. Un brouillon peut être abandonné. Un seul dossier en cours (brouillon ou en validation) par client.
 
@@ -134,24 +142,74 @@ La fonction est un attribut métier du compte, distinct du rôle ; elle désigne
 
 La mention « dossier en cours » ou « dossier en validation » signale une notation en préparation.
 
-![Créer un client à partir de ses documents](expression-besoin/captures/05-contrepartie-ia.jpg)
+![Créer un client depuis T24](expression-besoin/captures/60-client-t24.jpg)
 
-![Fiche pré-remplie, à relire](expression-besoin/captures/06-contrepartie-preremplie.jpg)
+**EF-CLI-02 — Création depuis T24.** Le chargé d'affaires saisit le **code client T24** (1 à 10 chiffres, longueur paramétrable). L'outil interroge l'API clients de T24 et affiche la fiche rapatriée avant création : intitulé, nom abrégé, forme juridique, ICE, RC, identifiant fiscal, secteur, segment commercial, ville, adresse, pays, devise, gestionnaire, centre d'affaires, groupe d'affaires, date de création, capital, statut.
 
-**EF-CLI-02 — Création d'un client.** Par saisie, ou à partir de documents (Kbis, statuts, attestation ICE, liasse) lus par l'OCR intelligent, qui pré-remplit la fiche ; l'analyste relit et enregistre.
+| Règle | Détail |
+|---|---|
+| Entité | Centre d'affaires de T24 s'il est dans le périmètre d'écriture, sinon l'entité choisie |
+| Groupe d'affaires | Rattachement au groupe de même code |
+| Doublon | Un code T24 déjà présent dans l'outil est refusé, sur toute la base |
+| Correspondance des champs | Noms par défaut de l'API Transact (party/customers) ; champs locaux (ICE, RC, segment) déclarés dans le paramètre T24_FIELD_MAP |
+| Segment commercial | Distinct du segment du modèle (calculé, RG-01) ; les deux sont affichés |
+
+![Saisie minimale](expression-besoin/captures/61-saisie-minimale.jpg)
+
+**EF-CLI-02b — Saisie minimale.** Si le client n'est pas encore dans T24, si T24 est désactivé ou ne répond pas, l'écran propose la saisie minimale : raison sociale, ICE ou RC, forme juridique, secteur, segment commercial, entité ; le code T24 éventuellement connu est conservé. L'OCR intelligent peut pré-remplir la fiche à partir de documents (statuts, attestation ICE, modèle J). La fiche est marquée « en attente de T24 ».
 
 | Champ | Type | Obligatoire | Règle |
 |---|---|---|---|
 | Raison sociale | Texte | Oui | 2 à 200 caractères |
 | Entité de rattachement | Liste | Oui | Entités de la portée d'écriture de l'utilisateur |
-| ICE | Texte | Recommandé | 15 chiffres ; unique par entité |
-| Registre de commerce, identifiant fiscal | Texte | Non | |
-| Forme juridique | Liste | Non | SA, SARL, SARL AU, SNC, entreprise individuelle… |
+| ICE ou RC | Texte | Oui (l'un des deux) | ICE : 15 chiffres ; unique par entité |
+| Forme juridique | Liste | Oui | SA, SARL, SARL AU, SNC, entreprise individuelle… |
 | Code secteur | Liste | Oui | Référentiel sectoriel interne |
-| Ville, pays | Texte, ISO 3166 | Non | Pays par défaut : pays de l'entité |
-| Devise des comptes | Liste ISO 4217 | Oui | Par défaut : devise de l'entité |
-| Date de création | Date | Recommandé | Nécessaire au critère d'ancienneté et aux règles BAM (lot A) |
-| Groupe d'affaires | Liste | Non | EF-GRP-01 |
+| Segment commercial | Liste | Oui | Référentiel paramétrable aligné sur T24 |
+| Code client T24 | Texte | Non | Conservé, vérifié au rattachement |
+| Devise, pays, ville, date de création | | Non | Date de création recommandée (ancienneté, règles BAM) |
+
+![Fiche T24 et actualisation](expression-besoin/captures/62-fiche-t24.jpg)
+
+**EF-CLI-05 — Rattachement et actualisation T24.** Depuis la fiche : « Rattacher à T24 et rapatrier » (fiche saisie) ou « Actualiser depuis T24 » (fiche T24). Les données de T24 remplacent la saisie ; un champ vide dans T24 n'efface rien ; chaque écart est affiché et journalisé (COUNTERPARTY_LINKED_TO_T24, COUNTERPARTY_SYNCED_FROM_T24). Une fiche rapatriée garde son code.
+
+![Engagements chez la banque](expression-besoin/captures/65-engagements.jpg)
+
+**EF-CLI-06 — Engagements ligne par ligne.** Lignes d'autorisation, de crédit et d'engagement par signature, rapatriées de T24 (API des limites) ou saisies.
+
+| Élément | Règle |
+|---|---|
+| Ligne | Type (paramétrable : bilan / hors bilan, court / long terme, pondération), référence, autorisé, encours, impayé et ancienneté, date de début, échéance, garanties et valeur, statut |
+| Position | Datée ; plus de 31 jours : « à actualiser » |
+| Sources | Les lignes T24 remplacent les lignes T24 ; les lignes saisies s'ajoutent |
+| Synthèse | Engagement global (base paramétrable : max(autorisé, encours) par ligne, encours ou autorisé ; hors bilan pondéré), utilisation, impayés, garanties |
+| Constats | Dépassement au-delà de l'autorisé, ligne échue encore utilisée, impayés ; critères BAM proposés « à vérifier » (impayé de plus de 90, 180, 360 jours) |
+| Dossier | L'engagement global pré-remplit le montant du dossier ; « Reprendre ce montant » |
+| Crédit bureau | Rapprochement de l'encours chez la banque et de l'encours déclaré au crédit bureau |
+
+![Saisir les lignes](expression-besoin/captures/67-engagements-saisie.jpg)
+
+![Rapport de solvabilité](expression-besoin/captures/63-credit-bureau.jpg)
+
+**EF-CLI-07 — Rapport de solvabilité.** Récupéré par l'API du crédit bureau (rafraîchi au préalable dans l'outil du bureau), lu par l'OCR intelligent depuis un PDF ou une image, ou saisi. Le rapport proposé se vérifie avant enregistrement (lignes par établissement, impayés, incidents, consultations, score).
+
+| Règle | Détail |
+|---|---|
+| Date de mise à jour | Celle du rapport, pas celle du chargement ; au-delà de l'ancienneté paramétrée (30 jours par défaut) : alerte systématique « à rafraîchir dans l'outil du crédit bureau » |
+| Signaux | Impayés, incidents non régularisés, nombre de consultations, écart avec les engagements : critères BAM proposés à vérifier, jamais cochés automatiquement |
+| Soumission | Rapport absent ou périmé : avertissement tracé, ou blocage, selon le paramètre |
+
+![Fiche juridique InfoRisque](expression-besoin/captures/64-inforisque.jpg)
+
+**EF-CLI-08 — Fiche juridique (InfoRisque).** Le rapport InfoRisque (PDF ou image) est lu par l'OCR intelligent : identité légale, dirigeants, actionnaires, bénéficiaires effectifs, groupe, comptes déposés, événements juridiques. Contrôles : comptes déposés rapprochés du bilan de la banque (écart de plus de 5 % signalé), changement de dirigeant, procédure, nantissement ; critères BAM proposés à vérifier. Identité vide de l'outil complétée (ICE, RC) sans écraser.
+
+![Votre portefeuille](expression-besoin/captures/66-portefeuille.jpg)
+
+**EF-CLI-09 — Bandeau « Votre portefeuille ».** En mode portefeuille, la liste des clients d'un chargé d'affaires rappelle la règle et son code gestionnaire ; la colonne « Gestionnaire » est affichée.
+
+![Watch list d'un client](expression-besoin/captures/74-watchlist.jpg)
+
+**EF-CLI-10 — Watch list.** Bloc de la fiche client, saisi par la surveillance : entrée (niveau WL1, WL2, WL3), changement de niveau, sortie, avec date d'effet, date du comité, numéro du procès-verbal et motif. Règles : une entrée suit une sortie ou rien ; une sortie suit une entrée ; dates ordonnées ; reprise de l'historique par une date passée ; confirmation par une seconde personne si paramétrée ; annulation motivée, jamais de suppression. Badge « Watch list » dans la liste des clients, bandeau sur les dossiers. Effet sur la note : RG-23.
 
 ![Fiche client : modifier, noter, supprimer](expression-besoin/captures/55-fiche-client-gestion.jpg)
 
@@ -161,7 +219,7 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 
 ![Fiche client et historique](expression-besoin/captures/28-fiche-contrepartie.jpg)
 
-**CA :** unicité de l'ICE par entité ; refus de créer un client dans une entité hors portée ; un client noté ne se supprime pas, il se désactive ; journalisation COUNTERPARTY_CREATED / UPDATED.
+**CA :** création depuis T24 avec aperçu ; doublon T24 refusé (même hors portefeuille) ; repli en saisie minimale si T24 est indisponible ; rattachement ultérieur ; unicité de l'ICE par entité ; refus de créer un client dans une entité hors portée ; engagements rapatriés et saisis cumulés ; alerte d'ancienneté du rapport de solvabilité ; écart des comptes déposés signalé ; un client noté ne se supprime pas, il se désactive ; journalisation de chaque opération.
 
 ### 4.4 Groupes d'affaires
 
@@ -175,12 +233,14 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 
 ![Ouvrir un dossier](expression-besoin/captures/07-ouvrir-dossier.jpg)
 
-**EF-DOS-01 — Ouverture.** Choix du client, du modèle et de la date d'arrêté (par défaut : aujourd'hui).
+**EF-DOS-01 — Ouverture.** Depuis la fiche du client (« Noter ce client ») ou le menu : motif du dossier (entrée en relation, renouvellement des crédits de fonctionnement, investissement, révision sur événement, autre ; liste paramétrable), type de crédit (proposé par le motif), modèle, date d'arrêté (par défaut : aujourd'hui) et exercice (conserver l'exercice repris ou charger le suivant). La dernière note validée du client est affichée.
 
 | Règle | Détail |
 |---|---|
 | Un dossier en cours par client | Refus si un brouillon ou un dossier en validation existe déjà (message : « Un dossier est déjà en cours pour ce client ») |
-| Reprise | La saisie du dernier dossier validé ou rejeté du client sur ce modèle est reprise, à mettre à jour |
+| Reprise | La saisie du dernier dossier validé du client sur ce modèle est reprise ; chaque champ repris est marqué « repris — à confirmer » ; les bilans du référentiel du client sont repris selon l'exercice choisi |
+| Actualisation T24 (EF-DOS-07) | Pour un client rattaché à T24 : fiche relue (sauf si relue depuis moins d'une heure) et engagements rapatriés (sauf s'ils datent du jour) ; une panne n'empêche pas l'ouverture |
+| Engagement global | Pré-rempli depuis les lignes d'engagement |
 | Client désactivé | Refus, avec invitation à le réactiver |
 | Modèle | Grille standard (TPE, PME, GE avec comptes) ou TPE comportementale (sans comptes exploitables) ; les grilles challenger sont réservées au pilote |
 
@@ -191,6 +251,24 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 ![Cadrage et montants](expression-besoin/captures/09-cadrage-montants.jpg)
 
 **EF-DOS-03 — Cadrage.** Segment (imposé ou calculé, RG-01), chiffre d'affaires HT et engagements bancaires globaux dans la devise du client, chiffre d'affaires du groupe le cas échéant, défaut avéré (case, avec motif). Les montants sont convertis en MAD au dernier cours publié à la date d'arrêté (RG-15) ; la conversion est affichée et consignée.
+
+![Données T24 à l'ouverture](expression-besoin/captures/68-dossier-ouverture.jpg)
+
+**EF-DOS-07 — Encadré « Données T24 à l'ouverture du dossier ».** Indique, pour la fiche et les engagements, « actualisé », « non actualisé » (avec le motif et la date des dernières données) ou rien à faire ; le résultat est conservé dans le journal du dossier (détail de CASE_CREATED). Paramètre : fiche et engagements (défaut), fiche seule, aucune.
+
+![Préparation du dossier](expression-besoin/captures/69-preparation.jpg)
+
+**EF-DOS-05 — Préparation du dossier (pièces requises).** Chaque motif liste les éléments requis (paramétrable). Deux sortes :
+
+| Élément | Vérification |
+|---|---|
+| États financiers chargés | Par l'outil : au moins un exercice avec des montants |
+| Rapport de solvabilité à jour | Par l'outil : rapport enregistré, dans la limite d'ancienneté |
+| Engagements à jour | Par l'outil : lignes datées de moins de 31 jours |
+| Fiche juridique (InfoRisque) à jour | Par l'outil : rapport enregistré, dans la limite d'ancienneté |
+| Statuts et modèle J, attestations fiscale et CNSS, rapport du CAC, business plan, devis, situation intermédiaire | Pièce jointe **typée** (une pièce non typée ne compte pour aucune exigence) |
+
+Le panneau affiche chaque élément fourni, manquant ou périmé, avec l'action à faire. À la soumission : avertissement tracé (défaut), blocage, ou aucun contrôle (paramètre DOCS_AT_SUBMISSION).
 
 ### 4.6 Pièces et OCR intelligent
 
@@ -267,6 +345,18 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 
 **EF-GRI-03 — Enregistrement.** Enregistrement à tout moment, sans contrôle bloquant ; un message confirme l'enregistrement ; une modification non enregistrée est signalée avant de quitter la page. Saisie limitée à 400 Ko.
 
+![Critères de classement BAM](expression-besoin/captures/70-criteres-bam.jpg)
+
+**EF-BAM-01 — Critères de classement BAM.** Bloc en bas du dossier : chaque critère (code, libellé abrégé, article de la circulaire), par famille (sensible, pré-douteux, douteux, compromis) ; source : bilan (coché automatiquement par une alerte du format de bilan : recul du CA de 50 %, endettement supérieur à 3 fois les capitaux propres, trois exercices déficitaires, comptes non reçus à 7 mois…) ou déclaration de l'analyste (datée, commentée) ; état : coché, non coché, levé, à vérifier (proposé par les engagements, le crédit bureau ou InfoRisque, jamais coché d'office). Effet sur la note : RG-22.
+
+![Levée par le comité](expression-besoin/captures/71-levee-comite.jpg)
+
+**EF-BAM-02 — Levée par le comité.** Enregistrée par la contre-étude ou la surveillance, jamais par un contributeur du dossier : critères levés, date du comité, numéro du procès-verbal, motif. Effet immédiat ou après confirmation d'une seconde personne (paramètre). La note du dossier est recalculée ; l'ancienne notation reste dans l'historique. La levée vaut pour le dossier ; au renouvellement elle est rappelée et le critère, s'il est toujours rempli, s'applique de nouveau. Journalisée (CLASSIFICATION_LIFT_RECORDED, COMMITTEE_DECISION_CONFIRMED / CANCELLED).
+
+![Critères sur la fiche de notation](expression-besoin/captures/75-fiche-criteres.jpg)
+
+**EF-BAM-03 — Restitution.** La fiche de notation fige les critères actifs à la date, leur source, la levée et l'effet sur la note ; ils sont transmis comme indicateurs à la classification des créances.
+
 ### 4.8 Aperçu du calcul
 
 ![Aperçu du calcul](expression-besoin/captures/17-apercu.jpg)
@@ -289,7 +379,9 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 
 ![Valider l'étape ou rejeter](expression-besoin/captures/20-decision.jpg)
 
-**EF-VAL-03 — Décision sur une étape.** Le panneau « Circuit de validation » affiche chaque étape (libellé, fonction, rôle minimal, état : validée, en attente, à venir, rejet), les décisions prises (par qui, quand, avis) et les contributeurs exclus. Le décideur saisit un avis (obligatoire pour un rejet, 10 caractères au moins) et clique sur « Valider : [étape] » ou « Rejeter ».
+![Lire le circuit du dossier](expression-besoin/captures/59-circuit-dossier.jpg)
+
+**EF-VAL-03 — Avis et décision.** Deux natures d'étape : **avis** (favorable ou défavorable ; ne rejette pas ; non bloquant, bloquant pour tous les centres, ou pour les catégories de délégation cochées) et **décision** (la contre-étude arrête la note). Plusieurs niveaux de décision peuvent être prévus, chacun avec ses conditions : exposition au-delà d'un seuil, note égale ou moins bonne qu'une classe, types de crédit, catégories de centre, combinées (l'une suffit ou toutes). Seul le niveau le plus élevé qui s'applique décide ; les niveaux inférieurs instruisent (avis bloquant) ; il reste toujours un niveau sans condition. **Décision sur une étape.** Le panneau « Circuit de validation » affiche chaque étape (libellé, fonction, rôle minimal, état : validée, en attente, à venir, rejet), les décisions prises (par qui, quand, avis) et les contributeurs exclus. Le décideur saisit un avis (obligatoire pour un rejet, 10 caractères au moins) et clique sur « Valider : [étape] » ou « Rejeter ».
 
 ![Contre-étude : validation finale](expression-besoin/captures/57-validation-finale.jpg)
 
@@ -304,7 +396,7 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 | RG-13 Séparation des fonctions | Un contributeur du dossier (création, enregistrements, pièces, décisions sur les propositions de l'OCR intelligent, soumission) ne décide d'aucune étape ; un dossier repris hérite des contributeurs du dossier rejeté |
 | Une personne, une étape | Une même personne ne décide que d'une étape d'un dossier |
 | Fonction et rôle | Le décideur détient une fonction habilitée de l'étape (si l'étape en désigne) et au moins son rôle minimal |
-| Seuil d'exposition | Une étape conditionnée par un seuil s'ajoute si l'exposition le dépasse ; une exposition inconnue applique toutes les étapes |
+| Conditions d'une étape | Lues à la soumission : exposition, note calculée (plafonds compris), type de crédit, catégorie du centre ; une donnée inconnue applique l'étape ; un centre sans catégorie prend la première catégorie active |
 | RG-14 Délégation | Au-delà du seuil de délégation, la dernière étape exige au moins le rôle paramétré |
 | Circuit figé | Un dossier garde le circuit de sa soumission ; une modification du paramétrage s'applique aux dossiers soumis ensuite |
 | Rejet | À n'importe quelle étape ; motif obligatoire ; dossier clos, repris en un nouveau brouillon |
@@ -387,15 +479,19 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 
 ![Vue d'ensemble de l'administration](expression-besoin/captures/32-admin.jpg)
 
-**EF-ADM-01 — Vue d'ensemble.** Accès aux utilisateurs, banques et filiales, devises, paramétrage des grilles, échelle de notation, paramétrage (circuit, workflow, dérogations, pièces, OCR intelligent).
+**EF-ADM-01 — Vue d'ensemble.** Accès aux utilisateurs, banques et filiales, devises, paramétrage des grilles, échelle de notation, format du bilan, paramétrage (circuit, workflow, comités, dérogations, pièces, OCR intelligent, référentiels externes, surveillance), raccordements, reprise du stock, journal d'audit.
 
 ![Utilisateurs](expression-besoin/captures/33-admin-utilisateurs.jpg)
 
-**EF-ADM-02 — Utilisateurs.** Création (identifiant, nom, rôle, entité, portée d'écriture, fonction) ; mot de passe provisoire affiché une seule fois ; modification du rôle, du rattachement et de la fonction ; réinitialisation du mot de passe ; désactivation et réactivation. Un administrateur ne modifie ni son propre rôle, ni son rattachement, ni sa fonction. Un administrateur d'entité ne gère que les comptes de sa branche et n'attribue pas le rôle Administrateur du groupe.
+**EF-ADM-02 — Utilisateurs.** Création (identifiant, nom, rôle, entité, portée d'écriture, fonction, code gestionnaire T24) ; mot de passe provisoire affiché une seule fois ; modification du rôle, du rattachement et de la fonction ; réinitialisation du mot de passe ; désactivation et réactivation. Un administrateur ne modifie ni son propre rôle, ni son rattachement, ni sa fonction. Un administrateur d'entité ne gère que les comptes de sa branche et n'attribue pas le rôle Administrateur du groupe.
+
+![Fonction et code gestionnaire](expression-besoin/captures/81-admin-code-gestionnaire.jpg)
+
+**EF-ADM-02b — Code gestionnaire.** Code gestionnaire T24 (chargé d'affaires) modifiable par compte ; prérequis du mode portefeuille (EF-PTF-01) ; journalisé (USER_OFFICER_CODE_CHANGED).
 
 ![Banques et filiales](expression-besoin/captures/34-admin-entites.jpg)
 
-**EF-ADM-03 — Banques et filiales.** Arbre des entités : code, nom, entité parente, pays, devise ; habillage (nom de l'outil, logo, couleur, appliquée seulement si son contraste est suffisant) ; désactivation.
+**EF-ADM-03 — Banques et filiales.** Arbre des entités (groupe, banque, banque régionale, centre d'affaires, filiales) : code, nom, entité parente, pays, devise, catégorie de délégation du centre (normale, encadrée, restreinte) ; habillage (nom de l'outil, logo, couleur, appliquée seulement si son contraste est suffisant) ; désactivation.
 
 ![Publier un cours de change](expression-besoin/captures/35-admin-devises.jpg)
 
@@ -419,7 +515,39 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 
 ![Paramétrer l'OCR intelligent](expression-besoin/captures/37-admin-ia.jpg)
 
-**EF-ADM-09 — OCR intelligent.** Activation, fournisseur, modèle, adresse du service (https obligatoire) ; état affiché (actif, désactivé, configuration incomplète).
+**EF-ADM-09 — OCR intelligent.** Activation, fournisseur (Anthropic, OpenAI, Azure OpenAI, API compatible OpenAI dont Google Gemini ou un modèle hébergé par la banque), modèle, adresse du service (https obligatoire ; adresse complète du déploiement Azure avec api-version), variable d'environnement de la clé (nom commençant par IA_CLE_, une par fournisseur ; aucun autre secret ne peut être désigné) ; état affiché (actif, désactivé, configuration incomplète).
+
+![Critères de classement et effet](expression-besoin/captures/80-admin-criteres.jpg)
+
+**EF-ADM-10 — Critères de classement, comités, watch list, motifs.** Critères BAM (code, famille, libellé, article, source, alerte du bilan liée, actif), effet par famille (plafond ou défaut) ; seconde validation des levées et de la watch list ; niveaux de watch list (plafond, délai de renotation, revue, cran de cumul) ; motifs de dossier (type de crédit par défaut, pièces requises) ; types de crédit ; catégories de délégation ; segments commerciaux ; types d'engagement. Versions journalisées.
+
+![Format du bilan](expression-besoin/captures/79-admin-bilan.jpg)
+
+**EF-ADM-11 — Format du bilan.** Versions datées : postes chargés (complet, agrégé, notation seulement), postes propres à la banque, indicateurs par formule, seuils d'appréciation (bon, mauvais, critique, variation significative), alertes. Une notation garde la version qui l'a produite.
+
+![Raccordements](expression-besoin/captures/76-admin-raccordements.jpg)
+
+**EF-ADM-12 — Raccordements (mise en service des API).** Pour T24, le crédit bureau et l'OCR intelligent : état, cible (adresse, chemins, fournisseur, modèle), présence du jeton (jamais sa valeur), dernier test. « Tester la connexion » appelle l'API avec un code réel, même désactivée, sans enregistrer de donnée client, et affiche ce qui a été lu ; journalisé (INTEGRATION_TESTED). **Au démarrage, toutes les API sont désactivées** et l'outil fonctionne en saisie. L'activation (Paramétrage) est refusée sans test réussi de moins de 30 jours sur la cible en vigueur ; la désactivation est toujours possible.
+
+![Reprise du stock](expression-besoin/captures/78-admin-reprise.jpg)
+
+**EF-ADM-13 — Reprise du stock.** Classeur Excel à quatre feuilles (clients, notes historiques validées, bilans, historique de watch list), modèle téléchargeable avec mode d'emploi et liste des postes. Contrôle à blanc ligne par ligne (créés, ignorés, rejetés avec motif), puis import en une seule transaction, journalisé avec l'empreinte du fichier (STOCK_IMPORTED). Import idempotent. Notes reprises : officielles (origine « reprise »), non recalculées, note et modèle d'origine conservés.
+
+![Journal d'audit](expression-besoin/captures/77-admin-journal.jpg)
+
+**EF-ADM-14 — Journal d'audit.** Lecture seule : filtres par objet, action, acteur et période ; 100 événements par page ; lien vers le dossier, le client, la notation ou le lot ; export Excel (10 000 lignes au plus). Cloisonné : un administrateur d'entité ne voit que son périmètre ; les événements globaux sont réservés à l'administrateur du groupe. Libellés communs avec le journal du dossier.
+
+### 4.17 Surveillance du portefeuille
+
+![Tableau de surveillance](expression-besoin/captures/72-surveillance.jpg)
+
+**EF-SUR-01 — Tableau de surveillance.** Filtres : date d'arrêté, horizon (6 ou 12 mois), entité, segment, secteur. Synthèse : exposition notée, nombre de clients notés, en watch list, lignes d'engagement. Indicateurs de risque (KRI) et de performance (KPI) avec feu vert, orange, rouge selon des seuils paramétrables et tendance sur l'horizon : note moyenne pondérée, exposition en risque élevé, en défaut, en watch list, taux de dégradation, stabilité des migrations, concentration des 10 premiers, impayés et dépassements sur les lignes, notes échues.
+
+![Migration et concentration](expression-besoin/captures/73-surveillance-migration.jpg)
+
+**EF-SUR-02 — Analyses.** Matrice de migration (note d'il y a N mois × note actuelle, sorties et non renotés comptés à part), répartition par classe, évolution, ventilations par segment, secteur et centre, concentration, liste des alertes. Infobulles au survol et au clavier ; vue tableau de chaque graphique.
+
+**EF-SUR-03 — Exposition et exports.** Exposition courante issue des lignes d'engagement (T24 ou saisie), à défaut l'engagement global déclaré ; source indiquée. Export CSV par tableau.
 
 ### 4.16 Usage sur téléphone
 
@@ -452,6 +580,10 @@ La mention « dossier en cours » ou « dossier en validation » signale une not
 | RG-19 Ratios du bilan | Formules uniques : EBE retraité du crédit-bail, fonds propres tangibles, dette nette économique, flux d'exploitation, DSCR sur le principal à 12 mois. EBE retraité nul ou négatif, ou fonds propres tangibles négatifs : cas particulier défavorable imposé. |
 | RG-20 Échelle paramétrable | Versions datées ; version en vigueur à la date de calcul ; version en vigueur figée ; bornes strictement décroissantes couvrant [0, 100] ; classes citées par les plafonds conservées. |
 | RG-21 Paramètres des grilles | Versions datées, mêmes règles que l'échelle ; contrôles du démarrage à l'enregistrement. |
+| RG-22 Critères de classement BAM | Après le grade et les exceptions : famille sensible → au mieux classe 8 ; pré-douteuse → au mieux 10 ; douteuse → DEF1 ; compromise → DEF3 (effets paramétrables). La famille la plus sévère l'emporte ; le score est conservé ; un critère levé par le comité n'a plus d'effet sur le dossier. |
+| RG-23 Watch list | WL1 → au mieux 8, WL2 → 9, WL3 → 10 (paramétrables), avec délai de renotation ; face à un critère BAM, le plafond le plus sévère s'applique ; cran supplémentaire de cumul paramétrable (désactivé par défaut). |
+| RG-24 Engagement global | Somme, par ligne active, de la base paramétrée (max(autorisé, encours) par défaut), hors bilan pondéré ; sert à la segmentation, au circuit et à la surveillance. |
+| RG-25 Notes reprises | Une note reprise du stock est officielle, datée de sa validation, non recalculée ; elle alimente la dernière note validée, les migrations et la surveillance. |
 
 ### 5.2 Échelle maîtresse (version ECH10-2026.1)
 
@@ -490,14 +622,18 @@ Le moteur livré doit reproduire exactement les cas de référence du simulateur
 | Table | Contenu | Clés et contraintes |
 |---|---|---|
 | entities | Banques et filiales, arbre, devise, pays, habillage | Code unique ; parent |
-| users, user_sessions | Comptes, rôle, entité, portée, fonction, verrouillage ; sessions | Identifiant unique |
-| counterparties | Clients : identité, entité, devise, secteur, segment, groupe, actif | ICE unique par entité |
+| users, user_sessions | Comptes, rôle, entité, portée, fonction, code gestionnaire, verrouillage ; sessions | Identifiant unique |
+| counterparties | Clients : identité, entité, devise, secteur, segment du modèle, segment commercial, groupe, gestionnaire, code T24, source (T24 ou saisie), données T24 et date de synchronisation, fiche juridique, actif | ICE unique par entité ; code T24 unique |
 | economic_groups | Groupes d'affaires | Code unique par entité |
 | exchange_rates | Cours datés vers le MAD | (devise, date) unique |
 | rating_cases | Dossiers : statut, saisie (JSON), conversion, circuit figé et décisions, auteurs | Un dossier en cours par client |
-| case_documents | Pièces : nom, type, taille, empreinte, contenu | Lien dossier |
+| case_documents | Pièces : nom, type MIME, type de pièce (exigence), taille, empreinte, contenu | Lien dossier |
+| rating_cases (compléments) | Motif, type de crédit | |
+| credit_facilities | Lignes d'engagement : source (API, saisie), type, référence, autorisé, encours, impayé, ancienneté, échéances, garanties, statut, date de position | Lien client |
+| credit_reports | Rapports de solvabilité : bureau, source (API, document, saisie), date de mise à jour, référence, contenu, pièce et empreinte | Lien client |
+| committee_decisions | Décisions de comité : levée de critère, entrée, changement de niveau, sortie de watch list ; date du comité, d'effet, référence, motif, statut (effective, à confirmer, annulée), auteur, confirmation | Lien client, dossier |
 | ai_proposals | Propositions de l'OCR intelligent : champ, valeur, source, justification, confiance, décision | Lien dossier |
-| rating_runs | Notations immuables : entrées, résultat, versions, origine (écran, API, lot) | Clé d'idempotence |
+| rating_runs | Notations immuables : entrées, résultat, versions, origine (écran, API, lot, dossier, reprise du stock) | Clé d'idempotence |
 | overrides | Dérogations : grades, motif, preuve, demandeur, décideur, expiration | Une en attente par notation |
 | renotation_batches, renotation_items, renotation_schedules | Lots, résultats par client, planifications | |
 | app_settings | Paramétrage, versions de l'échelle et des grilles, circuit | Clé unique |
@@ -535,16 +671,21 @@ Authentification par clé API (en-tête), rattachée à une entité et à un rô
 
 rating.calculated, case.validated, case.rejected, override.decided, renotation.completed ; signés (HMAC), rejoués en cas d'échec, écrits dans la même transaction que l'opération métier (outbox). Les systèmes aval consomment exclusivement case.validated comme note officielle.
 
-### 7.3 Intégrations cibles avec le SI de la banque
+### 7.3 Intégrations avec le SI de la banque
 
-| Système | Flux | Usage |
-|---|---|---|
-| Référentiel clients (NACOM ou équivalent) | Lecture | Identité, secteur, forme juridique, date de création, date d'entrée en relation |
-| Comptes courants | Lecture mensuelle | Mouvements créditeurs et débiteurs, soldes, utilisation des autorisations (comportement bancaire) |
-| Créances en souffrance, impayés, échéanciers | Lecture quotidienne | Retards, défaut, déclenchement de renotation |
-| SCIP, crédit bureau | Lecture | Incidents de paiement |
-| Centrale des bilans | Lecture | Alimentation des états financiers |
-| Annuaire d'entreprise (SSO) | Authentification | Connexion unique, si retenue |
+Chaque raccordement est **désactivé au démarrage**, se teste depuis l'écran Raccordements et ne s'active qu'après un test réussi (EF-ADM-12). Les jetons sont des variables d'environnement du serveur, jamais en base ni à l'écran.
+
+| Système | Flux | Paramètres | Usage |
+|---|---|---|---|
+| T24 — clients (Transact, party/customers) | Lecture à la demande | T24_BASE_URL, T24_CUSTOMER_PATH, T24_FIELD_MAP ; jeton T24_API_TOKEN | Création, rattachement et actualisation de la fiche client |
+| T24 — limites (holdings/limits) | Lecture à la demande et à l'ouverture d'un dossier | T24_FACILITIES_PATH, T24_FACILITY_FIELD_MAP | Lignes d'engagement |
+| Crédit bureau (Creditinfo Maroc ou autre) | Lecture à la demande | CREDIT_BUREAU_PROVIDER, _BASE_URL, _PATH ; jeton CREDIT_BUREAU_API_TOKEN | Rapport de solvabilité |
+| InfoRisque | Document (PDF, image) lu par l'OCR intelligent | — | Fiche juridique |
+| OCR intelligent | Appels au fournisseur paramétré | AI_PROVIDER, AI_MODEL, AI_BASE_URL, AI_KEY_ENV | Lecture des pièces, propositions |
+| Impayés, dépassements, contentieux (cible) | Lecture quotidienne | À définir avec la DSI | Critères BAM automatiques (lot C), déclenchement de renotation |
+| Annuaire d'entreprise (SSO, cible) | Authentification | À définir | Connexion unique, si retenue |
+
+**À fournir par la DSI :** adresses et jetons des API T24 (clients, limites) et du crédit bureau ; exemples de réponses pour caler les correspondances de champs ; exemples de rapports InfoRisque ; extraction du stock pour la reprise.
 
 ## 8. Paramètres
 
@@ -559,6 +700,18 @@ rating.calculated, case.validated, case.rejected, override.decided, renotation.c
 | OCR intelligent : activation, fournisseur, modèle, adresse | Désactivé | EF-ADM-09 |
 | Échelle de notation | ECH10-2026.1 | RG-20 |
 | Paramètres des grilles | Grilles embarquées | RG-21 |
+
+| Raccordements T24, crédit bureau, OCR intelligent | Désactivés | EF-ADM-12 ; activation après test réussi |
+| Actualisation T24 à l'ouverture d'un dossier | Fiche et engagements | EF-DOS-07 |
+| Portée des chargés d'affaires | Centre entier | EF-PTF-01 |
+| Ancienneté maximale du rapport de solvabilité / de la fiche juridique (jours) | 30 / 365 | EF-CLI-07, EF-CLI-08 |
+| Rapport de solvabilité à la soumission | Avertissement | EF-CLI-07 |
+| Pièces requises manquantes à la soumission | Avertissement | EF-DOS-05 |
+| Engagement global : base et pondération du hors bilan | max(autorisé, encours) ; 100 % | RG-24 |
+| Effet des familles de critères BAM | 8 / 10 / DEF1 / DEF3 | RG-22 |
+| Niveaux de watch list | WL1 8, WL2 9, WL3 10 | RG-23 |
+| Seconde validation des levées et de la watch list | Désactivée (rodage) | EF-BAM-02, EF-CLI-10 |
+| Seuils des indicateurs de surveillance | Proposés, à arrêter en COPIL | EF-SUR-01 |
 
 Tout changement est réservé à l'administrateur du groupe et journalisé avec la valeur précédente.
 
@@ -575,9 +728,12 @@ Chaque opération produit un événement : acteur, rôle, action, ressource, ent
 | OCR intelligent | AI_FINANCIALS_EXTRACTED, AI_PROPOSALS_GENERATED, AI_PROPOSAL_DECIDED |
 | Notation, dérogation | RATING_RUN_CREATED, OVERRIDE_REQUESTED, OVERRIDE_APPROVED, OVERRIDE_REJECTED, OVERRIDE_EXPIRED |
 | Renotation | RENOTATION_BATCH_CREATED, RENOTATION_BATCH_DONE, RENOTATION_BATCH_CANCELLED, RENOTATION_SCHEDULE_CREATED |
-| Paramétrage | SETTINGS_UPDATED, WORKFLOW_CIRCUIT_UPDATED, MODEL_PARAMS_CREATED, MODEL_PARAMS_UPDATED, MODEL_PARAMS_DELETED, échelle |
+| Paramétrage | SETTINGS_UPDATED, WORKFLOW_CIRCUIT_UPDATED, CASE_PURPOSES_UPDATED, CLASSIFICATION_UPDATED, WATCHLIST_LEVELS_UPDATED, FACILITY_TYPES_UPDATED, SURVEILLANCE_SETTINGS_UPDATED, MODEL_PARAMS_CREATED, MODEL_PARAMS_UPDATED, MODEL_PARAMS_DELETED, échelle |
+| Données externes | COUNTERPARTY_CREATED_FROM_T24, COUNTERPARTY_LINKED_TO_T24, COUNTERPARTY_SYNCED_FROM_T24, FACILITIES_SYNCED_FROM_T24, FACILITIES_RECORDED, CREDIT_REPORT_RECORDED, LEGAL_PROFILE_RECORDED, INTEGRATION_TESTED |
+| Comités | CLASSIFICATION_LIFT_RECORDED, WATCHLIST_ENTRY_RECORDED, WATCHLIST_LEVEL_CHANGED, WATCHLIST_EXIT_RECORDED, COMMITTEE_DECISION_CONFIRMED, COMMITTEE_DECISION_CANCELLED |
+| Reprise | STOCK_IMPORTED |
 
-L'historique d'un dossier est affiché sur sa page. Le journal est en ajout seul et exporté vers un stockage indépendant.
+L'historique d'un dossier est affiché sur sa page ; l'ensemble du journal se consulte dans Administration › Journal d'audit (EF-ADM-14). Le journal est en ajout seul et exporté vers un stockage indépendant.
 
 ## 10. Exigences non fonctionnelles
 
@@ -613,6 +769,16 @@ L'historique d'un dossier est affiché sur sa page. Le journal est en ajout seul
 11. Modification du circuit, de l'échelle et d'une grille par versions datées ; absence d'effet sur les dossiers en cours et sur les notations antérieures.
 12. Accès croisés entre deux filiales : données introuvables.
 13. Mêmes opérations par l'API : mêmes résultats, mêmes refus.
+14. Démarrage sans API : création en saisie minimale, engagements saisis, rapport saisi ; test de connexion puis activation de T24 ; activation refusée sans test.
+15. Client créé depuis T24 ; doublon refusé ; ouverture d'un dossier avec actualisation T24 ; T24 coupé : ouverture avec avertissement daté.
+16. Rapport de solvabilité ancien : alerte ; rapport lu par l'OCR intelligent ; fiche InfoRisque avec écart de comptes signalé.
+17. Pièces requises d'un motif : éléments manquants, pièce typée, avertissement à la soumission.
+18. Critère BAM sensible coché par le bilan : note plafonnée à 8 ; levée en comité par la contre-étude ; note recalculée ; rappel au renouvellement.
+19. Watch list : entrée WL1, passage en WL2, sortie ; plafond appliqué ; historique conservé.
+20. Circuit à niveaux : dossier au-delà du seuil décidé par le responsable de la contre-étude ; avis bloquant d'un centre en délégation restreinte.
+21. Mode portefeuille : un chargé d'affaires ne voit que ses clients.
+22. Reprise du stock : contrôle à blanc, import, réimport sans effet.
+23. Journal d'audit : filtres, export, cloisonnement d'un administrateur d'entité.
 
 ### 11.2 Critères de réception
 
@@ -623,11 +789,13 @@ L'historique d'un dossier est affiché sur sa page. Le journal est en ajout seul
 
 ## 12. Lotissement proposé
 
+Toutes les fonctions décrites sont opérationnelles dans le prototype de référence ; le lotissement ci-dessous organise leur reprise par la DSI.
+
 | Lot | Contenu |
 |---|---|
-| Lot 1 — Socle | Comptes, entités, devises, clients, dossiers, bilan (saisie et gabarit Excel), grilles, moteur, aperçu, circuit de validation, fiche de notation, journal |
-| Lot 2 — OCR intelligent et pilotage | Lecture des documents et propositions, dérogations, tableau de bord, groupes d'affaires, renotation par lot et planification, API et webhooks |
-| Lot 3 — Paramétrage et intégrations | Paramétrage des grilles, de l'échelle et du circuit à l'écran ; intégrations au SI (référentiel clients, comptes, impayés, SCIP) ; règles Bank Al-Maghrib du lot A |
+| Lot 1 — Socle | Comptes, profils et fonctions, entités, devises, clients (saisie minimale), dossiers, motifs et pièces requises, bilan (saisie et gabarit Excel), grilles, moteur, critères BAM et levée, aperçu, circuit avis / décision, fiche de notation, journal d'audit |
+| Lot 2 — Pilotage | OCR intelligent, dérogations, watch list, module de surveillance, tableau de bord, groupes d'affaires, renotation par lot et planification, reprise du stock, API et webhooks |
+| Lot 3 — Raccordements | T24 (clients, limites), crédit bureau, InfoRisque, portefeuille par chargé d'affaires, actualisation à l'ouverture ; mise en service après tests ; flux impayés et contentieux (critères BAM automatiques, lot C) |
 
 ## 13. Points à arrêter par la banque
 
@@ -635,6 +803,9 @@ L'historique d'un dossier est affiché sur sa page. Le journal est en ajout seul
 2. Définition du défaut, de la guérison et de la rechute (DEF1 à DEF3), alignée sur Bank Al-Maghrib.
 3. Fonctions et attribution des étapes du circuit ; seuils d'un éventuel comité de crédit.
 4. Fournisseur et hébergement de l'OCR intelligent ; types de pièces admis.
-5. Flux du SI disponibles et leur fréquence.
-6. Base de données cible (PostgreSQL ou Oracle) et environnement d'hébergement.
-7. Objectifs de disponibilité, RPO et RTO.
+5. Effets des critères BAM, niveaux de watch list, seconde validation, seuils des indicateurs de surveillance (proposition COPIL).
+6. Listes de pièces requises par motif ; ancienneté maximale des rapports.
+7. Activation du mode portefeuille, après renseignement des codes gestionnaires.
+8. API T24 (clients, limites) et crédit bureau : adresses, jetons, exemples de réponses ; flux impayés et contentieux ; procès-verbal de recette de chaque raccordement.
+9. Base de données cible (PostgreSQL ou Oracle) et environnement d'hébergement.
+10. Objectifs de disponibilité, RPO et RTO.

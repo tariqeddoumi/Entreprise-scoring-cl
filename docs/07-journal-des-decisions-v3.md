@@ -857,6 +857,15 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* procès-verbal de recette DSI par API, durée de validité du test.
 
+## D-68 — Journal d'audit consultable — **ADOPTÉE**
+
+*Décision :*
+- **Écran.** Administration › Journal d'audit, en lecture seule, avec filtres et export Excel.
+- **Cloisonnement.** Chacun ne voit que son périmètre ; les événements globaux sont réservés à l'administrateur du groupe.
+- **Libellés.** Les mêmes libellés servent au journal du dossier et au journal d'administration.
+
+*À confirmer :* durée de conservation du journal, accès de l'inspection et de l'audit interne (profil de consultation dédié).
+
 ---
 
 # 3. Ce qui reste à décider par la banque

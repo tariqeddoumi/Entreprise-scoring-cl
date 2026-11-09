@@ -83,6 +83,9 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | Engagements ligne par ligne (T24 ou saisie), engagement global calculé, dépassements et impayés, rapprochement crédit bureau (docs/23) | Livré ; API des limites T24 à brancher par la DSI |
 | Pièces et informations requises par motif, typage des pièces, préparation du dossier, contrôle à la soumission (docs/24) | Livré ; listes à arrêter en COPIL |
 | Mise en service des API : démarrage sans API, test de connexion, activation après test réussi (docs/26) | Livrée ; tests à faire avec la DSI |
+| Journal d'audit consultable (filtres, export) ; diagnostic complet écrans, front, back et base (docs/27) | Livré ; base de production alignée (migration 14) |
+| IA : OpenAI, Gemini, Azure OpenAI ou Claude, une clé par fournisseur, comparaison sans redéploiement (docs/28) | Livré ; clés à déposer sur Vercel |
+| Guide méthodologique complet (Word) : de l'ancien modèle au modèle expert, du modèle expert au statistique (docs/29) | Livré ; à valider en comité modèles |
 | Reprise du stock : clients, notes historiques validées, bilans, watch list, par classeur Excel contrôlé à blanc (docs/25) | Livrée ; extraction et correspondance des notes à fournir |
 | Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |

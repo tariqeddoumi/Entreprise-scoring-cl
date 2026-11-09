@@ -1,0 +1,965 @@
+{
+ "titre": "Guide utilisateur",
+ "sousTitre": "Outil de notation interne des entreprises — TPE, PME et grandes entreprises",
+ "date": "Novembre 2026 — version 3",
+ "profils": [
+  [
+   "P1 — Saisie (chargé d'affaires, analyste crédit)",
+   "Crée les clients (depuis T24 ou en saisie minimale), tient les engagements, le rapport de solvabilité et la fiche juridique, ouvre et instruit les dossiers, déclare les critères de classement BAM, soumet. Avec le cloisonnement par portefeuille, ne voit que ses clients."
+  ],
+  [
+   "P2 — Validation commerciale (directeur du centre d'affaires)",
+   "Donne un avis favorable ou défavorable sur les dossiers de son centre : non bloquant, ou bloquant selon la catégorie de délégation du centre."
+  ],
+  [
+   "P3 — Contre-étude (contre-étude, responsable, directeur des risques)",
+   "Instruit et décide la note ; le niveau qui décide dépend du montant, de la note et du type de crédit. Enregistre la levée d'un critère BAM décidée en comité. Demande et décide les dérogations, lance les renotations par lot."
+  ],
+  [
+   "P4 — Surveillance des risques",
+   "Suit le portefeuille (module Surveillance), enregistre les décisions de watch list (entrée, changement de niveau, sortie) et les levées de critère. Ne saisit ni ne valide une note."
+  ],
+  [
+   "P5 — Consultation, audit",
+   "Consulte les clients, dossiers, notations et modèles. Ne saisit rien."
+  ],
+  [
+   "P6 — Administration",
+   "Gère les comptes et leur fonction, l'organisation, les devises, le paramétrage, les raccordements (API), la reprise du stock ; consulte le journal d'audit."
+  ]
+ ],
+ "circuit": [
+  [
+   "1",
+   "Client : fiche T24 (ou saisie minimale), engagements, solvabilité, fiche juridique",
+   "Chargé d'affaires"
+  ],
+  [
+   "2",
+   "Ouvrir le dossier : motif, type de crédit, exercice",
+   "Chargé d'affaires"
+  ],
+  [
+   "3",
+   "Préparation : pièces requises, bilan, IA",
+   "Chargé d'affaires"
+  ],
+  [
+   "4",
+   "Grille, critères de classement BAM, aperçu",
+   "Chargé d'affaires"
+  ],
+  [
+   "5",
+   "Soumission",
+   "Chargé d'affaires"
+  ],
+  [
+   "6",
+   "Avis",
+   "Directeur du centre d'affaires"
+  ],
+  [
+   "7",
+   "Décision (niveau selon montant, note, type de crédit)",
+   "Contre-étude, responsable ou directeur des risques"
+  ],
+  [
+   "8",
+   "Note officielle",
+   "Outil"
+  ],
+  [
+   "9",
+   "Levée de critère, dérogation, watch list (si besoin)",
+   "Comités, contre-étude, surveillance"
+  ]
+ ],
+ "sections": [
+  {
+   "titre": "Prendre en main l'outil",
+   "intro": "Se connecter, se repérer dans le menu et lire le tableau de bord.",
+   "etapes": [
+    {
+     "img": "01-connexion",
+     "titre": "Se connecter",
+     "actions": [
+      "Ouvrir l'adresse de l'outil communiquée par l'administrateur.",
+      "Saisir son identifiant et son mot de passe.",
+      "Cliquer sur « Se connecter »."
+     ],
+     "aSavoir": "À la première connexion, le mot de passe provisoire doit être changé. Cinq échecs consécutifs verrouillent le compte quelques minutes."
+    },
+    {
+     "img": "31-mot-de-passe",
+     "titre": "Changer son mot de passe",
+     "actions": [
+      "Cliquer sur son nom, en haut à droite.",
+      "Saisir le mot de passe actuel, puis deux fois le nouveau.",
+      "Cliquer sur « Enregistrer »."
+     ],
+     "aSavoir": "Douze caractères au moins, sans reprendre l'identifiant. Les autres sessions ouvertes sont fermées."
+    },
+    {
+     "img": "03-navigation",
+     "titre": "Le menu principal",
+     "actions": [
+      "Tableau de bord : la vue d'ensemble du portefeuille.",
+      "Dossiers : les notations en cours et la file « À traiter ».",
+      "Clients, Nouvelle notation, Modèles, Méthodologie.",
+      "Administration : réservé aux administrateurs."
+     ],
+     "aSavoir": "Le nom de votre banque ou filiale s'affiche à côté du nom de l'outil : vous ne voyez que les dossiers de votre périmètre."
+    },
+    {
+     "img": "02-tableau-de-bord",
+     "titre": "Lire le tableau de bord",
+     "actions": [
+      "Les compteurs : clients, notations validées, dossiers à valider.",
+      "La distribution des classes (échelle 1 à 10) : la dernière note validée de chaque client.",
+      "Les dernières notations, avec la mention « proposée, non validée » le cas échéant."
+     ],
+     "aSavoir": "Seule une notation validée compte dans la distribution : une notation soumise n'est qu'une proposition."
+    }
+   ]
+  },
+  {
+   "titre": "Gérer les clients",
+   "intro": "Créer l'entreprise à noter à partir de son code client T24, ou en saisie minimale si elle n'est pas encore dans T24 ; puis tenir sa fiche : engagements, rapport de solvabilité, fiche juridique.",
+   "etapes": [
+    {
+     "img": "04-contreparties",
+     "titre": "La liste des clients",
+     "actions": [
+      "Menu « Clients ».",
+      "Rechercher par nom, ICE ou entité ; filtrer par segment.",
+      "La note affichée : classe 1 à 10 de la dernière notation validée ; « Noter » ouvre la fiche sur le formulaire de notation.",
+      "« Exporter CSV » produit la liste filtrée pour Excel."
+     ],
+     "aSavoir": "Une note antérieure à l'échelle 1 à 10 (STD-P…) est suivie de sa classe équivalente (« ≈ classe 6 »). La mention « dossier en cours » ou « dossier à valider » signale une notation en préparation."
+    },
+    {
+     "img": "05-contrepartie-ia",
+     "titre": "Créer un client avec l'IA",
+     "actions": [
+      "Cliquer sur « + Nouveau client ».",
+      "Coller un texte (extrait RC, attestation ICE) ou joindre la pièce.",
+      "Cliquer sur « Pré-remplir »."
+     ],
+     "aSavoir": "Rubrique visible uniquement si l'administrateur a activé l'IA. Sans IA, la fiche se saisit à la main."
+    },
+    {
+     "img": "06-contrepartie-preremplie",
+     "titre": "Relire et enregistrer la fiche",
+     "actions": [
+      "Relire chaque champ marqué « IA » et corriger si besoin.",
+      "Choisir la banque ou filiale de rattachement.",
+      "Compléter le pays et la devise des comptes si l'entreprise n'est pas au Maroc.",
+      "Cliquer sur « Enregistrer »."
+     ],
+     "aSavoir": "Rien n'est enregistré sans votre clic. Pays et devise vides : ceux de l'entité de rattachement."
+    },
+    {
+     "img": "60-client-t24",
+     "titre": "Créer un client depuis T24",
+     "actions": [
+      "Menu « Clients », bouton « + Nouveau client ».",
+      "Laisser cochée l'option « Client présent dans T24 », saisir le code client T24.",
+      "Cliquer sur « Rapatrier depuis T24 » : la fiche T24 s'affiche (intitulé, ICE, forme juridique, secteur, segment commercial, gestionnaire, centre).",
+      "Vérifier, puis « Créer la fiche depuis T24 »."
+     ],
+     "aSavoir": "Un code déjà présent dans l'outil est refusé (doublon), même s'il appartient au portefeuille d'un collègue. Le segment commercial de T24 reste distinct du segment calculé par le modèle."
+    },
+    {
+     "img": "61-saisie-minimale",
+     "titre": "Saisie minimale (client hors T24 ou T24 indisponible)",
+     "actions": [
+      "Choisir « Pas encore dans T24 » (ou « Passer à la saisie minimale » si T24 ne répond pas).",
+      "Saisir la raison sociale, l'ICE ou le RC, la forme juridique, le secteur et le segment commercial.",
+      "Enregistrer : la fiche est marquée « en attente de T24 »."
+     ],
+     "aSavoir": "Dès que le client existe dans T24, rattachez la fiche depuis sa page (« Rattacher à T24 et rapatrier ») : les données T24 remplacent la saisie, chaque écart est journalisé."
+    },
+    {
+     "img": "62-fiche-t24",
+     "titre": "La fiche T24 et son actualisation",
+     "actions": [
+      "Sur la fiche du client, le bloc « Référentiel T24 » montre le code, le segment commercial, le gestionnaire et la date de la dernière synchronisation.",
+      "« Actualiser depuis T24 » relit la fiche ; les changements sont affichés et tracés."
+     ],
+     "aSavoir": "À l'ouverture de chaque dossier, la fiche et les engagements d'un client T24 sont actualisés automatiquement ; si T24 ne répond pas, le dossier s'ouvre quand même, avec un avertissement daté."
+    },
+    {
+     "img": "65-engagements",
+     "titre": "Les engagements chez la banque",
+     "actions": [
+      "Bloc « Engagements chez la banque » de la fiche client.",
+      "« Rapatrier depuis T24 » charge les lignes (autorisé, encours, impayés, échéance, garanties).",
+      "L'outil calcule l'engagement global et signale les dépassements, les impayés et les critères BAM à vérifier."
+     ],
+     "aSavoir": "L'engagement global des lignes est repris dans le dossier (« Reprendre ce montant ») : c'est lui qui oriente la segmentation et le niveau de décision."
+    },
+    {
+     "img": "67-engagements-saisie",
+     "titre": "Saisir les lignes d'engagement",
+     "actions": [
+      "« Saisir les lignes » quand T24 n'est pas raccordé ou pour un engagement absent de T24 (caution, ligne d'une autre entité).",
+      "Pour chaque ligne : type, référence, autorisé, encours, impayé et ancienneté, échéance, garanties.",
+      "Indiquer la date de la position, puis « Enregistrer les lignes »."
+     ],
+     "aSavoir": "Les lignes saisies s'ajoutent aux lignes T24 sans les remplacer. Une position de plus de 31 jours est signalée « à actualiser »."
+    },
+    {
+     "img": "63-credit-bureau",
+     "titre": "Le rapport de solvabilité (crédit bureau)",
+     "actions": [
+      "Rafraîchir d'abord le rapport dans l'outil du crédit bureau.",
+      "Puis, sur la fiche : « Récupérer le rapport » (API) ou charger le PDF / l'image et « Lire le rapport » (IA), ou « Saisir manuellement ».",
+      "Vérifier le rapport proposé, puis « Enregistrer le rapport vérifié »."
+     ],
+     "aSavoir": "L'outil contrôle la date de mise à jour du rapport : au-delà de la limite d'ancienneté, une alerte demande de le rafraîchir dans l'outil du crédit bureau. Les incidents proposent des critères BAM à vérifier."
+    },
+    {
+     "img": "64-inforisque",
+     "titre": "La fiche juridique (InfoRisque)",
+     "actions": [
+      "Charger le rapport InfoRisque (PDF ou image) dans le bloc « Fiche juridique ».",
+      "« Lire le rapport InfoRisque » : l'IA extrait l'identité légale, les dirigeants, les actionnaires, les comptes déposés et les événements.",
+      "Vérifier, puis « Enregistrer la fiche vérifiée »."
+     ],
+     "aSavoir": "L'outil rapproche les comptes déposés au greffe du bilan saisi (écart de plus de 5 % signalé) et signale les événements juridiques (procédure, nantissement, changement de dirigeant)."
+    },
+    {
+     "img": "66-portefeuille",
+     "titre": "Votre portefeuille",
+     "actions": [
+      "Avec le cloisonnement par portefeuille activé, la liste des clients d'un chargé d'affaires est limitée aux clients dont il est gestionnaire, ou dont il a ouvert un dossier.",
+      "Le bandeau « Votre portefeuille » rappelle la règle et le code gestionnaire."
+     ],
+     "aSavoir": "Le directeur du centre voit tout son centre, la région ses centres, la banque toutes ses régions. Le code gestionnaire de chaque compte se renseigne en administration."
+    },
+    {
+     "img": "28-fiche-contrepartie",
+     "titre": "La fiche d'un client",
+     "actions": [
+      "Cliquer sur le nom d'un client (ou sur « Fiche »).",
+      "En haut : entité, pays, devise, identifiants.",
+      "Les dossiers de notation, puis l'historique des notations.",
+      "« détail » ouvre le résultat complet d'une notation."
+     ],
+     "aSavoir": "Quand deux notations validées existent, l'écran explique l'évolution entre les deux, critère par critère."
+    },
+    {
+     "img": "55-fiche-client-gestion",
+     "titre": "Modifier, noter ou supprimer un client",
+     "actions": [
+      "Sur la fiche, « Modifier la fiche » : corriger l'identité (ICE, RC, forme, secteur, ville…), puis « Enregistrer ».",
+      "« Noter ce client » : choisir le modèle et la date d'arrêté, puis « Ouvrir le dossier ».",
+      "« Supprimer le client » (gestionnaire des risques) : définitif pour un client sans notation ; un client noté est désactivé, son historique conservé.",
+      "Un client désactivé se réactive depuis sa fiche."
+     ],
+     "aSavoir": "Chaque modification est journalisée avec l'avant et l'après. Un client désactivé n'apparaît plus dans les listes de notation ni dans les lots (case « Afficher les désactivés » de la liste)."
+    }
+   ]
+  },
+  {
+   "titre": "Noter une entreprise",
+   "intro": "Le rôle du chargé d'affaires : ouvrir le dossier selon son motif, rassembler les pièces requises, l'instruire avec ou sans l'IA, déclarer les critères de classement, vérifier le calcul, soumettre.",
+   "etapes": [
+    {
+     "img": "07-ouvrir-dossier",
+     "titre": "Ouvrir un dossier : motif et type de crédit",
+     "actions": [
+      "Depuis la fiche du client, bloc « Noter ce client » (ou menu « Nouvelle notation »).",
+      "Choisir le motif (entrée en relation, renouvellement, investissement, révision), le type de crédit, le modèle et la date d'arrêté.",
+      "Vérifier le bilan proposé (exercice repris ou nouvel exercice à charger), puis « Ouvrir le dossier »."
+     ],
+     "aSavoir": "Un seul dossier en cours par client. La dernière note validée est reprise : chaque champ repris est signalé, à confirmer ou à mettre à jour."
+    },
+    {
+     "img": "08-dossier-brouillon",
+     "titre": "Le dossier en brouillon",
+     "actions": [
+      "À gauche : la grille de notation, domaine par domaine.",
+      "À droite : les pièces et l'assistance de l'IA.",
+      "En bas : les boutons Enregistrer, Aperçu et Soumettre."
+     ],
+     "aSavoir": "La barre de progression indique les critères renseignés et signale en rouge les données critiques manquantes (cinq sur la grille standard)."
+    },
+    {
+     "img": "68-dossier-ouverture",
+     "titre": "Les données T24 à l'ouverture",
+     "actions": [
+      "En tête du dossier, l'encadré « Données T24 à l'ouverture du dossier » indique ce qui a été actualisé (fiche, engagements) ou ce qui a échoué.",
+      "En cas d'échec, le dossier part des dernières données enregistrées : réessayez depuis la fiche client."
+     ],
+     "aSavoir": "L'actualisation automatique se règle en administration (fiche et engagements, fiche seule, ou aucune). Elle ne concerne que les clients rattachés à T24."
+    },
+    {
+     "img": "69-preparation",
+     "titre": "Préparer le dossier : pièces requises",
+     "actions": [
+      "Le panneau « Préparation du dossier » liste les éléments requis pour le motif : bilan, rapport de solvabilité à jour, engagements, fiche juridique, statuts, attestations…",
+      "Chaque élément est fourni, manquant ou périmé, avec ce qu'il faut faire.",
+      "Joindre les pièces dans « Pièces du dossier » en choisissant leur type."
+     ],
+     "aSavoir": "Une pièce non typée ne compte pour aucune exigence. À la soumission, les éléments manquants donnent un avertissement tracé (ou bloquent, selon le paramétrage)."
+    },
+    {
+     "img": "70-criteres-bam",
+     "titre": "Déclarer les critères de classement BAM",
+     "actions": [
+      "Bloc « Critères de classement BAM » en bas du dossier.",
+      "Les critères calculés sur le bilan se cochent seuls ; les autres (ATD, impayé de plus de 90 jours, procédure…) se déclarent, datés et commentés.",
+      "Les critères proposés par les sources externes (engagements, crédit bureau) apparaissent « à vérifier »."
+     ],
+     "aSavoir": "Effet sur la note : créance sensible → au mieux 8 ; pré-douteuse → au mieux 10 ; douteuse → DEF1 ; compromise → DEF3. La famille la plus sévère l'emporte ; le score reste visible."
+    },
+    {
+     "img": "09-cadrage-montants",
+     "titre": "Le cadrage du dossier",
+     "actions": [
+      "Vérifier le segment (PME par défaut) et la date d'arrêté.",
+      "Saisir le chiffre d'affaires et les engagements bancaires, dans la devise du client.",
+      "Renseigner l'ancienneté de l'entreprise."
+     ],
+     "aSavoir": "Les montants en devise étrangère sont convertis en MAD au cours de la date d'arrêté ; la conversion est conservée dans le dossier."
+    },
+    {
+     "img": "10-ajouter-piece",
+     "titre": "Ajouter les pièces",
+     "actions": [
+      "Cliquer sur « Choisir des fichiers » dans « Pièces du dossier ».",
+      "Sélectionner les états financiers, la liasse, le rapport de gestion…",
+      "Cliquer sur « Ajouter »."
+     ],
+     "aSavoir": "Le bilan se charge ensuite dans la section « Bilan et compte de produits et charges », en tête du dossier (chapitre 4). Une pièce Excel (.xlsx) est acceptée."
+    },
+    {
+     "img": "11-analyse-ia",
+     "titre": "Demander des propositions à l'IA",
+     "actions": [
+      "Cocher les pièces à faire lire.",
+      "Ajouter au besoin des éléments : compte rendu de visite, faits récents.",
+      "Cliquer sur « Proposer des valeurs » (jusqu'à deux minutes)."
+     ],
+     "aSavoir": "L'IA ne propose plus les ratios calculés depuis le bilan (fonds propres, levier, liquidité, DSCR…) : ils sont calculés par l'outil. Elle propose les autres critères et le chiffre d'affaires."
+    },
+    {
+     "img": "12-propositions",
+     "titre": "Examiner les propositions",
+     "actions": [
+      "Lire pour chaque proposition la valeur, la source et la justification.",
+      "Cliquer sur « Accepter » ou « Refuser ».",
+      "« Accepter celles ≥ 80 % » accepte d'un coup les plus sûres."
+     ],
+     "aSavoir": "Une proposition hors grille ou invalide est écartée automatiquement. Décider d'une proposition vous rend contributeur du dossier."
+    },
+    {
+     "img": "13-grille-ia",
+     "titre": "Contrôler la grille",
+     "actions": [
+      "Les valeurs acceptées portent le repère « IA ».",
+      "Vérifier chaque valeur ; la modifier si nécessaire.",
+      "Compléter les critères restants."
+     ],
+     "aSavoir": "Le barème du ratio est rappelé sous la valeur saisie."
+    },
+    {
+     "img": "14-critere-qualitatif",
+     "titre": "Noter un critère qualitatif",
+     "actions": [
+      "Ouvrir la liste de repères du critère.",
+      "Choisir le repère (100, 75, 50, 25 ou 0) qui décrit les faits.",
+      "Justifier ce choix dans les pièces du dossier."
+     ],
+     "aSavoir": "Les repères sont écrits : deux analystes face aux mêmes faits doivent choisir le même."
+    },
+    {
+     "img": "15-statut-donnee",
+     "titre": "Qualifier le statut d'une donnée",
+     "actions": [
+      "« Disponible » : la donnée est observée.",
+      "« Estimée » : comptée dans le score, pas dans la couverture.",
+      "« Manquante », « Périmée » : borne basse, score 0 ; le score haut possible est affiché."
+     ],
+     "aSavoir": "Sans fonds propres, dette nette sur EBE, liquidité, DSCR ou retards de paiement, aucune note n'est produite."
+    },
+    {
+     "img": "16-enregistrer",
+     "titre": "Enregistrer le brouillon",
+     "actions": [
+      "Cliquer sur « Enregistrer le brouillon » régulièrement.",
+      "Le message « Brouillon enregistré » confirme."
+     ],
+     "aSavoir": "« Modifications non enregistrées » signale une saisie à sauvegarder ; le navigateur prévient avant de quitter la page."
+    },
+    {
+     "img": "17-apercu",
+     "titre": "Vérifier avec l'aperçu",
+     "actions": [
+      "Cliquer sur « Aperçu du calcul ».",
+      "Lire la classe (1 à 10, 1 = meilleur risque), le score brut et la couverture.",
+      "Corriger la saisie si un point surprend."
+     ],
+     "aSavoir": "L'aperçu n'enregistre rien. La soumission recalcule exactement la même requête."
+    },
+    {
+     "img": "18-soumis",
+     "titre": "Soumettre à validation",
+     "actions": [
+      "Cliquer sur « Soumettre à validation », puis confirmer.",
+      "La notation est calculée et figée ; le dossier passe « En validation » et suit le circuit."
+     ],
+     "aSavoir": "Le circuit s'affiche sur le dossier : directeur du centre d'affaires, puis contre-étude. Vous ne décidez d'aucune étape de votre propre dossier."
+    },
+    {
+     "img": "25-sans-grade",
+     "titre": "Si la soumission est refusée",
+     "actions": [
+      "Lire le message sous les boutons : il nomme ce qui manque.",
+      "Charger ou compléter le bilan si le message l'indique (N et N−1, bilan équilibré).",
+      "Compléter les données critiques, puis soumettre de nouveau."
+     ],
+     "aSavoir": "Sur une grille standard, un dossier ne se soumet pas sans bilan conforme. Un dossier qui ne produit pas de grade ne peut pas non plus être soumis."
+    }
+   ]
+  },
+  {
+   "titre": "Charger le bilan et contrôler les ratios",
+   "intro": "Chaque notation sur grille standard repose sur un bilan identifié : exercices N et N−1 (N−2 facultatif), modèle normal ou simplifié. L'outil calcule les ratios de la grille ; l'analyste les contrôle et peut les corriger avec un motif.",
+   "etapes": [
+    {
+     "img": "46-bilan-section",
+     "titre": "La section Bilan",
+     "actions": [
+      "Ouvrir le dossier : la section « Bilan et compte de produits et charges » est en tête.",
+      "Trois façons de charger : lire le bilan avec l'IA, importer le gabarit Excel de la banque, ou saisir.",
+      "Préciser le modèle (normal ou simplifié) et si les comptes sont certifiés."
+     ],
+     "aSavoir": "Le modèle simplifié (TPE, CA ≤ 10 MDH) utilise les mêmes rubriques, sans tableau de financement. Montants en unités de la devise du client."
+    },
+    {
+     "img": "47-bilan-lu-ia",
+     "titre": "Lire le bilan avec l'IA",
+     "actions": [
+      "Ajouter le bilan aux pièces : PDF, photo ou Excel.",
+      "Cocher la pièce dans « Lire le bilan avec l'IA », puis cliquer sur « Lire le bilan ».",
+      "Relire le tableau : les cellules surlignées sont les moins sûres ; survoler une cellule montre sa source.",
+      "Corriger au besoin, puis enregistrer le brouillon."
+     ],
+     "aSavoir": "L'IA recopie les postes du bilan et du CPC, jamais les ratios. Rien n'est enregistré sans votre relecture ; enregistrer vous rend contributeur du dossier."
+    },
+    {
+     "img": "48-bilan-excel",
+     "titre": "Importer le gabarit Excel",
+     "actions": [
+      "Cliquer sur « Télécharger le gabarit vierge » et le remplir (ne pas modifier la colonne A).",
+      "Choisir le fichier rempli, puis « Importer le gabarit rempli ».",
+      "Vérifier le tableau, puis enregistrer."
+     ],
+     "aSavoir": "Le gabarit est relu par code de poste, sans IA. Le fichier est conservé dans les pièces du dossier avec son empreinte numérique."
+    },
+    {
+     "img": "49-bilan-controles",
+     "titre": "Vérifier les contrôles",
+     "actions": [
+      "Lire la liste « Contrôles » sous le tableau.",
+      "« Bloquant » : à corriger avant de soumettre (bilan déséquilibré, total ou résultat non retrouvé, exercice manquant).",
+      "« À vérifier » : à examiner (modèle simplifié au-delà de 10 MDH, CA différent du cadrage)."
+     ],
+     "aSavoir": "Des comptes clos depuis plus de 18 mois sont périmés : les ratios du bilan sont transmis « périmés » et un exercice plus récent doit être chargé."
+    },
+    {
+     "img": "50-bilan-ratios",
+     "titre": "Contrôler et corriger un ratio",
+     "actions": [
+      "Lire « Ratios de la grille » : valeur calculée et valeur retenue.",
+      "Pour corriger, saisir la valeur corrigée et un motif (ex. échéancier, crédit-bail).",
+      "La valeur retenue passe en orange, marquée « corrigé »."
+     ],
+     "aSavoir": "Sans motif, la correction est ignorée. La valeur calculée reste conservée et le valideur voit l'écart. Seuls les ratios de la grille se corrigent."
+    },
+    {
+     "img": "51-critere-calcule",
+     "titre": "Un critère calculé depuis le bilan",
+     "actions": [
+      "Dans la grille, le critère affiche « Bilan · Calculé depuis le bilan ».",
+      "Le lien renvoie à la section Bilan pour voir ou corriger.",
+      "Le statut « Non applicable » reste possible si le critère ne s'applique pas."
+     ],
+     "aSavoir": "Le DSCR demande le principal exigible à 12 mois (échéancier, données complémentaires) ; à défaut, les remboursements du tableau de financement sont utilisés et signalés."
+    }
+   ]
+  },
+  {
+   "titre": "Valider une notation",
+   "intro": "Le circuit : le directeur du centre d'affaires donne son avis, puis la contre-étude décide, au niveau fixé par le montant, la note et le type de crédit. Chaque étape revient à une personne qui n'a pas contribué au dossier.",
+   "etapes": [
+    {
+     "img": "19-a-traiter",
+     "titre": "La file « À traiter »",
+     "actions": [
+      "Menu « Dossiers », onglet « À traiter ».",
+      "Chacun y trouve les dossiers dont l'étape en attente lui revient (fonction et rôle).",
+      "Sous le statut, l'étape en attente : « Validation du directeur du centre d'affaires (1/2) »."
+     ],
+     "aSavoir": "La file liste aussi les notes à renouveler : dernière notation validée plus ancienne que la durée de validité."
+    },
+    {
+     "img": "53-valideur-bilan",
+     "titre": "Le bilan sous les yeux du valideur",
+     "actions": [
+      "Ouvrir le dossier soumis.",
+      "Lire la base financière : exercice, clôture, certification, pièce source.",
+      "Vérifier les ratios corrigés et leur motif avant de décider."
+     ],
+     "aSavoir": "Un ratio corrigé apparaît en orange avec le motif de l'analyste. Les contrôles du bilan et le bilan complet se déplient sous le tableau."
+    },
+    {
+     "img": "59-circuit-dossier",
+     "titre": "Lire le circuit du dossier",
+     "actions": [
+      "Le bloc « Circuit de validation » montre chaque étape : avis, décision, niveau qui décide.",
+      "L'étape en attente et la personne attendue sont signalées ; les contributeurs du dossier sont exclus."
+     ],
+     "aSavoir": "Un avis défavorable ne rejette pas le dossier : il est porté à la connaissance du décideur. Le circuit est figé à la soumission."
+    },
+    {
+     "img": "20-decision",
+     "titre": "Valider l'étape ou rejeter",
+     "actions": [
+      "Relire le résultat, la base financière et la saisie.",
+      "Saisir un avis (obligatoire pour un rejet, 10 caractères au moins).",
+      "Cliquer sur « Valider : … » ou « Rejeter »."
+     ],
+     "aSavoir": "Le circuit affiche chaque étape, sa fonction et son rôle. Un rejet, à n'importe quelle étape, renvoie le dossier à l'instruction."
+    },
+    {
+     "img": "57-validation-finale",
+     "titre": "La décision de la contre-étude",
+     "actions": [
+      "La contre-étude ouvre le dossier : l'étape 1 est validée, avec l'avis du directeur.",
+      "Saisir un avis si besoin, puis « Validation finale » (ou « Rejeter »)."
+     ],
+     "aSavoir": "Une même personne ne décide que d'une étape. Au-delà du seuil de délégation, la dernière étape exige un rôle supérieur."
+    },
+    {
+     "img": "71-levee-comite",
+     "titre": "Lever un critère après décision du comité",
+     "actions": [
+      "Bloc « Levée de critères par le comité », réservé à la contre-étude et à la surveillance.",
+      "Cocher le critère levé, saisir la date du comité, le numéro du procès-verbal et le motif.",
+      "« Enregistrer la levée » : la note du dossier est recalculée."
+     ],
+     "aSavoir": "La levée vaut pour ce dossier ; au renouvellement, elle est rappelée et le critère, s'il est toujours rempli, doit être réexaminé. Une personne qui a contribué au dossier ne peut pas l'enregistrer."
+    },
+    {
+     "img": "75-fiche-criteres",
+     "titre": "Les critères sur la fiche de notation",
+     "actions": [
+      "La fiche de notation fige les critères actifs à la date, leur source, leur levée éventuelle et leur effet sur la note."
+     ],
+     "aSavoir": "La classification officielle des créances reste établie par le système de provisionnement : la note l'alimente, elle ne la remplace pas."
+    },
+    {
+     "img": "21-valide",
+     "titre": "La note officielle",
+     "actions": [
+      "Le dossier passe « Validé ».",
+      "La notation devient la note du client."
+     ],
+     "aSavoir": "L'historique du dossier, en bas de page, trace chaque action : qui, quand, quoi."
+    },
+    {
+     "img": "22-resultat",
+     "titre": "Lire le résultat",
+     "actions": [
+      "Classe (1 à 10), score brut, classe de confiance et couverture observée.",
+      "Les droits d'usage de la note.",
+      "Les points forts et points faibles, critère par critère."
+     ],
+     "aSavoir": "Échelle commune à toutes les grilles : 1 = meilleur risque, 10 = risque le plus élevé ; un défaut constaté est noté à part (DEF1 à DEF3). La version de l'échelle appliquée est consignée dans la notation."
+    },
+    {
+     "img": "52-fiche-base-financiere",
+     "titre": "La base financière sur la fiche",
+     "actions": [
+      "Ouvrir la notation (lien « run » du dossier).",
+      "Lire « Base financière de la notation » : bilan retenu, postes clés N et N−1.",
+      "Déplier tous les indicateurs (dont gearing, rentabilité, délais) et le bilan complet."
+     ],
+     "aSavoir": "La fiche prouve sur quel bilan la note a été calculée : utile au renouvellement d'une ligne de court terme comme à un crédit d'investissement."
+    },
+    {
+     "img": "26-rejete-reprise",
+     "titre": "Reprendre un dossier rejeté",
+     "actions": [
+      "Lire le motif du rejet.",
+      "Cliquer sur « Reprendre le dossier ».",
+      "Corriger, puis soumettre de nouveau."
+     ],
+     "aSavoir": "Un nouveau brouillon reprend la saisie ; le dossier rejeté reste dans l'historique et ne fait jamais foi."
+    },
+    {
+     "img": "27-dossiers",
+     "titre": "Suivre tous les dossiers",
+     "actions": [
+      "Onglets : brouillons, à valider, validés, rejetés, abandonnés, tous.",
+      "Les compteurs donnent l'état du stock."
+     ],
+     "aSavoir": "Un brouillon inutile s'abandonne depuis le dossier (« Abandonner le dossier »)."
+    }
+   ]
+  },
+  {
+   "titre": "Demander et décider une dérogation",
+   "intro": "Ajuster une note validée, dans une limite de crans : un gestionnaire des risques demande, un autre décide.",
+   "etapes": [
+    {
+     "img": "23-derogation-demande",
+     "titre": "Demander une dérogation",
+     "actions": [
+      "Le gestionnaire des risques ouvre la notation validée (lien « run » du dossier).",
+      "Il déplie « Demander une dérogation ».",
+      "Il choisit la classe retenue (1 à 10) et le motif, justifie, puis clique sur « Demander »."
+     ],
+     "aSavoir": "Réservé au gestionnaire des risques, comme par l'API. Deux crans au plus (paramétrable), mesurés sur l'échelle de la notation. Pas de dérogation vers ou depuis un grade de défaut."
+    },
+    {
+     "img": "24-derogation-decision",
+     "titre": "Décider d'une dérogation",
+     "actions": [
+      "Un autre gestionnaire des risques, ou un administrateur, ouvre la notation.",
+      "Il lit la justification et saisit un commentaire.",
+      "Il clique sur « Approuver » ou « Rejeter »."
+     ],
+     "aSavoir": "Le demandeur ne peut pas approuver sa propre dérogation. Le résultat du moteur n'est jamais réécrit."
+    }
+   ]
+  },
+  {
+   "titre": "Surveiller le portefeuille et la watch list",
+   "intro": "Le module Surveillance donne la vue d'ensemble du portefeuille ; la watch list, décidée en comité, met un client sous surveillance renforcée et plafonne sa note.",
+   "etapes": [
+    {
+     "img": "72-surveillance",
+     "titre": "Le tableau de surveillance",
+     "actions": [
+      "Menu « Surveillance ».",
+      "Choisir la date d'arrêté, l'horizon, l'entité, le segment ou le secteur, puis « Appliquer ».",
+      "Lire l'exposition notée, les indicateurs de risque (feux vert, orange, rouge) et leur tendance sur 12 mois."
+     ],
+     "aSavoir": "Les seuils des indicateurs sont paramétrés en administration. L'exposition est celle des lignes d'engagement (T24 ou saisie) ; à défaut, l'engagement global déclaré."
+    },
+    {
+     "img": "73-surveillance-migration",
+     "titre": "Migrations, concentration et alertes",
+     "actions": [
+      "La matrice de migration croise les notes d'il y a 12 mois et d'aujourd'hui : sous la diagonale, les dégradations.",
+      "Les ventilations par segment, secteur et centre, la concentration et la liste des alertes complètent la lecture.",
+      "« Export CSV » pour chaque tableau."
+     ],
+     "aSavoir": "Survolez une case ou une colonne pour lire le détail. Les sorties et les clients non renotés sont comptés à part."
+    },
+    {
+     "img": "74-watchlist",
+     "titre": "Inscrire un client en watch list",
+     "actions": [
+      "Sur la fiche du client, bloc « Watch list » (profil surveillance).",
+      "Saisir le niveau (WL1, WL2, WL3), la date d'effet, la date du comité, le numéro du procès-verbal et le motif.",
+      "« Enregistrer l'entrée en watch list » ; plus tard, changer de niveau ou enregistrer la sortie."
+     ],
+     "aSavoir": "Effet sur la note : WL1 → au mieux 8, WL2 → 9, WL3 → 10, avec un délai de renotation. Face à un critère BAM, le plafond le plus sévère s'applique. Une décision erronée s'annule avec un motif, elle n'est jamais supprimée."
+    }
+   ]
+  },
+  {
+   "titre": "Groupes d'affaires et renotation",
+   "intro": "Rattacher les clients à leur groupe d'affaires, puis renoter le portefeuille par lot, ponctuellement ou chaque mois.",
+   "etapes": [
+    {
+     "img": "39-groupes",
+     "titre": "Les groupes d'affaires",
+     "actions": [
+      "Menu « Groupes ».",
+      "Créer un groupe : code, nom, entité qui le suit.",
+      "Le tableau donne le nombre de membres de chaque groupe ; « Renoter le groupe » ouvre un lot pré-rempli."
+     ],
+     "aSavoir": "Appartenir à un groupe ne relève jamais une note : le soutien du groupe reste soumis aux quatre conditions documentées du modèle."
+    },
+    {
+     "img": "40-groupe-fiche",
+     "titre": "La fiche d'un groupe",
+     "actions": [
+      "Cliquer sur le code du groupe.",
+      "Lire la note officielle et l'arrêté de chaque membre.",
+      "Rattacher des clients en collant leurs ICE, un par ligne ; les détacher de la même façon."
+     ],
+     "aSavoir": "Seuls les clients de l'entité du groupe et de sa descendance peuvent y être rattachés. Chaque rattachement est journalisé."
+    },
+    {
+     "img": "41-renotation-lancer",
+     "titre": "Lancer une renotation",
+     "actions": [
+      "Menu « Renotation » (gestionnaire des risques).",
+      "Nommer le lot et choisir la date d'arrêté.",
+      "Choisir la sélection : banque ou filiale, groupe d'affaires, segment, secteur, ancienneté de la validation.",
+      "Joindre au besoin le fichier CSV de la DSI (première colonne « ice »).",
+      "« Compter la sélection », puis « Lancer le lot »."
+     ],
+     "aSavoir": "Chaque client est renoté à partir de son dernier dossier validé. Une valeur du fichier hors grille est refusée, jamais appliquée."
+    },
+    {
+     "img": "42-renotation-suivi",
+     "titre": "Suivre un lot et lire la migration",
+     "actions": [
+      "Le lot se traite pendant que l'écran est ouvert ; la barre montre l'avancement.",
+      "Lire les compteurs : inchangées, améliorations, dégradations, sans note, défauts.",
+      "La matrice croise la note officielle (en ligne) et la note de surveillance (en colonne), sur l'échelle 1 à 10 ; une note antérieure (STD-P…) est transposée pour compter les crans."
+     ],
+     "aSavoir": "Fermer l'écran n'arrête rien : la tâche planifiée du serveur reprend le lot là où il en est, sans jamais noter deux fois."
+    },
+    {
+     "img": "43-renotation-revoir",
+     "titre": "Les clients à revoir",
+     "actions": [
+      "Le filtre « À revoir » liste les migrations, absences de note et défauts.",
+      "« Dossier » ouvre le dossier de revue créé par le lot.",
+      "« Exporter le lot (CSV) » produit le détail pour Excel."
+     ],
+     "aSavoir": "Un client sans dossier validé (nouvelle relation) est « écarté » avec son motif : il se note par un dossier, pas par le lot."
+    },
+    {
+     "img": "44-renotation-planifier",
+     "titre": "Planifier une renotation périodique",
+     "actions": [
+      "En bas de l'écran Renotation.",
+      "Choisir la fréquence (mensuelle à annuelle) et le jour d'exécution.",
+      "Choisir la sélection et le seuil de migration, puis enregistrer."
+     ],
+     "aSavoir": "À chaque échéance, un lot est créé avec pour date d'arrêté la fin du mois précédent. « Suspendre » arrête la planification sans la supprimer."
+    },
+    {
+     "img": "45-dossier-revue",
+     "titre": "Instruire un dossier de revue",
+     "actions": [
+      "Ouvrir le dossier depuis le lot ou la file « Dossiers ».",
+      "Lire le bandeau : note officielle, note de surveillance, écart en crans.",
+      "Vérifier et compléter la saisie reprise, puis soumettre à validation."
+     ],
+     "aSavoir": "La note officielle ne change qu'après validation de ce dossier par une seconde personne, comme pour tout dossier."
+    }
+   ]
+  },
+  {
+   "titre": "Autres fonctions",
+   "intro": "Simuler, consulter la grille et utiliser l'outil sur téléphone.",
+   "etapes": [
+    {
+     "img": "29-simulation",
+     "titre": "Simuler sans enregistrer",
+     "actions": [
+      "Menu « Nouvelle notation », partie « Simulation ».",
+      "Saisir une grille et cliquer sur « Simuler la notation »."
+     ],
+     "aSavoir": "Utile pour la formation ou pour tester l'effet d'un ratio. Rien n'est enregistré."
+    },
+    {
+     "img": "30-modele",
+     "titre": "Consulter la grille du modèle",
+     "actions": [
+      "Menu « Modèles », puis le modèle.",
+      "Pondération des domaines, critères, barèmes et repères."
+     ],
+     "aSavoir": "La méthodologie complète est dans le menu « Méthodologie »."
+    },
+    {
+     "img": "38-mobile",
+     "titre": "Sur téléphone",
+     "actions": [
+      "Le menu défile horizontalement.",
+      "Les tableaux larges défilent dans leur cadre."
+     ],
+     "aSavoir": "La validation d'un dossier est possible sur téléphone ; la saisie d'une grille complète est plus confortable sur ordinateur."
+    }
+   ]
+  },
+  {
+   "titre": "Administration",
+   "intro": "Réservé aux administrateurs : comptes et fonctions, organisation, devises, paramétrage, raccordements des API, reprise du stock et journal d'audit.",
+   "etapes": [
+    {
+     "img": "32-admin",
+     "titre": "Vue d'ensemble",
+     "actions": [
+      "Menu « Administration ».",
+      "Quatre domaines : utilisateurs, banques et filiales, devises, paramétrage."
+     ],
+     "aSavoir": "Un administrateur d'entité gère les comptes de son périmètre ; le paramétrage global relève de l'administrateur du groupe."
+    },
+    {
+     "img": "33-admin-utilisateurs",
+     "titre": "Créer un compte",
+     "actions": [
+      "Saisir l'identifiant, le nom, le rôle.",
+      "Choisir l'entité de rattachement et la portée d'écriture.",
+      "Cliquer sur « Créer » et remettre le mot de passe provisoire par un canal distinct.",
+      "Attribuer la fonction (circuit de validation) : chargé d'affaires, directeur du centre d'affaires, contre-étude…"
+     ],
+     "aSavoir": "Un compte non rattaché à une entité n'a accès à rien, sauf l'administrateur du groupe."
+    },
+    {
+     "img": "34-admin-entites",
+     "titre": "Banques et filiales",
+     "actions": [
+      "Créer une entité : code, entité mère, type, pays, devise.",
+      "Habillage facultatif : nom de l'outil, logo, couleur.",
+      "« Modifier » ou « Désactiver » une entité existante."
+     ],
+     "aSavoir": "Une entité voit sa descendance, jamais sa maison mère ni ses entités sœurs."
+    },
+    {
+     "img": "35-admin-devises",
+     "titre": "Publier un cours de change",
+     "actions": [
+      "Saisir la devise, la date d'effet et le cours en MAD.",
+      "Indiquer la source (Bank Al-Maghrib…).",
+      "Cliquer sur « Publier »."
+     ],
+     "aSavoir": "Un cours publié ne se modifie pas : une correction est un nouveau cours daté."
+    },
+    {
+     "img": "58-admin-circuit",
+     "titre": "Paramétrer le circuit de validation",
+     "actions": [
+      "Administration › Paramétrage, section « Circuit de validation ».",
+      "Pour chaque étape : nature (avis ou décision), rôle minimal, fonctions habilitées, conditions (montant, note, type de crédit, catégorie de centre).",
+      "Enregistrer : le nouveau circuit s'applique aux dossiers soumis ensuite."
+     ],
+     "aSavoir": "Seul le niveau de décision le plus élevé qui s'applique décide ; il reste toujours un niveau sans condition. Un dossier en cours garde le circuit de sa soumission."
+    },
+    {
+     "img": "36-admin-parametrage",
+     "titre": "Paramétrer le workflow",
+     "actions": [
+      "Rôle du valideur, seuil de délégation, bilan exigé pour soumettre.",
+      "Durée de validité d'une note, ampleur des dérogations, taille des pièces.",
+      "Cliquer sur « Enregistrer le paramétrage »."
+     ],
+     "aSavoir": "Chaque modification est journalisée. Les grilles de notation ne se paramètrent pas ici : elles relèvent du comité modèles."
+    },
+    {
+     "img": "54-admin-echelle",
+     "titre": "Paramétrer l'échelle de notation 1 à 10",
+     "actions": [
+      "Administration › « Échelle de notation ».",
+      "Lire la version en vigueur : classes, bornes de score, libellés.",
+      "« + Nouvelle version de l'échelle » : identifiant, date d'effet (aujourd'hui au plus tôt), bornes et libellés, motif.",
+      "« Enregistrer la version » : elle s'appliquera aux notations calculées à partir de sa date d'effet."
+     ],
+     "aSavoir": "Réservé à l'administrateur du groupe. Une version en vigueur est figée : chaque notation garde l'échelle de son calcul. Une version future se modifie ou se retire. Les classes citées par les plafonds (7, 8) doivent être conservées."
+    },
+    {
+     "img": "56-admin-grilles",
+     "titre": "Paramétrer les grilles de notation",
+     "actions": [
+      "Administration › « Paramétrage des grilles » ; choisir la grille.",
+      "« + Nouvelle version » : identifiant, date d'effet, libellé, motif.",
+      "Modifier poids, seuils, repères, critères ; total à 100 % par segment.",
+      "Exceptions, revues, couverture, confiance en bas de page.",
+      "« Enregistrer la version » : un refus liste les points à corriger."
+     ],
+     "aSavoir": "Réservé à l'administrateur du groupe. Version en vigueur figée ; version future modifiable ou retirable. Consignée dans chaque notation."
+    },
+    {
+     "img": "37-admin-ia",
+     "titre": "Paramétrer l'IA",
+     "actions": [
+      "Cocher « Activée ».",
+      "Choisir le fournisseur et le modèle ; l'adresse si l'API est interne.",
+      "Enregistrer."
+     ],
+     "aSavoir": "La clé d'accès n'est jamais saisie à l'écran : elle est déposée par l'informatique dans la configuration du serveur. Fournisseurs possibles : Anthropic (Claude), OpenAI, Azure OpenAI, Google Gemini ou API compatible ; une clé par fournisseur (variable IA_CLE_…), testée dans Raccordements."
+    },
+    {
+     "img": "81-admin-code-gestionnaire",
+     "titre": "Fonction et code gestionnaire d'un compte",
+     "actions": [
+      "Administration › Utilisateurs.",
+      "Pour chaque compte : rôle, entité, fonction dans le circuit (chargé d'affaires, directeur du centre, contre-étude…).",
+      "Renseigner le code gestionnaire T24 des chargés d'affaires, puis « Appliquer »."
+     ],
+     "aSavoir": "Le code gestionnaire relie le compte à son portefeuille T24 : il est nécessaire avant d'activer le cloisonnement par portefeuille."
+    },
+    {
+     "img": "80-admin-criteres",
+     "titre": "Critères de classement BAM et watch list",
+     "actions": [
+      "Administration › Paramétrage, section « Critères de classement BAM et effet ».",
+      "Régler l'effet de chaque famille (plafond, défaut), activer ou retirer un critère, le relier à une alerte du bilan.",
+      "Les niveaux de watch list (plafond, délais) se règlent dans la section voisine."
+     ],
+     "aSavoir": "Toute modification est journalisée avec la valeur précédente. Les valeurs proposées sont à arrêter en COPIL."
+    },
+    {
+     "img": "79-admin-bilan",
+     "titre": "Le format du bilan",
+     "actions": [
+      "Administration › Format du bilan.",
+      "Postes chargés, indicateurs calculés par formule, seuils d'appréciation (bon, mauvais, critique) et alertes.",
+      "Créer une nouvelle version datée pour toute modification."
+     ],
+     "aSavoir": "Une notation garde la version du format qui l'a produite : l'historique reste lisible."
+    },
+    {
+     "img": "76-admin-raccordements",
+     "titre": "Mettre en service les API (raccordements)",
+     "actions": [
+      "Administration › Raccordements : état de T24, du crédit bureau et de l'IA, adresse, présence du jeton, dernier test.",
+      "Saisir un code réel (code client T24, ICE) et « Tester la connexion » : l'API est appelée sans rien enregistrer.",
+      "Si le test est réussi, activer l'API dans Paramétrage."
+     ],
+     "aSavoir": "Au démarrage, toutes les API sont désactivées et l'outil fonctionne en saisie. L'activation est refusée sans test réussi de moins de 30 jours sur la même adresse ; la désactivation est toujours possible."
+    },
+    {
+     "img": "78-admin-reprise",
+     "titre": "Reprendre le stock existant",
+     "actions": [
+      "Administration › Reprise du stock, « Télécharger le modèle ».",
+      "Remplir les feuilles Clients, Notes, Bilans et Watch list.",
+      "« Contrôler » (à blanc, ligne par ligne), corriger les rejets, puis « Importer »."
+     ],
+     "aSavoir": "L'import se fait en une seule fois, ou rien n'est écrit. Rejouer le même classeur ne crée rien : on peut corriger et réimporter."
+    },
+    {
+     "img": "77-admin-journal",
+     "titre": "Consulter le journal d'audit",
+     "actions": [
+      "Administration › Journal d'audit.",
+      "Filtrer par objet, action, acteur et période ; ouvrir le dossier, le client ou la notation concernés.",
+      "« Exporter » pour un fichier Excel."
+     ],
+     "aSavoir": "Le journal est en ajout seul : rien ne s'y modifie. Un administrateur d'entité ne voit que son périmètre."
+    }
+   ]
+  }
+ ],
+ "regles": [
+  "Au démarrage, les API (T24, crédit bureau, IA) sont désactivées : tout se saisit. Une API ne s'active qu'après un test de connexion réussi.",
+  "Un client se crée depuis son code T24 ; à défaut, en saisie minimale, à rattacher à T24 ensuite.",
+  "Une seule échelle de notation pour toutes les grilles : classe 1 (meilleur risque) à 10, défaut hors échelle.",
+  "La note devient officielle au terme du circuit : avis du directeur du centre, puis décision de la contre-étude au niveau requis.",
+  "Celui qui a contribué au dossier ne le valide pas.",
+  "Les pièces requises dépendent du motif du dossier ; une pièce doit être typée pour compter.",
+  "Le rapport de solvabilité doit être à jour : il se rafraîchit dans l'outil du crédit bureau.",
+  "Un critère de classement BAM plafonne la note ou impose le défaut ; seul un comité peut le lever, avec son procès-verbal.",
+  "La watch list est décidée en comité ; elle plafonne la note (8, 9 ou 10).",
+  "Sans les données critiques (grille standard), aucune note n'est produite ; une donnée manquante vaut 0.",
+  "Sur une grille standard, pas de soumission sans bilan N et N−1 conforme ; les ratios ne se corrigent qu'avec un motif.",
+  "L'IA propose ; l'analyste décide, et chaque décision est tracée.",
+  "Une dérogation est limitée à deux crans et exige une seconde validation.",
+  "Une renotation par lot produit une note de surveillance : seule la validation d'un dossier change la note officielle.",
+  "Toute opération est tracée dans le journal d'audit."
+ ]
+}

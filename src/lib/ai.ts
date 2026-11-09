@@ -31,7 +31,12 @@ export interface AiConfig {
   provider: AiProvider;
   model: string;
   baseUrl: string | null;
+  /** Variable d'environnement de la clé (fournisseurs autres qu'Anthropic). */
+  keyEnv: string;
 }
+
+/** Nom de variable admis pour une clé d'IA : IA_CLE_… uniquement. */
+export const AI_KEY_ENV_PATTERN = /^IA_CLE_[A-Z0-9_]{1,40}$/;
 
 export interface AiDocument {
   name: string;
@@ -69,18 +74,23 @@ export async function aiConfig(): Promise<AiConfig> {
     provider,
     model: (s.AI_MODEL ?? "").trim() || DEFAULT_MODEL[provider],
     baseUrl: (s.AI_BASE_URL ?? "").trim() || null,
+    keyEnv: AI_KEY_ENV_PATTERN.test(s.AI_KEY_ENV ?? "") ? s.AI_KEY_ENV : "IA_CLE_API",
   };
 }
 
-function apiKey(provider: AiProvider): string | undefined {
-  if (provider === "anthropic") return process.env.ANTHROPIC_API_KEY;
-  return process.env.IA_CLE_API;
+/** Variable d'environnement qui porte la clé du fournisseur paramétré. */
+export function keyEnvOf(c: Pick<AiConfig, "provider" | "keyEnv">): string {
+  return c.provider === "anthropic" ? "ANTHROPIC_API_KEY" : c.keyEnv;
+}
+
+function apiKey(c: AiConfig): string | undefined {
+  return process.env[keyEnvOf(c)];
 }
 
 /** Ce qui manque pour appeler le fournisseur, ou null. */
 export function missingConfig(c: AiConfig): string | null {
-  if (!apiKey(c.provider)) {
-    return `la clé ${c.provider === "anthropic" ? "ANTHROPIC_API_KEY" : "IA_CLE_API"} est absente des variables d'environnement`;
+  if (!apiKey(c)) {
+    return `la clé ${keyEnvOf(c)} est absente des variables d'environnement`;
   }
   if (!c.model) return "le modèle n'est pas renseigné (paramètre « Modèle »)";
   if ((c.provider === "azure_openai" || c.provider === "compatible_openai") && !c.baseUrl) {
@@ -153,7 +163,7 @@ function anthropicBlocks(docs: AiDocument[]): Anthropic.Beta.BetaContentBlockPar
 }
 
 async function runAnthropic(c: AiConfig, req: AiRequest): Promise<AiResponse> {
-  const client = new Anthropic({ apiKey: apiKey("anthropic"), ...(c.baseUrl ? { baseURL: c.baseUrl } : {}) });
+  const client = new Anthropic({ apiKey: apiKey(c), ...(c.baseUrl ? { baseURL: c.baseUrl } : {}) });
   try {
     const stream = client.beta.messages.stream(
       {
@@ -204,6 +214,17 @@ async function pdfToText(base64: string): Promise<string> {
   return pages.map((t, i) => `[Page ${i + 1}]\n${t.trim()}`).join("\n\n");
 }
 
+/**
+ * Adresse « chat completions » : le chemin est complété s'il manque, en
+ * conservant les paramètres (Azure : ?api-version=…).
+ */
+export function chatCompletionsUrl(baseUrl: string | null): string {
+  const u = new URL(baseUrl || "https://api.openai.com/v1");
+  const path = u.pathname.replace(/\/+$/, "");
+  u.pathname = path.endsWith("/chat/completions") ? path : `${path}/chat/completions`;
+  return u.toString();
+}
+
 async function runOpenAiCompatible(c: AiConfig, req: AiRequest): Promise<AiResponse> {
   type Part = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
   const parts: Part[] = [];
@@ -224,9 +245,8 @@ async function runOpenAiCompatible(c: AiConfig, req: AiRequest): Promise<AiRespo
   }
   parts.push({ type: "text", text: req.instruction });
 
-  const base = (c.baseUrl ?? "https://api.openai.com/v1").replace(/\/+$/, "");
-  const url = base.endsWith("/chat/completions") ? base : `${base}/chat/completions`;
-  const key = apiKey(c.provider) ?? "";
+  const url = chatCompletionsUrl(c.baseUrl);
+  const key = apiKey(c) ?? "";
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (c.provider === "azure_openai") headers["api-key"] = key;
   else headers.authorization = `Bearer ${key}`;
