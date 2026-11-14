@@ -28,6 +28,8 @@ import {
 import { CUSTOMER_FIELD_LABELS, CUSTOMER_FIELDS, DATA_SOURCE_LABELS, type CoreBankingCustomer, type DataSource, type FieldChange } from "@/reference/core-banking";
 import { LEGAL_EVENT_LABELS, LEGAL_SIGNALS, PROFILE_IDENTITY_FIELDS, PROFILE_SOURCE_LABELS, profileFieldSpec, type LegalProfile, type ProfileFinding } from "@/reference/legal-profile";
 import { getAt, type Correction } from "@/reference/corrections";
+import { MATCH_LABELS, RECONCILE_LABELS, type FieldMatch, type ManualEntryRecord } from "@/reference/reconciliation";
+import type { T24Preview } from "@/lib/core-banking";
 import { Corrected, CorrectionForm, CorrectionsList, IdentityChecks, type CorrectionTarget } from "./ReportTools";
 import type { ReportDraft, ReportStatus } from "@/lib/external-data";
 import {
@@ -37,6 +39,8 @@ import {
   saveCreditReportAction,
   saveLegalProfileAction,
   syncT24Action,
+  compareT24Action,
+  reconcileT24Action,
 } from "../external-actions";
 
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
@@ -91,6 +95,157 @@ function Msg({ ok, error }: { ok?: string | null; error?: string | null }) {
 
 // --- Référentiel T24 ------------------------------------------------------------------
 
+/**
+ * Rapprochement de la fiche avec T24 : chaque champ saisi face à la valeur T24.
+ * T24 fait foi par défaut ; garder la valeur saisie à la place d'une valeur T24
+ * différente exige un motif. Rien n'est enregistré avant « Valider ».
+ */
+function ReconcileT24({
+  counterpartyId,
+  code,
+  preview,
+  onDone,
+  onCancel,
+}: {
+  counterpartyId: string;
+  code: string | undefined;
+  preview: T24Preview;
+  onDone: (msg: string) => void;
+  onCancel: () => void;
+}) {
+  const [choice, setChoice] = useState<Record<string, "T24" | "SAISIE">>(() => Object.fromEntries(preview.rows.map((r) => [r.field, preview.kept[r.field] ? "SAISIE" : r.proposed])));
+  const [reason, setReason] = useState<Record<string, string>>(() => Object.fromEntries(Object.entries(preview.kept).map(([f, k]) => [f, k?.reason ?? ""])));
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const color: Record<FieldMatch, string> = { IDENTIQUE: "var(--good)", A_COMPLETER: "var(--brand)", ECART: "var(--bad)", SAISIE_SEULE: "var(--warn)" };
+  const gaps = preview.rows.filter((r) => r.status === "ECART").length;
+  return (
+    <div className="card" style={{ padding: 12, boxShadow: "none", display: "grid", gap: 8, borderLeft: "4px solid var(--brand)" }}>
+      <strong style={{ fontSize: 13 }}>
+        Rapprochement avec le client T24 {preview.code}
+        {preview.name ? ` — ${preview.name}` : ""}
+      </strong>
+      <p className="muted" style={{ fontSize: 12 }}>
+        {gaps ? `${gaps} écart(s) entre la saisie et T24. ` : "Aucun écart entre la saisie et T24. "}
+        T24 fait foi par défaut ; pour garder une valeur saisie différente, choisissez « Saisie » et donnez le motif. La saisie d&apos;origine reste
+        consultable après le rattachement.
+      </p>
+      <div className="table-scroll">
+        <table className="data" style={{ minWidth: 720 }}>
+          <thead>
+            <tr>
+              <th scope="col">Champ</th>
+              <th scope="col">Saisie</th>
+              <th scope="col">T24</th>
+              <th scope="col">Contrôle</th>
+              <th scope="col">Valeur retenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {preview.rows.map((r) => (
+              <tr key={r.field}>
+                <td>{r.labelFr}</td>
+                <td>{r.manual ?? <span className="muted">—</span>}</td>
+                <td>{r.t24 ?? <span className="muted">—</span>}</td>
+                <td style={{ color: color[r.status], fontWeight: 600 }}>{MATCH_LABELS[r.status]}</td>
+                <td>
+                  {r.status === "ECART" ? (
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <span style={{ display: "flex", gap: 10 }}>
+                        {(["T24", "SAISIE"] as const).map((c) => (
+                          <label key={c} style={{ display: "inline-flex", gap: 4, alignItems: "center", fontSize: 12 }}>
+                            <input type="radio" style={{ width: 14 }} name={`choix-${r.field}`} checked={choice[r.field] === c} onChange={() => setChoice((x) => ({ ...x, [r.field]: c }))} />
+                            {c === "T24" ? "T24" : "Saisie"}
+                          </label>
+                        ))}
+                      </span>
+                      {choice[r.field] === "SAISIE" && (
+                        <input
+                          aria-label={`Motif pour garder la saisie — ${r.labelFr}`}
+                          placeholder="Motif (10 caractères au moins)"
+                          value={reason[r.field] ?? ""}
+                          onChange={(e) => setReason((x) => ({ ...x, [r.field]: e.target.value }))}
+                          style={{ fontSize: 12 }}
+                        />
+                      )}
+                    </div>
+                  ) : r.status === "SAISIE_SEULE" ? (
+                    <span className="muted" style={{ fontSize: 12 }}>saisie gardée</span>
+                  ) : (
+                    <span className="muted" style={{ fontSize: 12 }}>T24</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              setError(null);
+              const r = await reconcileT24Action(counterpartyId, code, choice as never, reason as never);
+              if (r.ok) onDone(r.okFr ?? "");
+              else setError(r.errorFr ?? "Échec.");
+            })
+          }
+        >
+          {pending ? "Enregistrement…" : "Valider le rapprochement"}
+        </button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>
+          Annuler
+        </button>
+      </div>
+      {error && (
+        <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Saisie d'origine conservée au rattachement, et valeurs gardées à la place de T24. */
+function ManualEntryView({ record }: { record: ManualEntryRecord }) {
+  const rows = (Object.keys(RECONCILE_LABELS) as Array<keyof typeof RECONCILE_LABELS>).filter((k) => record.snapshot[k]);
+  const kept = Object.entries(record.kept);
+  return (
+    <details>
+      <summary style={{ cursor: "pointer", fontSize: 13 }}>
+        Saisie d&apos;origine (avant rattachement, {record.snapshotAt.slice(0, 10)}, {record.snapshotBy})
+        {kept.length ? ` · ${kept.length} valeur(s) saisie(s) gardée(s)` : ""}
+      </summary>
+      <div className="table-scroll" style={{ marginTop: 6 }}>
+        <table className="data" style={{ minWidth: 520 }}>
+          <thead>
+            <tr>
+              <th scope="col">Champ</th>
+              <th scope="col">Saisie d&apos;origine</th>
+              <th scope="col">Gardée à la place de T24</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((k) => {
+              const g = record.kept[k];
+              return (
+                <tr key={k}>
+                  <td>{RECONCILE_LABELS[k]}</td>
+                  <td>{record.snapshot[k]}</td>
+                  <td style={{ fontSize: 12 }}>{g ? `oui (T24 : ${g.t24}) — ${g.reason}, ${g.by}` : <span className="muted">non</span>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 export function T24Panel({
   counterpartyId,
   source,
@@ -103,7 +258,9 @@ export function T24Panel({
   modelSegment,
   t24Enabled,
   canEdit,
+  manualEntry = null,
 }: {
+  manualEntry?: ManualEntryRecord | null;
   counterpartyId: string;
   source: DataSource | null;
   code: string | null;
@@ -120,13 +277,22 @@ export function T24Panel({
   const [input, setInput] = useState(code ?? "");
   const [pending, start] = useTransition();
   const [result, setResult] = useState<{ ok?: string; error?: string; changes?: FieldChange[] } | null>(null);
+  const [preview, setPreview] = useState<T24Preview | null>(null);
   const run = () =>
     start(async () => {
-      const r = await syncT24Action(counterpartyId, source === "T24" ? undefined : input);
+      const r = await syncT24Action(counterpartyId, undefined);
       if (r.ok) {
         setResult({ ok: r.changes?.length ? `Fiche actualisée depuis T24 : ${r.changes.length} champ(s) modifié(s).` : "Fiche à jour : aucun écart avec T24.", changes: r.changes });
         router.refresh();
       } else setResult({ error: r.errorFr });
+    });
+  // Fiche saisie : comparaison avec T24 avant tout rattachement.
+  const compare = () =>
+    start(async () => {
+      setResult(null);
+      const r = await compareT24Action(counterpartyId, source === "T24" ? undefined : input);
+      if (r.ok && r.preview) setPreview(r.preview);
+      else setResult({ error: r.errorFr });
     });
   return (
     <section id="t24" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0 }}>
@@ -192,11 +358,38 @@ export function T24Panel({
               <input inputMode="numeric" value={input} onChange={(e) => setInput(e.target.value)} style={{ maxWidth: 200 }} />
             </label>
           )}
-          <button type="button" className="btn-primary" disabled={pending || !t24Enabled || (source !== "T24" && !input.trim())} onClick={run}>
-            {pending ? "Interrogation de T24…" : source === "T24" ? "Actualiser depuis T24" : "Rattacher à T24 et rapatrier"}
-          </button>
+          {source === "T24" ? (
+            <>
+              <button type="button" className="btn-primary" disabled={pending || !t24Enabled} onClick={run}>
+                {pending ? "Interrogation de T24…" : "Actualiser depuis T24"}
+              </button>
+              {manualEntry && (
+                <button type="button" className="btn-ghost" disabled={pending || !t24Enabled} onClick={compare}>
+                  Revoir le rapprochement
+                </button>
+              )}
+            </>
+          ) : (
+            <button type="button" className="btn-primary" disabled={pending || !t24Enabled || !input.trim()} onClick={compare}>
+              {pending ? "Interrogation de T24…" : "Comparer la saisie avec T24"}
+            </button>
+          )}
           {!t24Enabled && <span className="muted" style={{ fontSize: 12 }}>Rapatriement T24 non activé (paramétrage).</span>}
         </div>
+      )}
+      {manualEntry && <ManualEntryView record={manualEntry} />}
+      {preview && (
+        <ReconcileT24
+          counterpartyId={counterpartyId}
+          code={source === "T24" ? undefined : input}
+          preview={preview}
+          onCancel={() => setPreview(null)}
+          onDone={(m) => {
+            setPreview(null);
+            setResult({ ok: m });
+            router.refresh();
+          }}
+        />
       )}
       <Msg ok={result?.ok} error={result?.error} />
       {result?.changes && result.changes.length > 0 && (

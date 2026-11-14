@@ -7,7 +7,8 @@ import { getPerimeter, getSessionIdentity } from "@/lib/session";
 import { checkClassification, checkWatchlistLevels, CLASSIFICATION_KEY, WATCHLIST_LEVELS_KEY, type ClassificationSettings, type WatchlistLevel } from "@/reference/classification";
 import { checkFacilityTypes, FACILITY_TYPES_KEY, type FacilityType } from "@/reference/facilities";
 import { checkSurveillance, KRI_CATALOG, SURVEILLANCE_KEY, type SurveillanceSettings } from "@/reference/portfolio";
-import { CASE_PURPOSES_KEY, checkPurposes, checkRefItems, COMMERCIAL_SEGMENTS_KEY, CREDIT_TYPES_KEY, ENTITY_TIERS_KEY, type CasePurpose, type RefItem } from "@/reference/case-purposes";
+import { CODE_STORED, ENTRY_LIST_DEFAULTS, ENTRY_LIST_KEYS, ENTRY_LIST_TITLES, LEGAL_FORMS_KEY, type EntryListKey } from "@/reference/entry-lists";
+import { CASE_PURPOSES_KEY, checkPurposes, checkRefItems, parseRefItems, COMMERCIAL_SEGMENTS_KEY, CREDIT_TYPES_KEY, ENTITY_TIERS_KEY, type CasePurpose, type RefItem } from "@/reference/case-purposes";
 
 export interface PurposesActionState {
   okFr?: string;
@@ -63,10 +64,11 @@ export async function savePurposesAction(list: CasePurpose[]): Promise<PurposesA
  * Listes paramétrables simples (types de crédit, catégories de délégation).
  * Un code utilisé (dossier, entité) ne se supprime pas : il se désactive.
  */
-export async function saveRefListAction(key: "CREDIT_TYPES" | "ENTITY_TIERS" | "COMMERCIAL_SEGMENTS", list: RefItem[]): Promise<PurposesActionState> {
+export async function saveRefListAction(key: "CREDIT_TYPES" | "ENTITY_TIERS" | "COMMERCIAL_SEGMENTS" | EntryListKey, list: RefItem[]): Promise<PurposesActionState> {
   const session = await getSessionIdentity("ADMIN");
   if (!session.ok) return { errorFr: session.reasonFr };
   if (!(await getPerimeter()).all) return { errorFr: "Réservé à un administrateur du groupe." };
+  if ((ENTRY_LIST_KEYS as readonly string[]).includes(key)) return saveEntryList(key as EntryListKey, list, session.identity);
   if (key !== CREDIT_TYPES_KEY && key !== ENTITY_TIERS_KEY && key !== COMMERCIAL_SEGMENTS_KEY) return { errorFr: "Liste inconnue." };
   const clean: RefItem[] = (Array.isArray(list) ? list : []).slice(0, 30).map((p) => ({
     code: String(p.code ?? "").trim().toUpperCase(),
@@ -100,6 +102,46 @@ export async function saveRefListAction(key: "CREDIT_TYPES" | "ENTITY_TIERS" | "
         resourceId: key,
         detail: { list: clean },
       });
+    });
+  } catch {
+    return { errorFr: "Enregistrement impossible : la base de données ne répond pas." };
+  }
+  revalidatePath("/admin/settings");
+  return { okFr: `${what} enregistrés.` };
+}
+
+/**
+ * Listes de saisie (formes juridiques, secteurs, villes, tribunaux, garanties).
+ * Un code de forme juridique ou de secteur utilisé par une fiche ne se
+ * supprime pas : il se désactive. Les valeurs antérieures aux listes (texte
+ * libre) ne bloquent pas l'enregistrement.
+ */
+async function saveEntryList(key: EntryListKey, list: RefItem[], identity: { name: string; role: string }): Promise<PurposesActionState> {
+  const what = ENTRY_LIST_TITLES[key];
+  const clean: RefItem[] = (Array.isArray(list) ? list : []).slice(0, 300).map((p) => ({
+    code: String(p.code ?? "").trim().toUpperCase(),
+    labelFr: String(p.labelFr ?? "").trim(),
+    active: !!p.active,
+  }));
+  const issues = checkRefItems(clean, what);
+  if (issues.length) return { errorFr: issues.join(" ") };
+  if (CODE_STORED.has(key)) {
+    const before = parseRefItems((await prisma.appSetting.findUnique({ where: { key } }))?.value, ENTRY_LIST_DEFAULTS[key]).map((x) => x.code);
+    const used =
+      key === LEGAL_FORMS_KEY
+        ? (await prisma.counterparty.findMany({ where: { legalForm: { in: before } }, distinct: ["legalForm"], select: { legalForm: true } })).map((u) => u.legalForm!)
+        : (await prisma.counterparty.findMany({ where: { sectorCode: { in: before } }, distinct: ["sectorCode"], select: { sectorCode: true } })).map((u) => u.sectorCode!);
+    const removed = used.filter((code) => !clean.some((p) => p.code === code));
+    if (removed.length) return { errorFr: `Code déjà utilisé par des fiches : ${removed.join(", ")}. Désactivez-le au lieu de le supprimer.` };
+  }
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.appSetting.upsert({
+        where: { key },
+        update: { value: JSON.stringify(clean), updatedBy: identity.name },
+        create: { key, value: JSON.stringify(clean), updatedBy: identity.name },
+      });
+      await auditWithin(tx, { actor: identity.name, actorRole: identity.role, action: "ENTRY_LIST_UPDATED", resourceType: "AppSetting", resourceId: key, detail: { list: clean } });
     });
   } catch {
     return { errorFr: "Enregistrement impossible : la base de données ne répond pas." };

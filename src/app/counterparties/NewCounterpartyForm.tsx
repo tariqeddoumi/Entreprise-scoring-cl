@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { createCounterpartyAction, extractCounterpartyAction, updateCounterpartyAction } from "./actions";
 import { createFromT24Action, previewT24Action, type T24Result } from "./external-actions";
 import { checkMinimalEntry, CUSTOMER_FIELDS, CUSTOMER_FIELD_LABELS } from "@/reference/core-banking";
+import { matchOption } from "@/reference/entry-lists";
 
 const FIELD_STYLE = { width: "100%" } as const;
 
@@ -72,10 +73,46 @@ interface Props {
   fromT24?: boolean;
   /** Chargé d'affaires restreint à son portefeuille : le gestionnaire est lui-même. */
   ownPortfolio?: boolean;
+  /** Listes de saisie paramétrées (formes juridiques, secteurs, villes). */
+  lists?: { legalForms: RefOption[]; sectors: RefOption[]; cities: RefOption[] };
+}
+
+type RefOption = { code: string; labelFr: string; active: boolean };
+
+/** Liste déroulante figée ; une valeur déjà enregistrée hors liste reste affichée. */
+function ListSelect({
+  value,
+  onChange,
+  options,
+  stored = "code",
+  disabled,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: RefOption[];
+  stored?: "code" | "label";
+  disabled?: boolean;
+  ariaLabel?: string;
+}) {
+  const active = options.filter((o) => o.active);
+  const key = (o: RefOption) => (stored === "code" ? o.code : o.labelFr);
+  const known = active.some((o) => key(o) === value);
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={FIELD_STYLE} disabled={disabled} aria-label={ariaLabel}>
+      <option value="">— Choisir —</option>
+      {active.map((o) => (
+        <option key={o.code} value={key(o)}>
+          {o.labelFr}
+        </option>
+      ))}
+      {value && !known && <option value={value}>{value} (hors liste)</option>}
+    </select>
+  );
 }
 
 /** Création ou modification d'une fiche client. */
-export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit, t24Enabled = false, segments = [], fromT24 = false, ownPortfolio = false }: Props) {
+export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit, t24Enabled = false, segments = [], fromT24 = false, ownPortfolio = false, lists }: Props) {
   const router = useRouter();
   const initial: FormState = edit ? { ...EMPTY, ...edit.values } : EMPTY;
   const [open, setOpen] = useState(false);
@@ -136,6 +173,13 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
             next[k] = val;
             filled.add(k);
           }
+        }
+        // Valeurs figées : le texte lu est ramené à la valeur de la liste
+        // (« S.A. » → SA) ; sans correspondance, le champ reste à choisir.
+        if (lists) {
+          if (next.legalForm) next.legalForm = matchOption(lists.legalForms, next.legalForm) ?? "";
+          if (next.city) next.city = matchOption(lists.cities, next.city, "label") ?? "";
+          if (next.sectorCode) next.sectorCode = matchOption(lists.sectors, next.sectorCode) ?? "";
         }
         return next;
       });
@@ -394,16 +438,20 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
             <input type="text" maxLength={30} style={FIELD_STYLE} {...field("rc")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            {label("Identifiant fiscal", "fiscalId")}
-            <input type="text" maxLength={30} style={FIELD_STYLE} {...field("fiscalId")} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
             {label(edit ? "Forme juridique" : "Forme juridique *", "legalForm")}
-            <input type="text" maxLength={60} style={FIELD_STYLE} {...field("legalForm")} />
+            {lists && !fromT24 ? (
+              <ListSelect value={values.legalForm} onChange={(v) => setValues((x) => ({ ...x, legalForm: v }))} options={lists.legalForms} />
+            ) : (
+              <input type="text" maxLength={60} style={FIELD_STYLE} {...field("legalForm")} />
+            )}
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            {label(edit ? "Secteur d'activité (code)" : "Secteur d'activité (code) *", "sectorCode")}
-            <input type="text" maxLength={30} style={FIELD_STYLE} {...field("sectorCode")} />
+            {label(edit ? "Secteur d'activité" : "Secteur d'activité *", "sectorCode")}
+            {lists && !fromT24 ? (
+              <ListSelect value={values.sectorCode} onChange={(v) => setValues((x) => ({ ...x, sectorCode: v }))} options={lists.sectors} />
+            ) : (
+              <input type="text" maxLength={30} style={FIELD_STYLE} {...field("sectorCode")} />
+            )}
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
             {edit ? "Segment commercial" : "Segment commercial *"}
@@ -417,6 +465,11 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
               {values.commercialSegment && !segments.some((x) => x.code === values.commercialSegment) && <option value={values.commercialSegment}>{values.commercialSegment}</option>}
             </select>
           </label>
+        </div>
+        {/* Saisie minimale : le reste vient de T24 au rattachement (compléments facultatifs). */}
+        <details open={!!edit} style={{ fontSize: 13 }}>
+          <summary style={{ cursor: "pointer" }}>{edit ? "Autres informations" : "Compléments facultatifs (identifiant fiscal, ville, code T24, gestionnaire, pays, devise)"}</summary>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 10 }}>
           {!ownPortfolio && (
             <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
               Gestionnaire (code chargé d&apos;affaires)
@@ -428,8 +481,16 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
             <input type="text" inputMode="numeric" maxLength={20} disabled={fromT24} style={FIELD_STYLE} {...field("coreBankingId")} />
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+            {label("Identifiant fiscal", "fiscalId")}
+            <input type="text" maxLength={30} style={FIELD_STYLE} {...field("fiscalId")} />
+          </label>
+          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
             {label("Ville", "city")}
-            <input type="text" maxLength={80} style={FIELD_STYLE} {...field("city")} />
+            {lists && !fromT24 ? (
+              <ListSelect value={values.city} onChange={(v) => setValues((x) => ({ ...x, city: v }))} options={lists.cities} stored="label" />
+            ) : (
+              <input type="text" maxLength={80} style={FIELD_STYLE} {...field("city")} />
+            )}
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
             {label("Pays (ISO)", "country")}
@@ -439,7 +500,8 @@ export function NewCounterpartyForm({ entities, defaultEntityId, aiUsable, edit,
             {label("Devise des comptes (ISO)", "currency")}
             <input type="text" maxLength={3} placeholder={entity?.currency ?? "MAD"} style={FIELD_STYLE} {...field("currency")} />
           </label>
-        </div>
+          </div>
+        </details>
         <span className="muted" style={{ fontSize: 12 }}>
           Pays et devise vides : ceux de l&apos;entité de rattachement ({entity?.country ?? "—"}, {entity?.currency ?? "MAD"}). Les
           montants des dossiers sont saisis dans cette devise et convertis en MAD au cours du jour d&apos;arrêté.

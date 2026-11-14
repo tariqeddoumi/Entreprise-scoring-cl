@@ -886,6 +886,15 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* politique de conservation du journal d'audit ; restriction de la surveillance à la période analysée.
 
+## D-71 — Saisie manuelle par listes, rapprochement avec T24 sans écrasement ni double comptage — **ADOPTÉE**
+
+*Décision :*
+- **Saisie manuelle.** Elle se fait par listes paramétrables : formes juridiques, secteurs, villes, tribunaux, garanties. La fiche se limite à cinq éléments.
+- **Rattachement à T24.** Il passe par une comparaison champ par champ. T24 fait foi par défaut ; une valeur saisie gardée exige un motif et n'est pas écrasée par les actualisations. La saisie d'origine est conservée.
+- **Engagements.** Les lignes saisies sont appariées aux lignes T24 (rapprochée, gardée, écartée). Une ligne non rapprochée sort des totaux. Migration 17 (docs/32).
+
+*À confirmer :* alignement des codes des listes sur T24 (DSI).
+
 ---
 
 # 3. Ce qui reste à décider par la banque

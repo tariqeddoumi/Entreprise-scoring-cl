@@ -71,7 +71,7 @@ Les conseils Supabase de la production signalent quatre clés étrangères sans 
 4. **Journal d'audit.** Les listes des filtres viennent du catalogue des libellés, et un index (action, date) sert le filtre.
 5. **Index.**
    - Ajoutés : note courante, dernières notations, filtre du journal, et les quatre clés étrangères signalées.
-   - Supprimé : l'index redondant de `financial_statements`, couvert par la contrainte d'unicité client + clôture.
+   - Aucun index supprimé : la migration est purement additive.
 
 **Cloisonnement.** Les requêtes directes ne lisent que les clients déjà obtenus par le client Prisma cloisonné de l'utilisateur. Le périmètre (entités, portefeuille du chargé d'affaires) s'applique donc exactement comme avant.
 

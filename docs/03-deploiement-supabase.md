@@ -227,7 +227,13 @@ Ajoute les éléments au jour de la décision (`rating_cases.evidence`), les cor
 psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/16-optimisation-performances.sql
 ```
 
-Ajoute `rating_runs.exposureBase` (engagement global en devise de base, repris de l'existant), les index de la note courante, des dernières notations et du filtre du journal, ceux des quatre clés étrangères signalées par Supabase, et supprime un index redondant. Idempotent (docs/31).
+Ajoute `rating_runs.exposureBase` (engagement global en devise de base, repris de l'existant), les index de la note courante, des dernières notations et du filtre du journal, ceux des quatre clés étrangères signalées par Supabase Purement additive, idempotente (docs/31).
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/17-rapprochement-saisie-t24.sql
+```
+
+Ajoute `counterparties.manualEntry` (saisie d'origine et valeurs gardées au rattachement à T24) et les colonnes de rapprochement des lignes d'engagement (`reconciliation`, `matchedReference`, `reconciledBy`, `reconciledAt`). Purement additive, idempotente (docs/32).
 
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas

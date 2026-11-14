@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { FacilityError, saveManualFacilities, syncFacilitiesFromT24 } from "@/lib/facilities";
+import { FacilityError, reconcileFacilities, saveManualFacilities, syncFacilitiesFromT24, type ReconcileDecision } from "@/lib/facilities";
 import { isOutOfScope } from "@/lib/scope";
 import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 
@@ -38,7 +38,25 @@ export async function syncFacilitiesAction(counterpartyId: string): Promise<Faci
   try {
     const n = await syncFacilitiesFromT24(await getDb(), await getPerimeter(), session.identity, counterpartyId);
     revalidatePath(`/counterparties/${counterpartyId}`);
-    return { ok: true, okFr: `${n} ligne(s) rapatriée(s) de T24.` };
+    const db = await getDb();
+    const pending = await db.creditFacility.count({ where: { counterpartyId, source: "SAISIE", reconciliation: null } });
+    return {
+      ok: true,
+      okFr: `${n} ligne(s) rapatriée(s) de T24.${pending ? ` ${pending} ligne(s) saisie(s) à rapprocher : vérifiez l'appariement proposé.` : ""}`,
+    };
+  } catch (e) {
+    return failure(e);
+  }
+}
+
+/** Rapprochement des lignes saisies avec les lignes T24 (rapprochée, gardée, écartée). */
+export async function reconcileFacilitiesAction(counterpartyId: string, decisions: ReconcileDecision[]): Promise<FacilityActionState> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    const n = await reconcileFacilities(await getDb(), await getPerimeter(), session.identity, counterpartyId, decisions);
+    revalidatePath(`/counterparties/${counterpartyId}`);
+    return { ok: true, okFr: `${n} ligne(s) saisie(s) rapprochée(s) : les totaux portent désormais sur les lignes retenues.` };
   } catch (e) {
     return failure(e);
   }

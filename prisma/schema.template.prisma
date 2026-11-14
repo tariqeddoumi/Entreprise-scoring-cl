@@ -132,6 +132,9 @@ model Counterparty {
   // Fiche juridique : identité, dirigeants, actionnaires, bénéficiaires
   // effectifs, comptes déposés, événements légaux (InfoRisque, T24 ou saisie).
   legalProfile        String?   @db.Text
+  // Saisie manuelle conservée au rattachement à T24 : instantané d'origine et
+  // valeurs gardées à la place de T24, avec motif (JSON, docs/32).
+  manualEntry         String?   @db.Text
   // Groupe d'affaires (groupe économique) : sélection des renotations par lot,
   // lecture des engagements du groupe. Distinct de l'organisation de la banque.
   economicGroupId String?
@@ -614,6 +617,7 @@ model FinancialStatement {
   updatedAt      DateTime     @updatedAt
 
   @@unique([counterpartyId, closingDate])
+  @@index([counterpartyId])
   @@map("financial_statements")
 }
 
@@ -707,6 +711,13 @@ model CreditFacility {
   // ACTIVE | ECHUE | CLOTUREE
   status         String       @default("ACTIVE")
   // Date de la position (AAAA-MM-JJ).
+  // Rapprochement d'une ligne saisie avec T24 : RAPPROCHEE (remplacée par la
+  // ligne T24 de même référence), CONSERVEE (absente de T24, gardée), ECARTEE ;
+  // vide = à rapprocher (hors totaux tant que T24 a fourni des lignes).
+  reconciliation   String?
+  matchedReference String?
+  reconciledBy     String?
+  reconciledAt     DateTime?
   asOfDate       String
   recordedBy     String
   createdAt      DateTime     @default(now())

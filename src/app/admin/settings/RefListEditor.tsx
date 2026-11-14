@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { checkRefItems, type RefItem } from "@/reference/case-purposes";
 import { saveRefListAction } from "./purposes-actions";
+import type { EntryListKey } from "@/reference/entry-lists";
 
 /** Liste paramétrable simple : types de crédit, catégories de délégation. */
 export function RefListEditor({
@@ -13,7 +14,7 @@ export function RefListEditor({
   readOnly,
   withHelp = false,
 }: {
-  listKey: "CREDIT_TYPES" | "ENTITY_TIERS" | "COMMERCIAL_SEGMENTS";
+  listKey: "CREDIT_TYPES" | "ENTITY_TIERS" | "COMMERCIAL_SEGMENTS" | EntryListKey;
   title: string;
   intro: string;
   initial: RefItem[];

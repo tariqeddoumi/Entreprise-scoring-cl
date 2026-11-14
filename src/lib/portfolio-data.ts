@@ -1,4 +1,5 @@
 import { officialRunHistory } from "./current-ratings";
+import { effectiveFacilities } from "@/reference/reconciliation";
 import type { PrismaClient } from "@/generated/prisma";
 import { loadWatchlistLevels } from "@/lib/classification-store";
 import { descendants, loadTree, type EntityNode } from "@/lib/scope";
@@ -144,6 +145,8 @@ export async function loadPortfolio(db: PrismaClient, filters: PortfolioFilters)
   // paramétrée), date = la plus ancienne position des lignes du client.
   const byCp = new Map<string, typeof facilityRows>();
   for (const f of facilityRows) byCp.set(f.counterpartyId, [...(byCp.get(f.counterpartyId) ?? []), f]);
+  // Lignes retenues par client (saisie non rapprochée exclue dès que T24 a fourni des lignes).
+  for (const [id, rows] of byCp) byCp.set(id, effectiveFacilities(rows).effective);
   const positions = new Map<string, FacilityPosition>();
   for (const [id, rows] of byCp) {
     if (!keep(id)) continue;

@@ -1,3 +1,5 @@
+import { parseManualEntry } from "@/reference/reconciliation";
+import { DEFAULT_ENTRY_LISTS, loadEntryLists } from "@/lib/entry-lists";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compareRuns } from "@/core/compare";
@@ -188,6 +190,7 @@ export default async function CounterpartyPage({
       ? "Comparaison indisponible : l'une des deux notations provient d'un moteur antérieur et n'a pas la même structure."
       : null;
 
+  const { data: entryLists } = await safeQuery((db) => loadEntryLists(db), DEFAULT_ENTRY_LISTS);
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div>
@@ -243,6 +246,7 @@ export default async function CounterpartyPage({
           <h2 style={{ fontWeight: 600 }}>Gérer la fiche</h2>
           {canEdit && (
             <NewCounterpartyForm
+              lists={entryLists}
               entities={writable}
               defaultEntityId={counterparty.entityId}
               aiUsable={false}
@@ -281,6 +285,7 @@ export default async function CounterpartyPage({
       )}
 
       <T24Panel
+        manualEntry={parseManualEntry(counterparty.manualEntry)}
         counterpartyId={counterparty.id}
         source={(counterparty.dataSource as DataSource | null) ?? null}
         code={counterparty.coreBankingId}
@@ -308,6 +313,8 @@ export default async function CounterpartyPage({
           today={today}
           canEdit={canEdit}
           t24Ready={t24FacilitiesReady}
+          guaranteeTypes={entryLists.guaranteeTypes}
+          pendingMatches={ext.facilities.pending}
         />
       )}
 

@@ -1,3 +1,4 @@
+import { DEFAULT_ENTRY_LISTS, loadEntryLists } from "@/lib/entry-lists";
 import { aiStatus } from "@/lib/ai";
 import { loadSettings, SETTINGS } from "@/lib/settings";
 import { safeQuery } from "@/lib/safe-db";
@@ -42,6 +43,7 @@ export default async function SettingsPage() {
   const format = await effectiveFormat(today());
   const { data: surveillance } = await safeQuery((db) => loadSurveillanceSettings(db), DEFAULT_SURVEILLANCE);
   const { data: facilityTypes } = await safeQuery((db) => loadFacilityTypes(db), DEFAULT_FACILITY_TYPES);
+  const { data: entryLists } = await safeQuery((db) => loadEntryLists(db), DEFAULT_ENTRY_LISTS);
 
   return (
     <div style={{ display: "grid", gap: 18 }}>
@@ -91,6 +93,19 @@ export default async function SettingsPage() {
         initial={lists.segments}
         readOnly={!perimeter.all}
       />
+      <section className="card" style={{ padding: 16, display: "grid", gap: 6 }} id="listes-saisie">
+        <h2 style={{ fontWeight: 600 }}>Listes de saisie</h2>
+        <p className="muted" style={{ fontSize: 12 }}>
+          En saisie manuelle (client pas encore dans T24, ou T24 indisponible), la fiche client et les lignes d&apos;engagement se remplissent par ces
+          listes : les valeurs sont figées et se rapprochent de T24 au rattachement. Alignez les codes sur ceux de T24. Un code utilisé se désactive au
+          lieu d&apos;être supprimé.
+        </p>
+      </section>
+      <RefListEditor listKey="ENTRY_LEGAL_FORMS" title="Formes juridiques" intro="Code enregistré dans la fiche (ex. SA, SARL), comparé tel quel à T24." initial={entryLists.legalForms} readOnly={!perimeter.all} />
+      <RefListEditor listKey="ENTRY_SECTORS" title="Secteurs d'activité" intro="Code du référentiel sectoriel de la banque (par défaut : sections de la NMAE 2010)." initial={entryLists.sectors} readOnly={!perimeter.all} />
+      <RefListEditor listKey="ENTRY_CITIES" title="Villes" intro="Libellé enregistré dans la fiche ; comparé à T24 sans accents ni casse." initial={entryLists.cities} readOnly={!perimeter.all} />
+      <RefListEditor listKey="ENTRY_COMMERCIAL_COURTS" title="Tribunaux de commerce" intro="Tribunal qui tient le registre de commerce (fiche client, signalétique des rapports)." initial={entryLists.commercialCourts} readOnly={!perimeter.all} />
+      <RefListEditor listKey="ENTRY_GUARANTEE_TYPES" title="Types de garantie" intro="Garanties des lignes d'engagement saisies." initial={entryLists.guaranteeTypes} readOnly={!perimeter.all} />
       <SettingsForm
         readOnly={!perimeter.all}
         values={values}

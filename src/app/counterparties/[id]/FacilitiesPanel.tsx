@@ -14,7 +14,8 @@ import {
   type FacilityTotals,
   type FacilityType,
 } from "@/reference/facilities";
-import { saveFacilitiesAction, syncFacilitiesAction } from "../facility-actions";
+import { reconcileFacilitiesAction, saveFacilitiesAction, syncFacilitiesAction } from "../facility-actions";
+import { RECONCILIATION_LABELS, type FacilityReconciliation, type MatchProposal } from "@/reference/reconciliation";
 
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 const amount = (v: number | null | undefined) => (v === null || v === undefined ? "—" : nf.format(v));
@@ -25,6 +26,133 @@ export interface FacilityRow extends Facility {
   id: string;
   source: "API" | "SAISIE";
   asOfDate: string;
+  reconciliation?: FacilityReconciliation | null;
+  matchedReference?: string | null;
+}
+
+/**
+ * Rapprochement des lignes saisies avec les lignes rapatriées de T24 :
+ * l'appariement proposé (référence, type, montants, échéance) se confirme ou
+ * se corrige ligne à ligne. Tant qu'il n'est pas validé, les lignes saisies ne
+ * comptent pas dans les totaux.
+ */
+function ReconcilePanel({
+  counterpartyId,
+  lines,
+  proposals,
+  typeLabel,
+  onDone,
+}: {
+  counterpartyId: string;
+  lines: FacilityRow[];
+  proposals: MatchProposal[];
+  typeLabel: (code: string) => string;
+  onDone: (msg: string) => void;
+}) {
+  const router = useRouter();
+  const api = lines.filter((l) => l.source === "API");
+  const byId = new Map(lines.map((l) => [l.id, l]));
+  const [choice, setChoice] = useState<Record<string, { action: FacilityReconciliation; apiId: string }>>(() =>
+    Object.fromEntries(proposals.map((p) => [p.manualId, { action: p.apiId ? "RAPPROCHEE" : "CONSERVEE", apiId: p.apiId ?? "" }]))
+  );
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
+  const desc = (l: FacilityRow | undefined) =>
+    l ? `${l.labelFr || typeLabel(l.typeCode)}${l.reference ? ` · ${l.reference}` : ""} · autorisé ${amount(l.authorized)} · encours ${amount(l.outstanding)}` : "—";
+  return (
+    <div className="card" style={{ padding: 12, boxShadow: "none", display: "grid", gap: 8, borderLeft: "4px solid var(--warn)" }}>
+      <strong style={{ fontSize: 13 }}>Rapprochement des lignes saisies avec T24 ({proposals.length})</strong>
+      <p className="muted" style={{ fontSize: 12 }}>
+        Appariement proposé par référence, type, montants et échéance. Rapprochée : la ligne T24 la remplace dans les totaux, la saisie reste
+        consultable. Gardée : ligne absente de T24 (elle s&apos;ajoute aux lignes T24). Écartée : ligne saisie par erreur ou soldée.
+      </p>
+      <div className="table-scroll">
+        <table className="data" style={{ minWidth: 820 }}>
+          <thead>
+            <tr>
+              <th scope="col">Ligne saisie</th>
+              <th scope="col">Ligne T24 proposée</th>
+              <th scope="col">Décision</th>
+            </tr>
+          </thead>
+          <tbody>
+            {proposals.map((p) => {
+              const c = choice[p.manualId];
+              return (
+                <tr key={p.manualId}>
+                  <td style={{ fontSize: 12 }}>{desc(byId.get(p.manualId))}</td>
+                  <td>
+                    <select
+                      aria-label={`Ligne T24 pour ${desc(byId.get(p.manualId))}`}
+                      value={c.apiId}
+                      onChange={(e) => setChoice((x) => ({ ...x, [p.manualId]: { action: e.target.value ? "RAPPROCHEE" : x[p.manualId].action === "RAPPROCHEE" ? "CONSERVEE" : x[p.manualId].action, apiId: e.target.value } }))}
+                    >
+                      <option value="">— Aucune —</option>
+                      {api.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {desc(a)}
+                        </option>
+                      ))}
+                    </select>
+                    {p.apiId && p.apiId === c.apiId && p.why.length > 0 && (
+                      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        Proposée : {p.why.join(", ")}
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <select
+                      aria-label={`Décision pour ${desc(byId.get(p.manualId))}`}
+                      value={c.action}
+                      onChange={(e) => setChoice((x) => ({ ...x, [p.manualId]: { ...x[p.manualId], action: e.target.value as FacilityReconciliation } }))}
+                    >
+                      <option value="RAPPROCHEE" disabled={!c.apiId}>
+                        Rapprocher de la ligne T24
+                      </option>
+                      <option value="CONSERVEE">Garder (absente de T24)</option>
+                      <option value="ECARTEE">Écarter</option>
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={pending}
+          onClick={() =>
+            start(async () => {
+              setMsg(null);
+              const r = await reconcileFacilitiesAction(
+                counterpartyId,
+                proposals.map((p) => ({ manualId: p.manualId, action: choice[p.manualId].action, apiId: choice[p.manualId].action === "RAPPROCHEE" ? choice[p.manualId].apiId : null }))
+              );
+              if (r.ok) {
+                onDone(r.okFr ?? "");
+                router.refresh();
+              } else setMsg({ error: r.errorFr });
+            })
+          }
+        >
+          {pending ? "Enregistrement…" : "Valider le rapprochement"}
+        </button>
+      </div>
+      {msg?.ok && (
+        <p role="status" style={{ color: "var(--good)", fontSize: 13 }}>
+          {msg.ok}
+        </p>
+      )}
+      {msg?.error && (
+        <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>
+          {msg.error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 function Totals({ t, currency, settings }: { t: FacilityTotals; currency: string; settings: FacilitySettings }) {
@@ -86,6 +214,8 @@ export function FacilitiesPanel({
   canEdit,
   t24Ready,
   compact = false,
+  guaranteeTypes = [],
+  pendingMatches = [],
 }: {
   counterpartyId: string;
   lines: FacilityRow[];
@@ -101,6 +231,10 @@ export function FacilitiesPanel({
   t24Ready: boolean;
   /** Vue du dossier : synthèse, détail sur la fiche client. */
   compact?: boolean;
+  /** Types de garantie paramétrés (saisie par liste). */
+  guaranteeTypes?: Array<{ code: string; labelFr: string; active: boolean }>;
+  /** Lignes saisies à rapprocher des lignes T24, avec l'appariement proposé. */
+  pendingMatches?: MatchProposal[];
 }) {
   const router = useRouter();
   const [edit, setEdit] = useState<Facility[] | null>(null);
@@ -109,7 +243,9 @@ export function FacilitiesPanel({
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
   const typeLabel = (code: string) => types.find((t) => t.code === code)?.labelFr ?? code;
   const nature = (code: string) => NATURE_LABELS[types.find((t) => t.code === code)?.nature ?? "BILAN"];
-  const draftTotals = useMemo(() => (edit ? facilityTotals([...lines.filter((l) => l.source === "API"), ...edit], types, settings) : null), [edit, lines, types, settings]);
+  // Aperçu en saisie : avec des lignes T24, les nouvelles lignes saisies seront à rapprocher (hors totaux).
+  const hasApi = lines.some((l) => l.source === "API");
+  const draftTotals = useMemo(() => (edit ? facilityTotals(hasApi ? lines.filter((l) => l.source === "API" || l.reconciliation === "CONSERVEE") : edit, types, settings) : null), [edit, lines, types, settings, hasApi]);
   const set = (i: number, p: Partial<Facility>) => setEdit((e) => e!.map((l, k) => (k === i ? { ...l, ...p } : l)));
   const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(/\s/g, "").replace(",", ".")));
   const run = (f: () => Promise<{ ok: boolean; okFr?: string; errorFr?: string }>, after?: () => void) =>
@@ -199,13 +335,36 @@ export function FacilitiesPanel({
                       {l.guaranteeValue ? ` · ${amount(l.guaranteeValue)}` : ""}
                     </td>
                     <td>{FACILITY_STATUS_LABELS[l.status]}</td>
-                    <td style={{ fontSize: 12 }}>{l.source === "API" ? `T24 (${l.asOfDate})` : `Saisie (${l.asOfDate})`}</td>
+                    <td style={{ fontSize: 12 }}>
+                      {l.source === "API" ? `T24 (${l.asOfDate})` : `Saisie (${l.asOfDate})`}
+                      {l.source === "SAISIE" && l.reconciliation && (
+                        <div className="muted" style={{ fontSize: 11 }}>
+                          {RECONCILIATION_LABELS[l.reconciliation]}
+                          {l.matchedReference ? ` ${l.matchedReference}` : ""}
+                          {l.reconciliation !== "CONSERVEE" ? " — hors totaux" : ""}
+                        </div>
+                      )}
+                      {l.source === "SAISIE" && !l.reconciliation && lines.some((x) => x.source === "API") && (
+                        <div style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600 }}>à rapprocher — hors totaux</div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )
+      )}
+
+      {canEdit && !compact && !edit && pendingMatches.length > 0 && (
+        <ReconcilePanel
+          key={pendingMatches.map((p) => `${p.manualId}:${p.apiId ?? ""}`).join(",")}
+          counterpartyId={counterpartyId}
+          lines={lines}
+          proposals={pendingMatches}
+          typeLabel={typeLabel}
+          onDone={(m) => setMsg({ ok: m })}
+        />
       )}
 
       {canEdit && !compact && !edit && (
@@ -220,7 +379,7 @@ export function FacilitiesPanel({
             className="btn-ghost"
             onClick={() => {
               const manual = lines.filter((l) => l.source === "SAISIE");
-              setEdit(manual.length ? manual.map(({ id: _id, source: _s, asOfDate: _a, ...f }) => f) : [{ ...EMPTY }]);
+              setEdit(manual.length ? manual.map(({ id: _id, source: _s, asOfDate: _a, reconciliation: _r, matchedReference: _m, ...f }) => f) : [{ ...EMPTY }]);
               setAsOf(manual[0]?.asOfDate ?? today);
             }}
           >
@@ -292,7 +451,19 @@ export function FacilitiesPanel({
                       <input type="date" aria-label={`Ligne ${i + 1} : échéance`} value={l.maturityDate} onChange={(e) => set(i, { maturityDate: e.target.value })} />
                     </td>
                     <td>
-                      <input aria-label={`Ligne ${i + 1} : garanties`} value={l.guarantees} maxLength={300} onChange={(e) => set(i, { guarantees: e.target.value })} />
+                      {guaranteeTypes.length > 0 ? (
+                        <select aria-label={`Ligne ${i + 1} : garanties`} value={l.guarantees} onChange={(e) => set(i, { guarantees: e.target.value })}>
+                          <option value="">— Choisir —</option>
+                          {guaranteeTypes.filter((g) => g.active).map((g) => (
+                            <option key={g.code} value={g.labelFr}>
+                              {g.labelFr}
+                            </option>
+                          ))}
+                          {l.guarantees && !guaranteeTypes.some((g) => g.active && g.labelFr === l.guarantees) && <option value={l.guarantees}>{l.guarantees} (hors liste)</option>}
+                        </select>
+                      ) : (
+                        <input aria-label={`Ligne ${i + 1} : garanties`} value={l.guarantees} maxLength={300} onChange={(e) => set(i, { guarantees: e.target.value })} />
+                      )}
                     </td>
                     <td>
                       <input inputMode="decimal" style={{ maxWidth: 110 }} aria-label={`Ligne ${i + 1} : valeur des garanties`} value={l.guaranteeValue ?? ""} onChange={(e) => set(i, { guaranteeValue: num(e.target.value) })} />

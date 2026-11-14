@@ -12,9 +12,10 @@
 --    surveillance ne relit plus les instantanés (7,3 s → voir docs/31) ;
 --  - index de la note courante (client, arrêté, date) et des dernières
 --    notations ; index du filtre par action du journal d'audit ;
---  - index des clés étrangères signalés par l'outil de diagnostic Supabase ;
---  - suppression d'un index redondant (financial_statements, couvert par la
---    contrainte d'unicité client + clôture).
+--  - index des clés étrangères signalés par l'outil de diagnostic Supabase.
+--
+-- Aucune suppression : la migration est purement additive (l'index redondant
+-- de financial_statements est conservé, son coût est négligeable).
 --
 -- Usage :
 --   psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/16-optimisation-performances.sql
@@ -53,8 +54,6 @@ CREATE INDEX IF NOT EXISTS "entities_parentId_idx" ON corp_scoring."entities" ("
 CREATE INDEX IF NOT EXISTS "renotation_batches_scheduleId_idx" ON corp_scoring."renotation_batches" ("scheduleId");
 CREATE INDEX IF NOT EXISTS "renotation_items_counterpartyId_idx" ON corp_scoring."renotation_items" ("counterpartyId");
 CREATE INDEX IF NOT EXISTS "users_entityId_idx" ON corp_scoring."users" ("entityId");
-
-DROP INDEX IF EXISTS corp_scoring."financial_statements_counterpartyId_idx";
 
 ANALYZE corp_scoring."rating_runs";
 ANALYZE corp_scoring."audit_events";

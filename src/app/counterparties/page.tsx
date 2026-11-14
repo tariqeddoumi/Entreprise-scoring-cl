@@ -1,3 +1,4 @@
+import { DEFAULT_ENTRY_LISTS, loadEntryLists } from "@/lib/entry-lists";
 import { currentRatings } from "@/lib/current-ratings";
 import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
@@ -131,6 +132,7 @@ export default async function CounterpartiesPage({ searchParams }: { searchParam
   const portfolio = perimeter.portfolio ?? null;
   const { data: segments } = await safeQuery((db) => loadCommercialSegments(db), DEFAULT_COMMERCIAL_SEGMENTS);
 
+  const { data: entryLists } = await safeQuery((db) => loadEntryLists(db), DEFAULT_ENTRY_LISTS);
   return (
     <div style={{ display: "grid", gap: 18 }}>
       <div>
@@ -159,6 +161,7 @@ export default async function CounterpartiesPage({ searchParams }: { searchParam
 
       {dbAvailable && canCreate && data.writable.length > 0 && (
         <NewCounterpartyForm
+              lists={entryLists}
           entities={data.writable}
           defaultEntityId={identity.entityId ?? null}
           aiUsable={ai.enabled && !ai.missing}

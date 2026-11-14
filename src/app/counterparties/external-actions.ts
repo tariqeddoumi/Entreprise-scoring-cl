@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { CoreBankingError, createFromT24, fetchT24Customer, syncFromT24 } from "@/lib/core-banking";
+import { CoreBankingError, createFromT24, fetchT24Customer, previewT24Reconciliation, reconcileWithT24, syncFromT24, type T24Preview } from "@/lib/core-banking";
+import type { CounterpartyFromT24 } from "@/reference/core-banking";
 import { correctCreditReport, correctLegalReport, extractCreditReport, extractLegalProfile, fetchCreditReport, saveCreditReport, saveLegalProfile, updateIdentityFromReport, wrapAiError, type ReportDraft } from "@/lib/external-data";
 import { canWrite, isOutOfScope, loadTree } from "@/lib/scope";
 import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
@@ -69,6 +70,39 @@ export async function syncT24Action(counterpartyId: string, code?: string): Prom
     revalidatePath(`/counterparties/${counterpartyId}`);
     revalidatePath("/counterparties");
     return { ok: true, changes: r.changes };
+  } catch (e) {
+    return t24Failure(e);
+  }
+}
+
+/** Comparaison de la fiche saisie avec T24, sans rien enregistrer. */
+export async function compareT24Action(counterpartyId: string, code?: string): Promise<{ ok: boolean; preview?: T24Preview; errorFr?: string }> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    return { ok: true, preview: await previewT24Reconciliation(await getDb(), await getPerimeter(), counterpartyId, code || undefined) };
+  } catch (e) {
+    return t24Failure(e);
+  }
+}
+
+/** Rapprochement validé : choix par champ (T24 ou saisie, motif si la saisie est gardée). */
+export async function reconcileT24Action(
+  counterpartyId: string,
+  code: string | undefined,
+  decisions: Partial<Record<keyof CounterpartyFromT24, "T24" | "SAISIE">>,
+  reasons: Partial<Record<keyof CounterpartyFromT24, string>>
+): Promise<{ ok: boolean; okFr?: string; errorFr?: string }> {
+  const session = await getSessionIdentity("ANALYST");
+  if (!session.ok) return { ok: false, errorFr: session.reasonFr };
+  try {
+    const r = await reconcileWithT24(await getDb(), await getPerimeter(), session.identity, counterpartyId, code || undefined, decisions ?? {}, reasons ?? {});
+    revalidatePath(`/counterparties/${counterpartyId}`);
+    revalidatePath("/counterparties");
+    return {
+      ok: true,
+      okFr: `Fiche rattachée au client T24 ${r.code} : ${r.updated.length} champ(s) repris de T24${r.kept.length ? `, ${r.kept.length} valeur(s) saisie(s) gardée(s) avec motif` : ""}. La saisie d'origine reste consultable.`,
+    };
   } catch (e) {
     return t24Failure(e);
   }

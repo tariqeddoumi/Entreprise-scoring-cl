@@ -3,6 +3,9 @@
  * d'administration. Une action sans libellé s'affiche par son code, lisible.
  */
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  ENTRY_LIST_UPDATED: "Liste de saisie modifiée",
+  COUNTERPARTY_RECONCILED_WITH_T24: "Fiche rapprochée de T24",
+  FACILITIES_RECONCILED: "Engagements rapprochés de T24",
   // Dossiers
   CASE_CREATED: "Dossier ouvert",
   CASE_REOPENED: "Dossier repris après rejet",
