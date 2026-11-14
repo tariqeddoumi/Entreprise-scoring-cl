@@ -45,7 +45,7 @@ export function FinancialBasisPanel({ basis, model, format }: { basis: Financial
           Notation calculée sur le bilan de l&apos;exercice <strong>{n.fiscalYear || "N"}</strong>
           {n.closingDate ? <> clos le <strong>{n.closingDate}</strong></> : null} ·{" "}
           {STATEMENT_MODEL_LABELS[basis.statementModel]} · {basis.certified ? "comptes certifiés" : "comptes non certifiés"} ·{" "}
-          {basis.source === "IA" ? "lu par l'IA et relu par l'analyste" : basis.source === "EXCEL" ? "gabarit Excel de la banque" : "saisi par l'analyste"}
+          {basis.source === "IA" ? "lu par l'OCR intelligent et relu par l'analyste" : basis.source === "EXCEL" ? "gabarit Excel de la banque" : "saisi par l'analyste"}
           {basis.years.length > 1 ? ` · ${basis.years.length} exercices` : ""} · montants en {currency}.
         </p>
         {basis.document && (

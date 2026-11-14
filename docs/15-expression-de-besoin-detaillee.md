@@ -6,7 +6,7 @@
 **Référence fonctionnelle :** prototype opérationnel (moteur 3.3.0), guide méthodologique complet, note méthodologique, journal des décisions (D-01 à D-68), couverture des critères Bank Al-Maghrib, proposition de paramétrage COPIL.
 **Nouveautés de la version 3.0 :** fiche client T24 et saisie minimale ; engagements ligne par ligne ; rapport de solvabilité (API ou lecture) ; fiche juridique InfoRisque ; portefeuille par chargé d'affaires ; ouverture du dossier par motif et actualisation T24 ; pièces requises par motif ; critères de classement BAM, plafonds et levée par comité ; watch list ; circuit avis / décision à niveaux ; module de surveillance du portefeuille ; mise en service des API ; reprise du stock ; journal d'audit consultable.
 
-> Les captures d'écran proviennent du prototype, sur des clients et des montants fictifs. Elles constituent la maquette de référence : l'ergonomie peut être adaptée à la charte et aux composants de la DSI, mais chaque information, chaque contrôle et chaque règle décrits ici doivent être conservés. La lecture automatique des documents est désignée dans ce document par « OCR intelligent » ; les maquettes affichent encore l'ancien libellé « IA », à remplacer dans l'interface (exigence EF-OCR-09).
+> Les captures d'écran proviennent du prototype, sur des clients et des montants fictifs. Elles constituent la maquette de référence : l'ergonomie peut être adaptée à la charte et aux composants de la DSI, mais chaque information, chaque contrôle et chaque règle décrits ici doivent être conservés. La lecture automatique des documents est désignée dans ce document par « OCR intelligent » ; les maquettes affichent encore l'ancien libellé « OCR intelligent », à remplacer dans l'interface (exigence EF-OCR-09).
 
 ## 1. Cadre du projet
 
@@ -321,7 +321,7 @@ Le panneau affiche chaque élément fourni, manquant ou périmé, avec l'action 
 
 | Règle | Détail |
 |---|---|
-| Libellé | L'interface emploie « OCR intelligent » (lecture des documents, propositions) ; les maquettes montrent encore « IA » |
+| Libellé | L'interface emploie « OCR intelligent » (lecture des documents, propositions) ; les maquettes montrent encore « OCR intelligent » |
 | Désactivé par défaut | Activation par l'administrateur du groupe ; fournisseur, modèle et adresse paramétrables ; possibilité d'un moteur hébergé par la banque |
 | Secret | La clé d'accès au service reste dans la configuration du serveur, jamais en base ni à l'écran |
 | Décision humaine | Rien n'est appliqué sans décision de l'analyste ; chaque décision est journalisée (AI_PROPOSAL_DECIDED) |

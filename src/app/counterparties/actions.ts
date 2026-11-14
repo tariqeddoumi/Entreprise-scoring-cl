@@ -6,6 +6,8 @@ import { extractCounterparty, type CounterpartyExtraction } from "@/lib/ai-assis
 import { CounterpartyError, createCounterparty, deleteCounterparty, updateCounterparty } from "@/lib/counterparties";
 import { isOutOfScope } from "@/lib/scope";
 import { checkMinimalEntry } from "@/reference/core-banking";
+import { checkAgainstLists } from "@/reference/entry-lists";
+import { loadEntryLists } from "@/lib/entry-lists";
 import { counterpartyPatchSchema, counterpartySchema } from "@/lib/schemas";
 import { getDb, getPerimeter, getSessionIdentity } from "@/lib/session";
 
@@ -44,6 +46,9 @@ export async function createCounterpartyAction(
   // Écran : saisie minimale exigée (le rapatriement T24 a son propre chemin).
   const missing = checkMinimalEntry(parsed.data);
   if (missing.length) return { ok: false, errorFr: `Saisie minimale incomplète : ${missing.join(" ")}` };
+  // Valeurs figées : forme juridique, secteur et ville viennent des listes paramétrées.
+  const offList = checkAgainstLists(parsed.data, await loadEntryLists(await getDb()));
+  if (offList.length) return { ok: false, errorFr: offList.join(" ") };
 
   try {
     const created = await createCounterparty(
@@ -73,7 +78,7 @@ export interface ExtractionResult {
 }
 
 /**
- * Pré-remplissage de la fiche par l'IA, depuis un extrait (RC, attestation ICE,
+ * Pré-remplissage de la fiche par l'OCR intelligent, depuis un extrait (RC, attestation ICE,
  * statuts) ou un texte collé. Rien n'est enregistré : l'analyste relit et
  * enregistre lui-même.
  */
@@ -120,6 +125,13 @@ export async function updateCounterpartyAction(id: string, payload: unknown): Pr
   const parsed = counterpartyPatchSchema.safeParse(payload);
   if (!parsed.success) return { ok: false, errorFr: issuesFr(parsed.error) };
   try {
+    const db = await getDb();
+    // Fiche en saisie : valeurs des listes (une valeur déjà enregistrée reste admise).
+    const prev = await db.counterparty.findUnique({ where: { id }, select: { legalForm: true, sectorCode: true, city: true, dataSource: true } });
+    if (prev && prev.dataSource !== "T24") {
+      const offList = checkAgainstLists(parsed.data, await loadEntryLists(db), prev);
+      if (offList.length) return { ok: false, errorFr: offList.join(" ") };
+    }
     await updateCounterparty(await getDb(), await getPerimeter(), session.identity, id, parsed.data);
     revalidatePath("/counterparties");
     revalidatePath(`/counterparties/${id}`);

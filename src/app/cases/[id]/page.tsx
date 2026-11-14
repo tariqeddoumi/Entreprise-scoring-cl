@@ -17,6 +17,9 @@ import { activeWatchlistCap, caseLifts, counterpartyLifts, loadClassification, w
 import { DEFAULT_CLASSIFICATION, type WatchlistCap } from "@/reference/classification";
 import { LiftPanel } from "@/app/committee/CommitteePanels";
 import { CreditReportPanel } from "@/app/counterparties/[id]/ExternalPanels";
+import { EvidencePanel } from "./EvidencePanel";
+import { CaseToc } from "./CaseToc";
+import { parseEvidence } from "@/lib/case-evidence";
 import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
 import { FacilitiesPanel } from "@/app/counterparties/[id]/FacilitiesPanel";
 import { facilityStatus, type FacilityStatus } from "@/lib/facilities";
@@ -37,6 +40,8 @@ import { CaseWorkspace } from "./CaseWorkspace";
 import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
 export const dynamic = "force-dynamic";
+/** Lecture OCR d'un rapport long (plusieurs dizaines de lignes de crédit) : jusqu'à 4 minutes. */
+export const maxDuration = 300;
 
 
 function describe(action: string, detail: string | null): string {
@@ -69,7 +74,7 @@ function describe(action: string, detail: string | null): string {
 }
 
 /**
- * Dossier de notation : saisie (brouillon), pièces et assistance de l'IA,
+ * Dossier de notation : saisie (brouillon), pièces et assistance de l'OCR intelligent,
  * soumission, puis validation par une seconde personne.
  */
 export default async function CasePage({ params }: { params: Promise<{ id: string }> }) {
@@ -81,7 +86,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
     const c = await db.ratingCase.findUnique({
       where: { id },
       include: {
-        counterparty: { select: { id: true, name: true, currency: true, ice: true, rc: true, legalForm: true, legalProfile: true, entityId: true } },
+        counterparty: { select: { id: true, name: true, currency: true, ice: true, rc: true, legalForm: true, legalProfile: true, entityId: true, dataSource: true } },
         run: { select: { id: true, resultSnapshot: true, inputSnapshot: true, finalGrade: true, cappedGrade: true, outcome: true } },
         documents: {
           orderBy: { createdAt: "asc" },
@@ -132,6 +137,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const fx: FxConversion | null = c.fxDetail ? (JSON.parse(c.fxDetail) as FxConversion) : null;
   const snapshot = c.run ? readResultSnapshot(c.run.resultSnapshot) : null;
   const editable = c.status === "DRAFT" && canRate;
+  const evidence = parseEvidence(c.evidence);
   // Dossier en cours : format en vigueur ; dossier soumis : celui figé dans la notation.
   const frozenBasis = c.run ? readFinancialBasis(c.run.inputSnapshot) : null;
   const format = c.status === "DRAFT" ? await effectiveFormat(today()) : await formatByVersion(frozenBasis?.formatVersion, today());
@@ -248,6 +254,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
           {c.decidedBy && ` · ${c.status === "VALIDATED" ? "validé" : "décidé"} par ${c.decidedBy}`}
         </p>
       </div>
+
+      {!editable && <CaseToc />}
 
       {data.fromBatch && c.status === "DRAFT" && (
         <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--warn)", fontSize: 14 }}>
@@ -394,7 +402,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       )}
 
       {prep && prep.items.length > 0 && (
-        <section id="preparation" className="card" style={{ padding: 16, display: "grid", gap: 8, minWidth: 0 }}>
+        <section id="preparation" data-toc="Préparation du dossier" className="card" style={{ padding: 16, display: "grid", gap: 8, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
             <h2 style={{ fontWeight: 600 }}>Préparation du dossier</h2>
             <span style={{ fontSize: 13, fontWeight: 600, color: prep.missing.length ? "var(--warn)" : "var(--good)" }}>
@@ -441,6 +449,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         />
       )}
 
+      {c.status !== "DRAFT" && evidence && <EvidencePanel caseId={c.id} evidence={evidence} />}
+
       <CreditReportPanel
         counterpartyId={c.counterparty.id}
         caseId={c.id}
@@ -451,6 +461,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         today={today()}
         canEdit={editable && canWriteHere}
         aiUsable={ai.enabled && !ai.missing}
+        t24={c.counterparty.dataSource === "T24"}
       />
 
       {ext.legal && ext.legal.analysis.findings.some((f) => f.level !== "INFO") && (

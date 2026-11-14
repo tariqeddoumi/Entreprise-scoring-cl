@@ -55,7 +55,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
   },
   {
     code: "AI",
-    labelFr: "Intelligence artificielle — lecture des pièces",
+    labelFr: "OCR intelligent — lecture des pièces",
     flag: "AI_ENABLED",
     targetKeys: ["AI_PROVIDER", "AI_MODEL", "AI_BASE_URL", "AI_KEY_ENV"],
     tokenEnv: ["ANTHROPIC_API_KEY"],
@@ -154,7 +154,7 @@ export async function testIntegration(db: PrismaClient, identity: Identity, code
     } else {
       const c = await aiConfig();
       const missing = missingConfig(c);
-      if (missing) throw new Error(`IA non configurée : ${missing}.`);
+      if (missing) throw new Error(`OCR intelligent non configuré : ${missing}.`);
       const r = await pingAi();
       details.push(`Fournisseur : ${c.provider} · modèle : ${r.model}`);
       if (!(r.json && typeof r.json === "object" && (r.json as { ok?: unknown }).ok === true)) throw new Error("Réponse reçue, mais pas au format attendu.");

@@ -73,7 +73,7 @@ export function ClassificationPanel({
       : `${FAMILY_LABELS[cl.family!]} : note de défaut ${cl.effect.grade}.`;
 
   return (
-    <section id="classement" className="card no-print" style={{ padding: 16, display: "grid", gap: 12, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="classement" data-toc="Critères de classement BAM" className="card no-print" style={{ padding: 16, display: "grid", gap: 12, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Critères de classement BAM</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>

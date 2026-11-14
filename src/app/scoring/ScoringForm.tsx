@@ -26,7 +26,7 @@ interface Props {
   readOnly?: boolean;
   /** Devise de saisie des montants (celle de la contrepartie). */
   currency?: string;
-  /** Champs remplis depuis une proposition de l'IA acceptée (repère visuel). */
+  /** Champs remplis depuis une proposition de l'OCR intelligent acceptée (repère visuel). */
   aiFields?: ReadonlySet<string>;
   /** Format de bilan en vigueur (ratios calculés depuis le bilan). */
   format?: StatementFormat;
@@ -133,7 +133,7 @@ type FieldMark = "BILAN" | "REPRIS" | "A_SAISIR" | "ANOMALIE" | "SAISI";
 
 const FIELD_MARKS: Record<Exclude<FieldMark, "SAISI">, { label: string; color: string; title: string }> = {
   BILAN: { label: "Calculé du bilan", color: "var(--brand)", title: "Valeur calculée à partir du bilan chargé" },
-  REPRIS: { label: "Repris — à confirmer", color: "var(--bcp-orange)", title: "Valeur reprise de la note précédente : confirmez-la ou mettez-la à jour" },
+  REPRIS: { label: "Repris — à confirmer", color: "var(--warn)", title: "Valeur reprise de la note précédente : confirmez-la ou mettez-la à jour" },
   A_SAISIR: { label: "À saisir", color: "var(--bad)", title: "Aucune valeur : ni récupérée du bilan, ni reprise" },
   ANOMALIE: { label: "Anomalie", color: "var(--bad)", title: "Donnée déclarée invalide ou périmée : à vérifier" },
 };
@@ -147,12 +147,12 @@ function FieldMarkBadge({ mark }: { mark: Exclude<FieldMark, "SAISI"> }) {
   );
 }
 
-/** Repère « proposé par l'IA » à côté d'un champ rempli depuis une proposition acceptée. */
+/** Repère « proposé par l'OCR intelligent » à côté d'un champ rempli depuis une proposition acceptée. */
 function AiMark({ show }: { show: boolean }) {
   if (!show) return null;
   return (
-    <span className="ai-mark" title="Valeur reprise d'une proposition de l'IA, acceptée par l'analyste">
-      IA
+    <span className="ai-mark" title="Valeur reprise d'une proposition de l'OCR intelligent, acceptée par l'analyste">
+      OCR
     </span>
   );
 }
@@ -161,7 +161,7 @@ function AiMark({ show }: { show: boolean }) {
  * Grille de saisie d'un dossier de notation, générée depuis la version de
  * modèle publiée. Composant contrôlé : l'état (le brouillon) appartient à
  * l'écran qui l'affiche — dossier ou simulation — pour que les propositions de
- * l'IA, l'enregistrement et l'aperçu travaillent sur la même saisie.
+ * l'OCR intelligent, l'enregistrement et l'aperçu travaillent sur la même saisie.
  */
 export function ScoringForm({ model, draft, onChange, readOnly = false, currency = "MAD", aiFields, format, facilityExposure = null }: Props) {
   const segment = displaySegment(draft, model);
@@ -286,7 +286,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
             <span>
               <strong>À traiter :</strong>{" "}
               <span style={{ color: todo.aSaisir ? "var(--bad)" : "var(--muted)" }}>{todo.aSaisir} à saisir</span> ·{" "}
-              <span style={{ color: todo.repris ? "var(--bcp-orange)" : "var(--muted)" }}>{todo.repris} repris à confirmer</span> ·{" "}
+              <span style={{ color: todo.repris ? "var(--warn)" : "var(--muted)" }}>{todo.repris} repris à confirmer</span> ·{" "}
               <span style={{ color: todo.anomalies ? "var(--bad)" : "var(--muted)" }}>{todo.anomalies} anomalie(s)</span>
               {todo.bilan > 0 ? <span className="muted"> · {todo.bilan} calculé(s) du bilan</span> : null}
             </span>
@@ -319,7 +319,7 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
         </button>
       </section>
 
-      <section className="card no-print" style={{ padding: 16 }}>
+      <section id="cadrage" data-toc="Cadrage du dossier" className="card no-print" style={{ padding: 16 }}>
         <h2 style={{ fontWeight: 600, marginBottom: 12 }}>Cadrage du dossier</h2>
         {draft.reprise && (
           <div role="note" style={{ fontSize: 13, borderLeft: "4px solid var(--bcp-orange)", background: "var(--surface-2)", padding: "8px 10px", borderRadius: 4, marginBottom: 12 }}>
@@ -462,7 +462,15 @@ export function ScoringForm({ model, draft, onChange, readOnly = false, currency
         const missingCritical = domainCriteria.filter((c) => c.unavailablePolicy === "BLOCK" && !answered(c)).length;
         const isCollapsed = collapsed[domain.code] ?? false;
         return (
-          <section key={domain.code} className="card no-print" style={{ padding: 16 }}>
+          <section
+            key={domain.code}
+            id={`domaine-${domain.code}`}
+            data-toc={`${domain.code} — ${domain.labelFr}`}
+            data-toc-flag={missingCritical > 0 ? `${missingCritical} critique(s)` : domainAnswered < domainCriteria.length ? `${domainCriteria.length - domainAnswered} à saisir` : "complet"}
+            data-toc-level={missingCritical > 0 ? "bad" : domainAnswered < domainCriteria.length ? "warn" : "good"}
+            className="card no-print"
+            style={{ padding: 16 }}
+          >
             <button
               type="button"
               onClick={() => setCollapsed((prev) => ({ ...prev, [domain.code]: !isCollapsed }))}

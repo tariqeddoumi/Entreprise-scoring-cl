@@ -11,7 +11,7 @@ import { prisma } from "./prisma";
  * version incomparables. L'échelle maîtresse 1 à 10, elle, se paramètre par
  * versions datées et figées (src/lib/rating-scale.ts, écran Échelle de notation).
  *
- * Les secrets (clé d'API de l'IA) ne s'enregistrent jamais en base, où ils
+ * Les secrets (clé d'API de l'OCR intelligent) ne s'enregistrent jamais en base, où ils
  * seraient lisibles par tout accès à la base et recopiés dans les sauvegardes :
  * ils restent des variables d'environnement.
  */
@@ -20,7 +20,7 @@ export type SettingKind = "boolean" | "integer" | "enum" | "text" | "url";
 
 export interface SettingDef {
   key: string;
-  group: "Workflow" | "Comités" | "Dérogations" | "Pièces" | "Intelligence artificielle" | "Référentiels externes";
+  group: "Workflow" | "Comités" | "Dérogations" | "Pièces" | "OCR intelligent" | "Référentiels externes";
   labelFr: string;
   helpFr: string;
   kind: SettingKind;
@@ -193,16 +193,16 @@ export const SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "AI_ENABLED",
-    group: "Intelligence artificielle",
-    labelFr: "Assistance par l'IA",
+    group: "OCR intelligent",
+    labelFr: "OCR intelligent (lecture des pièces)",
     helpFr:
-      "Désactivée par défaut. Activée, l'IA lit les pièces et propose des valeurs ; aucune proposition n'est appliquée sans validation humaine, et chaque décision est tracée.",
+      "Désactivé par défaut. Activé, l'OCR intelligent lit les pièces et propose des valeurs ; aucune proposition n'est appliquée sans validation humaine, et chaque décision est tracée.",
     kind: "boolean",
     default: "false",
   },
   {
     key: "AI_PROVIDER",
-    group: "Intelligence artificielle",
+    group: "OCR intelligent",
     labelFr: "Fournisseur",
     helpFr:
       "Anthropic (Claude, lecture native des PDF), OpenAI, Azure OpenAI, ou toute API compatible OpenAI (DeepSeek, Mistral, modèle hébergé par la banque). Gemini (Google) passe par « API compatible OpenAI ». La clé reste une variable d'environnement : ANTHROPIC_API_KEY, ou celle désignée ci-dessous pour les autres.",
@@ -218,7 +218,7 @@ export const SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "AI_MODEL",
-    group: "Intelligence artificielle",
+    group: "OCR intelligent",
     labelFr: "Modèle",
     helpFr: "Vide : modèle par défaut du fournisseur Anthropic. Obligatoire pour les autres fournisseurs.",
     kind: "text",
@@ -226,7 +226,7 @@ export const SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "AI_BASE_URL",
-    group: "Intelligence artificielle",
+    group: "OCR intelligent",
     labelFr: "Adresse de l'API",
     helpFr:
       "Vide : adresse officielle (OpenAI : https://api.openai.com/v1). Obligatoire pour Azure (adresse complète du déploiement, api-version comprise) et les API compatibles (Gemini : https://generativelanguage.googleapis.com/v1beta/openai). Adresse https exigée.",
@@ -235,7 +235,7 @@ export const SETTINGS: readonly SettingDef[] = [
   },
   {
     key: "AI_KEY_ENV",
-    group: "Intelligence artificielle",
+    group: "OCR intelligent",
     labelFr: "Variable d'environnement de la clé",
     helpFr:
       "Pour OpenAI, Azure et les API compatibles : nom de la variable d'environnement qui porte la clé, commençant par IA_CLE_ (par exemple IA_CLE_OPENAI, IA_CLE_GEMINI, IA_CLE_AZURE). Une clé par fournisseur : on passe de l'un à l'autre sans redéployer. Anthropic lit toujours ANTHROPIC_API_KEY.",
@@ -410,7 +410,7 @@ export function validateSetting(key: string, raw: string): { ok: true; value: st
       }
       return { ok: true, value: v };
     case "text":
-      // Seules les variables IA_CLE_… peuvent porter une clé d'IA : aucun autre
+      // Seules les variables IA_CLE_… peuvent porter une clé d'OCR intelligent : aucun autre
       // secret de l'environnement ne peut être envoyé au fournisseur paramétré.
       if (key === "AI_KEY_ENV" && !/^IA_CLE_[A-Z0-9_]{1,40}$/.test(v)) return { ok: false, errorFr: `${def.labelFr} : nom commençant par IA_CLE_, en majuscules (ex. IA_CLE_OPENAI).` };
       if (v.length > 200) return { ok: false, errorFr: `${def.labelFr} : 200 caractères au plus.` };

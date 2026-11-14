@@ -1,3 +1,4 @@
+import { effectiveFacilities, proposeFacilityMatches, type FacilityReconciliation, type MatchProposal } from "@/reference/reconciliation";
 import type { PrismaClient } from "@/generated/prisma";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
@@ -60,6 +61,9 @@ export interface StoredFacility extends Facility {
   source: "API" | "SAISIE";
   asOfDate: string;
   recordedBy: string;
+  /** Rapprochement d'une ligne saisie avec T24 ; vide = à rapprocher. */
+  reconciliation: FacilityReconciliation | null;
+  matchedReference: string | null;
 }
 
 const dec = (v: unknown) => (v === null || v === undefined ? null : Number(v));
@@ -83,11 +87,15 @@ export async function listFacilities(db: PrismaClient, counterpartyId: string): 
     guarantees: r.guarantees ?? "",
     guaranteeValue: dec(r.guaranteeValue),
     status: (r.status === "ECHUE" || r.status === "CLOTUREE" ? r.status : "ACTIVE") as Facility["status"],
+    reconciliation: r.reconciliation === "RAPPROCHEE" || r.reconciliation === "CONSERVEE" || r.reconciliation === "ECARTEE" ? r.reconciliation : null,
+    matchedReference: r.matchedReference,
   }));
 }
 
 export interface FacilityStatus {
   lines: StoredFacility[];
+  /** Lignes saisies à rapprocher des lignes T24 (hors totaux), avec l'appariement proposé. */
+  pending: MatchProposal[];
   totals: FacilityTotals;
   findings: FacilityFinding[];
   signals: FacilitySignal[];
@@ -102,9 +110,18 @@ export async function facilityStatus(
   opts: { bureauOwnOutstanding?: number | null; declaredExposure?: number | null; date?: string } = {}
 ): Promise<FacilityStatus> {
   const [lines, types, settings] = await Promise.all([listFacilities(db, counterpartyId), loadFacilityTypes(db), facilitySettings()]);
-  const positionDate = lines.length ? lines.map((l) => l.asOfDate).sort()[0] : null;
-  const a = analyseFacilities(lines, opts.date ?? today(), { types, settings, bureauOwnOutstanding: opts.bureauOwnOutstanding, declaredExposure: opts.declaredExposure, positionDate });
-  return { lines, ...a, positionDate, settings, types };
+  // Totaux sur les lignes retenues : une ligne saisie non rapprochée ne
+  // s'ajoute pas aux lignes T24 (pas de double comptage).
+  const { effective } = effectiveFacilities(lines);
+  const positionDate = effective.length ? effective.map((l) => l.asOfDate).sort()[0] : null;
+  const pending = proposeFacilityMatches(lines);
+  const a = analyseFacilities(effective, opts.date ?? today(), { types, settings, bureauOwnOutstanding: opts.bureauOwnOutstanding, declaredExposure: opts.declaredExposure, positionDate });
+  if (pending.length)
+    a.findings.unshift({
+      level: "ATTENTION",
+      textFr: `${pending.length} ligne(s) saisie(s) à rapprocher des lignes rapatriées de T24 : elles ne comptent pas dans les totaux tant qu'elles ne sont pas rapprochées, gardées ou écartées.`,
+    });
+  return { lines, pending, ...a, positionDate, settings, types };
 }
 
 async function writable(db: PrismaClient, perimeter: Perimeter, counterpartyId: string) {
@@ -166,6 +183,66 @@ export async function saveManualFacilities(db: PrismaClient, perimeter: Perimete
   if (issues.length) throw new FacilityError(400, issues.join(" "));
   await replace(db, identity, cp, "SAISIE", lines, asOfDate, "FACILITIES_RECORDED");
   return lines.length;
+}
+
+export interface ReconcileDecision {
+  manualId: string;
+  action: FacilityReconciliation;
+  /** Ligne T24 retenue (rapprochement). */
+  apiId?: string | null;
+}
+
+/**
+ * Rapprochement des lignes saisies avec les lignes T24 : rapprochée (la ligne
+ * T24 la remplace dans les totaux, la saisie reste consultable), gardée
+ * (absente de T24) ou écartée. Chaque ligne T24 ne sert qu'une fois.
+ */
+export async function reconcileFacilities(db: PrismaClient, perimeter: Perimeter, identity: Identity, counterpartyId: string, decisions: ReconcileDecision[]) {
+  const cp = await writable(db, perimeter, counterpartyId);
+  const rows = await db.creditFacility.findMany({ where: { counterpartyId: cp.id }, select: { id: true, source: true, reference: true, typeCode: true } });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const usedApi = new Set<string>();
+  const issues: string[] = [];
+  const clean = (Array.isArray(decisions) ? decisions : []).slice(0, 300).filter((d) => d && typeof d.manualId === "string");
+  for (const d of clean) {
+    const m = byId.get(d.manualId);
+    if (!m || m.source !== "SAISIE") issues.push("Ligne saisie introuvable.");
+    if (!["RAPPROCHEE", "CONSERVEE", "ECARTEE"].includes(d.action)) issues.push("Choix non admis.");
+    if (d.action === "RAPPROCHEE") {
+      const a = d.apiId ? byId.get(d.apiId) : undefined;
+      if (!a || a.source !== "API") issues.push("Rapprochement : choisissez la ligne T24 correspondante.");
+      else if (usedApi.has(a.id)) issues.push(`La ligne T24 ${a.reference ?? a.typeCode} est rapprochée deux fois.`);
+      else usedApi.add(a.id);
+    }
+  }
+  if (!clean.length) issues.push("Aucune décision.");
+  if (issues.length) throw new FacilityError(400, [...new Set(issues)].join(" "));
+  const at = new Date();
+  await db.$transaction(async (tx) => {
+    for (const d of clean) {
+      const a = d.action === "RAPPROCHEE" && d.apiId ? byId.get(d.apiId)! : null;
+      await tx.creditFacility.updateMany({
+        where: { id: d.manualId, counterpartyId: cp.id, source: "SAISIE" },
+        data: { reconciliation: d.action, matchedReference: a ? (a.reference ?? a.typeCode) : null, reconciledBy: identity.name, reconciledAt: at },
+      });
+    }
+    await auditWithin(tx, {
+      actor: identity.name,
+      actorRole: identity.role,
+      action: "FACILITIES_RECONCILED",
+      resourceType: "Counterparty",
+      resourceId: cp.id,
+      entityId: cp.entityId,
+      detail: {
+        decisions: clean.map((d) => ({
+          ligneSaisie: byId.get(d.manualId)?.reference || byId.get(d.manualId)?.typeCode,
+          choix: d.action,
+          ...(d.apiId ? { ligneT24: byId.get(d.apiId)?.reference || byId.get(d.apiId)?.typeCode } : {}),
+        })),
+      },
+    });
+  });
+  return clean.length;
 }
 
 /** Rapatriement depuis T24 (limites du client) : remplace les lignes T24. */

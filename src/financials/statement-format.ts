@@ -21,7 +21,7 @@ import { FormulaError, identifiers, parseFormula } from "./formula";
  * Chaque format est une version datée : celle en vigueur à la date d'arrêté
  * du dossier s'applique et son identifiant est figé dans la notation.
  *
- * Module PUR : partagé par l'écran, le serveur et l'IA.
+ * Module PUR : partagé par l'écran, le serveur et l'OCR intelligent.
  */
 
 export type PosteMode = "CHARGE" | "MASQUE" | "CALCULE" | "SAISI";

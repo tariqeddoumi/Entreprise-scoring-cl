@@ -3,6 +3,9 @@
  * d'administration. Une action sans libellé s'affiche par son code, lisible.
  */
 export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  ENTRY_LIST_UPDATED: "Liste de saisie modifiée",
+  COUNTERPARTY_RECONCILED_WITH_T24: "Fiche rapprochée de T24",
+  FACILITIES_RECONCILED: "Engagements rapprochés de T24",
   // Dossiers
   CASE_CREATED: "Dossier ouvert",
   CASE_REOPENED: "Dossier repris après rejet",
@@ -10,9 +13,9 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   CASE_DOCUMENT_ADDED: "Pièce ajoutée",
   CASE_DOCUMENT_TYPED: "Pièce typée",
   CASE_RECALCULATED: "Notation recalculée",
-  AI_FINANCIALS_EXTRACTED: "Bilan lu par l'IA",
-  AI_PROPOSALS_GENERATED: "Analyse par l'IA",
-  AI_PROPOSAL_DECIDED: "Proposition de l'IA traitée",
+  AI_FINANCIALS_EXTRACTED: "Bilan lu par l'OCR intelligent",
+  AI_PROPOSALS_GENERATED: "Analyse par l'OCR intelligent",
+  AI_PROPOSAL_DECIDED: "Proposition de l'OCR intelligent traitée",
   CASE_SUBMITTED: "Soumis à validation",
   CASE_STEP_APPROVED: "Étape de validation franchie",
   CASE_VALIDATED: "Validation finale",

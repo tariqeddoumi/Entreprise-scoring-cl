@@ -23,7 +23,7 @@ import {
 /**
  * Calcul des indicateurs financiers et des ratios de la grille — DÉTERMINISTE.
  *
- * L'IA ou l'OCR lisent les postes ; les ratios sont toujours calculés ici, par
+ * L'OCR intelligent ou l'OCR lisent les postes ; les ratios sont toujours calculés ici, par
  * formule, à partir du gabarit CGNC (src/financials/chart.ts) et des
  * définitions du dictionnaire comptable (src/reference/cgnc.ts). L'analyste ne
  * corrige que les ratios qui servent à la grille, avec un motif obligatoire ;
@@ -41,8 +41,34 @@ export interface FinancialYearDraft {
   closingDate: string;
   /** Montants tels que saisis ou lus (unités de la devise de la contrepartie). */
   values: Record<string, string>;
-  /** Origine de chaque valeur lue par l'IA : passage du document et confiance. */
+  /** Origine de chaque valeur lue par l'OCR intelligent : passage du document et confiance. */
   lineage?: Record<string, { source: string; confidence: number }>;
+  /**
+   * Valeurs lues (OCR intelligent ou gabarit Excel) modifiées ensuite par
+   * l'analyste : la valeur lue reste conservée, le motif est exigé.
+   */
+  corrections?: Record<string, { read: string; reason: string }>;
+}
+
+/** Longueur minimale du motif d'une correction de valeur lue. */
+export const MIN_VALUE_CORRECTION_REASON = 10;
+
+/**
+ * Saisie d'une valeur d'exercice : si la valeur venait d'une lecture,
+ * l'écart à la valeur lue est tracé (valeur lue + motif à fournir) ;
+ * revenir à la valeur lue efface la correction.
+ */
+export function editYearValue(y: FinancialYearDraft, key: string, value: string): FinancialYearDraft {
+  const lineage = { ...(y.lineage ?? {}) };
+  const corrections = { ...(y.corrections ?? {}) };
+  const prior = corrections[key];
+  if (!prior && lineage[key] !== undefined) corrections[key] = { read: y.values[key] ?? "", reason: "" };
+  delete lineage[key];
+  if (corrections[key] && parseAmount(corrections[key].read) === parseAmount(value)) delete corrections[key];
+  const next: FinancialYearDraft = { ...y, values: { ...y.values, [key]: value }, lineage };
+  if (Object.keys(corrections).length) next.corrections = corrections;
+  else delete next.corrections;
+  return next;
 }
 
 export interface FinancialsDraft {
@@ -59,7 +85,7 @@ export interface FinancialsDraft {
 export const MAX_FISCAL_YEARS = 3;
 /** Exercices exigés (N et N−1) ; N−2 est facultatif. */
 export const REQUIRED_FISCAL_YEARS = 2;
-/** Au-delà, les comptes sont périmés pour la notation (même règle que l'IA). */
+/** Au-delà, les comptes sont périmés pour la notation (même règle que l'OCR intelligent). */
 export const STALE_AFTER_MONTHS = 18;
 
 export function emptyYear(): FinancialYearDraft {
@@ -87,6 +113,7 @@ export function parseFinancials(raw: unknown): FinancialsDraft {
         closingDate: String(y?.closingDate ?? ""),
         values: y?.values && typeof y.values === "object" ? { ...y.values } : {},
         ...(y?.lineage ? { lineage: y.lineage } : {}),
+        ...(y?.corrections && typeof y.corrections === "object" ? { corrections: { ...y.corrections } } : {}),
       }))
     : base.years;
   while (years.length < REQUIRED_FISCAL_YEARS) years.push(emptyYear());
@@ -621,6 +648,19 @@ export function computeFinancials(
     const ok = Math.abs(caN - ctx.declaredTurnover) <= ctx.declaredTurnover * 0.01;
     controls.push({ key: "CA_CADRAGE", labelFr: "CA du bilan / CA du cadrage", status: ok ? "OK" : "ALERTE", detailFr: ok ? "Concordants." : `Bilan ${fmt(caN)}, cadrage ${fmt(ctx.declaredTurnover)} : le segment repose sur le CA du cadrage.` });
   }
+
+  // --- Valeurs lues corrigées : motif exigé (bloquant à la soumission) ---
+  f.years.forEach((y, i) => {
+    for (const [key, cor] of Object.entries(y.corrections ?? {})) {
+      if ((cor?.reason ?? "").trim().length >= MIN_VALUE_CORRECTION_REASON) continue;
+      controls.push({
+        key: `CORRECTION_LUE_${i}_${key}`,
+        labelFr: `Correction de « ${posteLabel(key)} » (${y.fiscalYear || `exercice ${i + 1}`})`,
+        status: "KO",
+        detailFr: `Valeur lue ${cor?.read || "vide"} modifiée sans motif (${MIN_VALUE_CORRECTION_REASON} caractères au moins).`,
+      });
+    }
+  });
 
   // --- Ratios de la grille ---
   const gridRatios: FinancialGridRatio[] = [];

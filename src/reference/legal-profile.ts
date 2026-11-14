@@ -4,7 +4,7 @@
  * événements légaux.
  *
  * Source principale : rapport InfoRisque (Inforisk, charika.ma, membre du
- * réseau Dun & Bradstreet), lu par l'IA dans le PDF puis vérifié ; à défaut
+ * réseau Dun & Bradstreet), lu par l'OCR intelligent dans le PDF puis vérifié ; à défaut
  * T24 ou la saisie. Selon le rapport commandé (Express, Gold, Platinium,
  * Ultimate), certaines rubriques peuvent manquer : elles restent vides, rien
  * n'est inventé.
@@ -21,6 +21,8 @@
  *    réduction de capital, bénéficiaires effectifs non identifiés (KYC),
  *    groupe d'appartenance (à rapprocher du groupe d'affaires).
  */
+
+import { parseAmountLoose, type FieldSpec } from "./corrections";
 
 export type ProfileSource = "INFORISK" | "T24" | "SAISIE";
 export const PROFILE_SOURCE_LABELS: Record<ProfileSource, string> = { INFORISK: "Rapport InfoRisque", T24: "T24", SAISIE: "Saisie" };
@@ -76,6 +78,8 @@ export interface LegalEvent {
   date: string;
   kind: LegalEventKind;
   labelFr: string;
+  /** Événement levé par une correction motivée (information qui n'a plus cours). */
+  resolved: boolean;
 }
 
 export interface LegalProfile {
@@ -85,12 +89,18 @@ export interface LegalProfile {
   documentName?: string;
   documentSha256?: string;
   recordedBy?: string;
+  /** Rapport historisé (legal_reports) dont cette fiche est la vue corrigée. */
+  reportId?: string;
   identity: {
     name: string;
     legalForm: string;
     ice: string;
     rc: string;
+    /** Tribunal de commerce qui tient le RC. */
+    commercialCourt: string;
     fiscalId: string;
+    cnss: string;
+    patente: string;
     capital: number | null;
     creationDate: string;
     address: string;
@@ -110,11 +120,7 @@ export interface LegalProfile {
   legalEvents: LegalEvent[];
 }
 
-const num = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : Number(String(v).replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : null;
-};
+const num = (v: unknown): number | null => parseAmountLoose(v);
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : typeof v === "number" ? String(v) : "");
 const iso = (v: unknown) => {
   const s = str(v, 10);
@@ -139,12 +145,16 @@ export function normalizeProfile(raw: unknown, source: ProfileSource = "INFORISK
     ...(o.documentName ? { documentName: str(o.documentName, 200) } : {}),
     ...(o.documentSha256 ? { documentSha256: str(o.documentSha256, 64) } : {}),
     ...(o.recordedBy ? { recordedBy: str(o.recordedBy, 80) } : {}),
+    ...(o.reportId ? { reportId: str(o.reportId, 40) } : {}),
     identity: {
       name: str(id.name, 300),
       legalForm: str(id.legalForm, 60),
       ice: str(id.ice, 20).replace(/\s/g, ""),
       rc: str(id.rc, 30),
-      fiscalId: str(id.fiscalId, 30),
+      commercialCourt: str(id.commercialCourt, 80),
+      fiscalId: str(id.fiscalId, 30).replace(/\s/g, ""),
+      cnss: str(id.cnss, 30).replace(/\s/g, ""),
+      patente: str(id.patente, 30).replace(/\s/g, ""),
       capital: num(id.capital),
       creationDate: iso(id.creationDate),
       address: str(id.address, 300),
@@ -167,7 +177,7 @@ export function normalizeProfile(raw: unknown, source: ProfileSource = "INFORISK
     legalEvents: arr(o.legalEvents, 100)
       .map((x) => {
         const k = str(x.kind, 30).toUpperCase();
-        return { date: iso(x.date), kind: ((LEGAL_EVENT_KINDS as readonly string[]).includes(k) ? k : "AUTRE") as LegalEventKind, labelFr: str(x.labelFr, 300) };
+        return { date: iso(x.date), kind: ((LEGAL_EVENT_KINDS as readonly string[]).includes(k) ? k : "AUTRE") as LegalEventKind, labelFr: str(x.labelFr, 300), resolved: x.resolved === true };
       })
       .sort((a, b) => b.date.localeCompare(a.date)),
   };
@@ -274,6 +284,11 @@ export function analyseProfile(
   const recent = addYears(ctx.today, -1);
   for (const e of p.legalEvents) {
     const label = `${LEGAL_EVENT_LABELS[e.kind]}${e.date ? ` (${e.date})` : ""}${e.labelFr ? ` : ${e.labelFr}` : ""}`;
+    if (e.resolved) {
+      if (["REDRESSEMENT", "LIQUIDATION", "DISSOLUTION", "RADIATION", "SAUVEGARDE", "CHANGEMENT_DIRIGEANT", "CESSION_PARTS", "REDUCTION_CAPITAL"].includes(e.kind))
+        findings.push({ level: "INFO", textFr: `${label} : levé par une correction motivée, sans effet.` });
+      continue;
+    }
     if (e.kind === "REDRESSEMENT") {
       signals.add("LEGAL_REDRESSEMENT");
       findings.push({ level: "ALERTE", textFr: `${label}. Critère E15 à vérifier.` });
@@ -326,7 +341,7 @@ const holderSchema = {
   properties: { name: { type: "string" }, pct: { type: ["number", "null"] }, kind: { type: "string", enum: ["PERSONNE", "SOCIETE", ""] } },
 } as const;
 
-/** Schéma JSON de l'extraction par l'IA d'un rapport InfoRisque. */
+/** Schéma JSON de l'extraction par l'OCR intelligent d'un rapport InfoRisque. */
 export const PROFILE_EXTRACTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -336,13 +351,16 @@ export const PROFILE_EXTRACTION_SCHEMA = {
     identity: {
       type: "object",
       additionalProperties: false,
-      required: ["name", "legalForm", "ice", "rc", "fiscalId", "capital", "creationDate", "address", "city", "activity", "headcount", "status"],
+      required: ["name", "legalForm", "ice", "rc", "commercialCourt", "fiscalId", "cnss", "patente", "capital", "creationDate", "address", "city", "activity", "headcount", "status"],
       properties: {
         name: { type: "string" },
         legalForm: { type: "string" },
         ice: { type: "string" },
         rc: { type: "string" },
+        commercialCourt: { type: "string" },
         fiscalId: { type: "string" },
+        cnss: { type: "string" },
+        patente: { type: "string" },
         capital: { type: ["number", "null"] },
         creationDate: { type: "string" },
         address: { type: "string" },
@@ -388,3 +406,44 @@ export const PROFILE_EXTRACTION_SCHEMA = {
     },
   },
 } as const;
+
+// --- Champs corrigibles --------------------------------------------------------------------
+
+const PROFILE_IDENTITY_SPECS: Record<string, FieldSpec> = {
+  name: { kind: "text", labelFr: "Raison sociale" },
+  legalForm: { kind: "text", labelFr: "Forme juridique" },
+  ice: { kind: "text", labelFr: "ICE" },
+  rc: { kind: "text", labelFr: "Registre de commerce" },
+  commercialCourt: { kind: "text", labelFr: "Tribunal de commerce" },
+  fiscalId: { kind: "text", labelFr: "Identifiant fiscal (IF)" },
+  cnss: { kind: "text", labelFr: "Numéro CNSS" },
+  patente: { kind: "text", labelFr: "Taxe professionnelle (patente)" },
+  capital: { kind: "number", labelFr: "Capital social" },
+  creationDate: { kind: "date", labelFr: "Date de création" },
+  city: { kind: "text", labelFr: "Ville" },
+  status: { kind: "text", labelFr: "Statut légal" },
+};
+const DEPOSIT_SPECS: Record<string, FieldSpec> = {
+  revenue: { kind: "number", labelFr: "Chiffre d'affaires déposé" },
+  netIncome: { kind: "number", labelFr: "Résultat net déposé", allowNegative: true },
+  equity: { kind: "number", labelFr: "Capitaux propres déposés", allowNegative: true },
+  totalAssets: { kind: "number", labelFr: "Total du bilan déposé" },
+};
+
+/** Champs d'une fiche InfoRisque que l'analyste peut corriger, avec motif. */
+export function profileFieldSpec(path: string): FieldSpec | null {
+  const id = /^identity\.([A-Za-z]+)$/.exec(path);
+  if (id) {
+    const sp = PROFILE_IDENTITY_SPECS[id[1]];
+    return sp ? { ...sp, labelFr: `Identité — ${sp.labelFr}` } : null;
+  }
+  const ev = /^legalEvents\.(\d+)\.(resolved|date)$/.exec(path);
+  if (ev) return ev[2] === "resolved" ? { kind: "boolean", labelFr: `Événement ${Number(ev[1]) + 1} — levé (n'a plus cours)` } : { kind: "date", labelFr: `Événement ${Number(ev[1]) + 1} — date` };
+  const fin = /^financials\.(\d+)\.([A-Za-z]+)$/.exec(path);
+  if (fin && DEPOSIT_SPECS[fin[2]]) return { ...DEPOSIT_SPECS[fin[2]], labelFr: `Comptes déposés ${Number(fin[1]) + 1} — ${DEPOSIT_SPECS[fin[2]].labelFr}` };
+  if (path === "score.value") return { kind: "text", labelFr: "Score InfoRisque" };
+  if (path === "paymentBehaviour") return { kind: "text", labelFr: "Comportement de paiement" };
+  return null;
+}
+
+export const PROFILE_IDENTITY_FIELDS = PROFILE_IDENTITY_SPECS;

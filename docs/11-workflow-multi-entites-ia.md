@@ -1,4 +1,4 @@
-# Workflow, multi-banques et filiales, multi-devise, IA — rapport de mise en œuvre
+# Workflow, multi-banques et filiales, multi-devise, OCR intelligent — rapport de mise en œuvre
 
 *Octobre 2026. Décisions correspondantes : D-45 à D-49 (journal des décisions).*
 
@@ -12,8 +12,8 @@ L'outil a été comparé au modèle qu'il applique, puis à l'outil de notation 
 | Banques et filiales | Une seule banque | Arbre d'entités, cloisonnement dans la couche de données | Arbre d'entités, cloisonnement dans la couche de données, habillage par entité |
 | Devises | MAD implicite | — | Devise par entité et contrepartie, cours datés, conversion consignée |
 | Workflow | Note officielle dès le calcul ; quatre yeux sur les seules dérogations | Brouillon → soumis → validé/rejeté, séparation des fonctions, délégation | Idem, plus reprise après rejet, abandon, file « À traiter », historique du dossier |
-| IA | Aucune | Fournisseur paramétrable, validation humaine | Propositions sur la grille depuis les pièces, pré-remplissage de la fiche contrepartie, fournisseur paramétrable |
-| Paramétrage | Variables d'environnement | Écrans de paramétrage | Écrans : banques et filiales, devises, paramètres du workflow et de l'IA, utilisateurs rattachés |
+| OCR intelligent | Aucune | Fournisseur paramétrable, validation humaine | Propositions sur la grille depuis les pièces, pré-remplissage de la fiche contrepartie, fournisseur paramétrable |
+| Paramétrage | Variables d'environnement | Écrans de paramétrage | Écrans : banques et filiales, devises, paramètres du workflow et de l'OCR intelligent, utilisateurs rattachés |
 | Dérogations à l'écran | API seulement | — | Demande et décision à l'écran, sur notation validée |
 
 Deux défauts ont été trouvés et corrigés en cours de route :
@@ -51,7 +51,7 @@ Brouillon ──abandon──▶ Abandonné
 - **Écran du dossier.**
   - la grille, générée depuis le modèle ;
   - Enregistrer le brouillon, Aperçu du calcul, Soumettre à validation ;
-  - le panneau des pièces et de l'IA ;
+  - le panneau des pièces et de l'OCR intelligent ;
   - la conversion des montants ;
   - après soumission, le résultat figé ;
   - le panneau de validation ;
@@ -63,9 +63,9 @@ Brouillon ──abandon──▶ Abandonné
 - **Dérogations.** Elles se demandent depuis une notation validée et se décident à l'écran par une seconde personne (RISK_MANAGER).
 - **Simulation.** Elle reste disponible sans rien enregistrer.
 
-### 2.4 IA d'assistance (D-48)
+### 2.4 OCR intelligent d'assistance (D-48)
 
-**Configuration** (Paramétrage › Intelligence artificielle) :
+**Configuration** (Paramétrage › OCR intelligent) :
 
 - activation, désactivée par défaut ;
 - fournisseur : Anthropic, OpenAI, Azure OpenAI ou API compatible ;
@@ -89,11 +89,11 @@ DeepSeek ne connaît pas la sortie contrainte par schéma : l'outil passe en mod
 
 1. Ajouter les pièces : états financiers, liasse, rapport de gestion, extrait RC (PDF, image, texte, CSV).
 2. Facultatif : ajouter un compte rendu de visite ou des faits récents.
-3. Cliquer sur « Proposer des valeurs ». L'IA renvoie des propositions pour les ratios, les ancrages qualitatifs, les statuts de donnée, les red flags, les exceptions, la matérialité ESG, le support groupe et les montants. Chacune porte sa source, son calcul et sa confiance.
-4. Accepter ou refuser chaque proposition, ou « Accepter celles ≥ 80 % ». Une valeur acceptée remplit la grille, avec le repère « IA ».
+3. Cliquer sur « Proposer des valeurs ». L'OCR intelligent renvoie des propositions pour les ratios, les ancrages qualitatifs, les statuts de donnée, les red flags, les exceptions, la matérialité ESG, le support groupe et les montants. Chacune porte sa source, son calcul et sa confiance.
+4. Accepter ou refuser chaque proposition, ou « Accepter celles ≥ 80 % ». Une valeur acceptée remplit la grille, avec le repère « OCR ».
 5. Enregistrer.
 
-**Dans la fiche contrepartie :** « Pré-remplir avec l'IA » depuis un extrait ou un texte collé, puis relecture et enregistrement.
+**Dans la fiche contrepartie :** « Pré-remplir avec l'OCR intelligent » depuis un extrait ou un texte collé, puis relecture et enregistrement.
 
 **Avec Anthropic :** les PDF sont lus page par page, tableaux compris. La réponse est contrainte par un schéma JSON. Le **repli serveur** est activé : si le modèle principal décline une requête, l'API la rejoue sur un modèle de secours dans le même appel. Avec un autre fournisseur, le texte des PDF est extrait localement avant envoi.
 
@@ -107,22 +107,22 @@ DeepSeek ne connaît pas la sortie contrainte par schéma : l'outil passe en mod
 | Validité d'une notation (mois) | 12 | 1 à 36 |
 | Crans maximaux d'une dérogation | 2 | 1 à 4 |
 | Taille maximale d'une pièce (Mo) | 4 | 1 à 20 (4 sur Vercel) |
-| IA activée / fournisseur / modèle / adresse | non / anthropic / — / — | listes fermées, https |
+| OCR intelligent activé / fournisseur / modèle / adresse | non / anthropic / — / — | listes fermées, https |
 
 ## 3. Vérifications
 
 - **Contrôles automatiques.**
-  - Compilation TypeScript, lint, 235 tests unitaires : 19 nouveaux sur le périmètre, les devises, la saisie, les propositions de l'IA, la séparation des fonctions et le paramétrage.
+  - Compilation TypeScript, lint, 235 tests unitaires : 19 nouveaux sur le périmètre, les devises, la saisie, les propositions de l'OCR intelligent, la séparation des fonctions et le paramétrage.
   - Validation du schéma sur les quatre moteurs de base (PostgreSQL, MySQL, SQL Server, SQLite).
   - Contrôle d'alignement complet. Il couvre désormais la section 8, le cloisonnement, ainsi que la requête de notation construite en un seul endroit.
 - **Migration 04 sur une copie de la base actuelle** (schéma de `main` et données de démonstration) :
   - jouée deux fois sans erreur ;
   - base obtenue strictement identique au schéma Prisma (`prisma migrate diff` vide) ;
   - dix contreparties rattachées à l'entité racine.
-- **Parcours de bout en bout** dans un navigateur, sur PostgreSQL. Fournisseur d'IA simulé au format OpenAI, en https. 17 contrôles, tous réussis :
+- **Parcours de bout en bout** dans un navigateur, sur PostgreSQL. Fournisseur d'OCR intelligent simulé au format OpenAI, en https. 17 contrôles, tous réussis :
   1. ouverture d'un dossier ;
-  2. analyse d'une pièce par l'IA : 5 propositions retenues, 2 écartées (champ inconnu, ancrage invalide) ;
-  3. acceptation des propositions et repères « IA » dans la grille ;
+  2. analyse d'une pièce par l'OCR intelligent : 5 propositions retenues, 2 écartées (champ inconnu, ancrage invalide) ;
+  3. acceptation des propositions et repères « OCR intelligent » dans la grille ;
   4. enregistrement du brouillon ;
   5. aperçu du calcul ;
   6. soumission ;
@@ -130,8 +130,8 @@ DeepSeek ne connaît pas la sortie contrainte par schéma : l'outil passe en mod
   8. dossier présent dans la file « À traiter » du valideur ;
   9. validation par une seconde personne ;
   10. filiale CI sans visibilité sur les contreparties du Maroc ;
-  11. fiche contrepartie pré-remplie par l'IA ;
-  12. analyse par l'IA sur le dossier de la filiale CI : propositions retenues ;
+  11. fiche contrepartie pré-remplie par l'OCR intelligent ;
+  12. analyse par l'OCR intelligent sur le dossier de la filiale CI : propositions retenues ;
   13. propositions acceptées et appliquées à la grille ;
   14. soumission en XOF bloquée faute de cours ;
   15. cours saisi, puis conversion consignée : 95 000 000 XOF → 1 567 500 MAD ;

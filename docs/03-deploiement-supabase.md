@@ -117,7 +117,7 @@ premier administrateur, qui crée ensuite les autres comptes depuis l'écran
 **Utilisateurs**. En cas de perte du dernier accès administrateur :
 `npm run users:create -- --username <identifiant> --reset`.
 
-### Banques et filiales, devises, dossiers, IA (à partir de fin octobre 2026)
+### Banques et filiales, devises, dossiers, OCR intelligent (à partir de fin octobre 2026)
 
 À appliquer **avant** le déploiement de la version qui introduit ces fonctions
 (détail : `docs/11-workflow-multi-entites-ia.md`) :
@@ -128,7 +128,7 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/04-multi-entites-workflow-ia
 
 Le script est idempotent et transactionnel. Il crée l'entité racine `GROUPE`, y
 rattache les contreparties existantes, crée les tables des cours, du paramétrage,
-des dossiers, des pièces et des propositions de l'IA, et les durcit. Ensuite,
+des dossiers, des pièces et des propositions de l'OCR intelligent, et les durcit. Ensuite,
 l'administrateur du groupe rattache chaque compte non administrateur à sa banque
 ou filiale (écran **Utilisateurs**) : sans rattachement, ces comptes n'ont plus
 accès à aucun dossier.
@@ -150,7 +150,7 @@ renotation ; le second rattache les webhooks à une entité, crée l'outbox des
 
 ### Remise à zéro et nouveau jeu de démonstration
 
-`npm run db:reset-seed` supprime toutes les données métier (clients, groupes, dossiers, notations, dérogations, lots, cours de change, webhooks, paramétrage hors IA) puis recharge le jeu de démonstration, calculé par le moteur sur l'échelle 1 à 10 en vigueur. Les comptes, leurs sessions, les entités, les paramètres de l'IA (clés `AI_*`) et le journal d'audit (en ajout seul) sont conservés. Sans option, le script affiche la base visée et ce qu'il supprimerait ; `-- --confirm` exécute. La suppression se fait en une seule transaction. Contre Supabase, utiliser l'adresse **directe** (`DIRECT_URL`) comme `DATABASE_URL` pour cette exécution : une transaction interactive ne passe pas par le pooler.
+`npm run db:reset-seed` supprime toutes les données métier (clients, groupes, dossiers, notations, dérogations, lots, cours de change, webhooks, paramétrage hors OCR intelligent) puis recharge le jeu de démonstration, calculé par le moteur sur l'échelle 1 à 10 en vigueur. Les comptes, leurs sessions, les entités, les paramètres de l'OCR intelligent (clés `AI_*`) et le journal d'audit (en ajout seul) sont conservés. Sans option, le script affiche la base visée et ce qu'il supprimerait ; `-- --confirm` exécute. La suppression se fait en une seule transaction. Contre Supabase, utiliser l'adresse **directe** (`DIRECT_URL`) comme `DATABASE_URL` pour cette exécution : une transaction interactive ne passe pas par le pooler.
 
 ### Circuit de validation (novembre 2026)
 
@@ -183,7 +183,7 @@ Raccordements (Administration › Paramétrage › Référentiels externes) :
 | T24 (Transact, API clients) | `T24_ENABLED`, `T24_BASE_URL`, `T24_CUSTOMER_PATH`, longueur du code client | `T24_API_TOKEN` (en-tête `Authorization: Bearer`) |
 | Crédit bureau (Creditinfo ou Quantik) | `CREDIT_BUREAU_API_ENABLED`, `CREDIT_BUREAU_PROVIDER`, `CREDIT_BUREAU_BASE_URL`, `CREDIT_BUREAU_PATH` | `CREDIT_BUREAU_API_TOKEN` |
 
-La correspondance des champs T24 (champs locaux de la banque : ICE, RC, segment commercial…) se paramètre sous la clé `T24_FIELD_MAP` de `app_settings` (JSON : pour chaque champ de la fiche, la liste des chemins dans la réponse de T24). Les adresses doivent être en https ; elles sont appelées depuis le serveur de l'application, qui doit donc atteindre le réseau interne de la banque (hébergement interne, ou passerelle). Sans raccordement, la création se fait en saisie minimale et le rapport de solvabilité se charge en PDF ou en image, lu par l'IA.
+La correspondance des champs T24 (champs locaux de la banque : ICE, RC, segment commercial…) se paramètre sous la clé `T24_FIELD_MAP` de `app_settings` (JSON : pour chaque champ de la fiche, la liste des chemins dans la réponse de T24). Les adresses doivent être en https ; elles sont appelées depuis le serveur de l'application, qui doit donc atteindre le réseau interne de la banque (hébergement interne, ou passerelle). Sans raccordement, la création se fait en saisie minimale et le rapport de solvabilité se charge en PDF ou en image, lu par l'OCR intelligent.
 
 ### Portefeuille par chargé d'affaires (novembre 2026)
 
@@ -216,6 +216,24 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/14-alignement-noms-contraint
 ```
 
 Renomme trois clés étrangères créées en minuscules par les premiers scripts, pour qu'elles portent le nom attendu par Prisma. Les définitions sont inchangées. Idempotent. **Appliquée en production le 8 novembre 2026** (docs/27).
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/15-dossier-fige-ocr-corrections.sql
+```
+
+Ajoute les éléments au jour de la décision (`rating_cases.evidence`), les corrections motivées des rapports (`credit_reports.corrections`), les rapports InfoRisque historisés (`legal_reports`), les pièces sources du client (`counterparty_documents`, protégées par RLS) et le tribunal de commerce, la CNSS et la patente de la fiche client. Idempotent. **Appliquée en production le 9 novembre 2026** (docs/30).
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/16-optimisation-performances.sql
+```
+
+Ajoute `rating_runs.exposureBase` (engagement global en devise de base, repris de l'existant), les index de la note courante, des dernières notations et du filtre du journal, ceux des quatre clés étrangères signalées par Supabase Purement additive, idempotente (docs/31).
+
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/17-rapprochement-saisie-t24.sql
+```
+
+Ajoute `counterparties.manualEntry` (saisie d'origine et valeurs gardées au rattachement à T24) et les colonnes de rapprochement des lignes d'engagement (`reconciliation`, `matchedReference`, `reconciledBy`, `reconciledAt`). Purement additive, idempotente (docs/32).
 
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas

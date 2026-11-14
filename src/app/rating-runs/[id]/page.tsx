@@ -21,6 +21,8 @@ import { isOfficialRun } from "@/lib/cases";
 import { effectiveGrade } from "@/lib/overrides";
 import { settingInt } from "@/lib/settings";
 import { CaseStatusBadge } from "@/app/cases/CaseStatusBadge";
+import { EvidencePanel } from "@/app/cases/[id]/EvidencePanel";
+import { parseEvidence } from "@/lib/case-evidence";
 import { ClassificationBasisPanel, readClassificationBasis } from "@/app/scoring/ClassificationBasisPanel";
 import { FinancialBasisPanel, readFinancialBasis } from "@/app/scoring/FinancialBasisPanel";
 
@@ -47,7 +49,7 @@ export default async function RatingRunPage({
         include: {
           counterparty: { select: { id: true, name: true, ice: true, segment: true } },
           overrides: { orderBy: { createdAt: "desc" } },
-          ratingCase: { select: { id: true, status: true, decidedBy: true } },
+          ratingCase: { select: { id: true, status: true, decidedBy: true, evidence: true } },
           renotationItem: { select: { batchId: true, caseId: true, previousGrade: true, batch: { select: { name: true } } } },
         },
       }),
@@ -138,6 +140,11 @@ export default async function RatingRunPage({
           </Link>
         </div>
       )}
+
+      {run.ratingCase && (() => {
+        const ev = parseEvidence(run.ratingCase.evidence);
+        return ev ? <EvidencePanel caseId={run.ratingCase.id} evidence={ev} /> : null;
+      })()}
 
       {run.origin === "REPRISE" &&
         (() => {

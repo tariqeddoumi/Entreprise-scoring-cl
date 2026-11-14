@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import type { ModelConfig } from "@/core/types";
 import { SECTION_LABELS, STATEMENT_MODEL_LABELS, type PosteSection, type StatementModel } from "@/financials/chart";
 import {
+  editYearValue,
+  MIN_VALUE_CORRECTION_REASON,
   emptyYear,
   hasFinancials,
   yearHasData,
@@ -34,7 +36,7 @@ interface Props {
   onChange?: (next: CaseDraft) => void;
   readOnly?: boolean;
   currency: string;
-  /** Dossier : lecture par l'IA et import du gabarit Excel. Absent en simulation. */
+  /** Dossier : lecture par l'OCR intelligent et import du gabarit Excel. Absent en simulation. */
   caseId?: string;
   documents?: BalanceSheetDocument[];
   aiUsable?: boolean;
@@ -65,12 +67,11 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
   const setF = (patch: Partial<FinancialsDraft>) => onChange?.({ ...draft, financials: { ...f, ...patch } });
   const setYear = (i: number, patch: Partial<FinancialYearDraft>) =>
     setF({ years: f.years.map((y, k) => (k === i ? { ...y, ...patch } : y)) });
-  const setValue = (i: number, key: string, value: string) => {
-    const y = f.years[i];
-    const lineage = { ...(y.lineage ?? {}) };
-    delete lineage[key];
-    setYear(i, { values: { ...y.values, [key]: value }, lineage });
-  };
+  const setValue = (i: number, key: string, value: string) => setF({ years: f.years.map((y, k) => (k === i ? editYearValue(y, key, value) : y)) });
+  const setReason = (i: number, key: string, reason: string) =>
+    setF({
+      years: f.years.map((y, k) => (k === i && y.corrections?.[key] ? { ...y, corrections: { ...y.corrections, [key]: { ...y.corrections[key], reason } } } : y)),
+    });
 
   function load(r: { statementModel: StatementModel | ""; certified: boolean; years: FinancialYearDraft[]; document: FinancialsDraft["document"] }, source: "IA" | "EXCEL") {
     if (filled && !window.confirm("Remplacer le bilan déjà saisi par celui qui vient d'être lu ? Les corrections de ratios sont conservées.")) return;
@@ -127,12 +128,12 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
   const alerts = fin.controls.filter((c) => c.status === "ALERTE").length;
 
   return (
-    <section id="bilan" className="card" style={{ padding: 16, display: "grid", gap: 14, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="bilan" data-toc="Bilan et CPC" data-toc-flag={!filled ? "à charger" : ko > 0 ? `${ko} bloquant(s)` : "chargé"} data-toc-level={!filled ? "warn" : ko > 0 ? "bad" : "good"} className="card" style={{ padding: 16, display: "grid", gap: 14, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Bilan et compte de produits et charges</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-          Chargez le bilan (lecture par l&apos;IA d&apos;un PDF, d&apos;une photo ou d&apos;un Excel ; gabarit Excel de la banque ; ou saisie).
-          Les ratios de la grille sont calculés par l&apos;outil selon les définitions CGNC, jamais par l&apos;IA ; vous pouvez corriger un
+          Chargez le bilan (lecture par l&apos;OCR intelligent d&apos;un PDF, d&apos;une photo ou d&apos;un Excel ; gabarit Excel de la banque ; ou saisie).
+          Les ratios de la grille sont calculés par l&apos;outil selon les définitions CGNC, jamais par l&apos;OCR intelligent ; vous pouvez corriger un
           ratio avec un motif. Exercices N et N−1 exigés, N−2 facultatif. Montants en {currency}.
         </p>
       </div>
@@ -153,9 +154,9 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
       {editable && caseId && (
         <div className="balance-tools" style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
           <div className="card" style={{ padding: 12, display: "grid", gap: 8, boxShadow: "none" }}>
-            <strong style={{ fontSize: 13 }}>Lire le bilan avec l&apos;IA</strong>
+            <strong style={{ fontSize: 13 }}>Lire le bilan avec l&apos;OCR intelligent</strong>
             {!aiUsable ? (
-              <span className="muted" style={{ fontSize: 12 }}>IA désactivée ou non configurée : utilisez le gabarit Excel ou la saisie.</span>
+              <span className="muted" style={{ fontSize: 12 }}>OCR intelligent désactivé ou non configuré : utilisez le gabarit Excel ou la saisie.</span>
             ) : readableDocs.length === 0 ? (
               <span className="muted" style={{ fontSize: 12 }}>Ajoutez d&apos;abord le bilan aux pièces du dossier (PDF, photo ou Excel).</span>
             ) : (
@@ -239,7 +240,7 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
             Comptes certifiés par un commissaire aux comptes
           </label>
           <span className="muted" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
-            Origine : {f.source === "IA" ? "lecture par l'IA" : f.source === "EXCEL" ? "gabarit Excel" : filled ? "saisie" : "—"}
+            Origine : {f.source === "IA" ? "lecture par l'OCR intelligent" : f.source === "EXCEL" ? "gabarit Excel" : filled ? "saisie" : "—"}
             {f.document ? ` · pièce « ${f.document.name} » (empreinte ${f.document.sha256.slice(0, 12)}…)` : ""}
           </span>
         </div>
@@ -298,6 +299,7 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
                   computed={fin.years}
                   editable={editable}
                   onValue={setValue}
+                  onReason={setReason}
                 />
               ))}
             </tbody>
@@ -306,7 +308,7 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
         </details>
         {years.some((y) => y.lineage && Object.keys(y.lineage).length) && (
           <p className="muted" style={{ fontSize: 11 }}>
-            Valeurs lues par l&apos;IA : survolez une cellule pour voir sa source. Les cellules surlignées ont une confiance inférieure à {LOW_CONFIDENCE} % : à vérifier en priorité.
+            Valeurs lues par l&apos;OCR intelligent : survolez une cellule pour voir sa source. Les cellules surlignées ont une confiance inférieure à {LOW_CONFIDENCE} % : à vérifier en priorité.
           </p>
         )}
       </fieldset>
@@ -413,6 +415,7 @@ function SectionRows({
   computed,
   editable,
   onValue,
+  onReason,
 }: {
   label: string;
   postes: FormatPoste[];
@@ -420,6 +423,7 @@ function SectionRows({
   computed: Array<Record<string, number | undefined>>;
   editable: boolean;
   onValue: (i: number, key: string, value: string) => void;
+  onReason?: (i: number, key: string, reason: string) => void;
 }) {
   return (
     <>
@@ -445,8 +449,10 @@ function SectionRows({
             if (p.onlyN && i > 0) return <td key={i} />;
             const lin = y.lineage?.[p.key];
             const low = lin !== undefined && lin.confidence < LOW_CONFIDENCE;
+            const cor = y.corrections?.[p.key];
+            const noReason = !!cor && cor.reason.trim().length < MIN_VALUE_CORRECTION_REASON;
             return (
-              <td key={i} title={lin ? `Lu par l'IA — ${lin.source} (confiance ${lin.confidence} %)` : undefined}>
+              <td key={i} title={lin ? `Lu par l'OCR intelligent — ${lin.source} (confiance ${lin.confidence} %)` : cor ? `Valeur lue : ${cor.read || "vide"}` : undefined}>
                 {editable ? (
                   <input
                     aria-label={`${p.labelFr} — exercice ${YEAR_LABELS[i]}`}
@@ -457,6 +463,22 @@ function SectionRows({
                   />
                 ) : (
                   <span style={{ display: "block", textAlign: "right" }}>{formatAmount(computed[i]?.[p.key])}</span>
+                )}
+                {cor && (
+                  <div style={{ fontSize: 11, marginTop: 2, display: "grid", gap: 2 }}>
+                    <span style={{ color: "var(--warn)" }}>corrigé · lu {cor.read || "vide"}</span>
+                    {editable && onReason ? (
+                      <input
+                        aria-label={`Motif de la correction — ${p.labelFr}, exercice ${YEAR_LABELS[i]}`}
+                        placeholder="Motif de la correction"
+                        value={cor.reason}
+                        onChange={(e) => onReason(i, p.key, e.target.value)}
+                        style={{ fontSize: 11, padding: "2px 4px", borderColor: noReason ? "var(--bad)" : undefined }}
+                      />
+                    ) : (
+                      cor.reason && <span className="muted">{cor.reason}</span>
+                    )}
+                  </div>
                 )}
               </td>
             );

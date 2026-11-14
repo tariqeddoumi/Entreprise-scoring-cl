@@ -16,9 +16,9 @@ import { MAX_FISCAL_YEARS, type FinancialYearDraft } from "@/financials/compute"
 import { parseTemplate } from "@/financials/excel-template";
 
 /**
- * Assistance à la saisie par l'IA.
+ * Assistance à la saisie par l'OCR intelligent.
  *
- * L'IA lit les pièces du dossier (états financiers, rapports, extraits) et
+ * L'OCR intelligent lit les pièces du dossier (états financiers, rapports, extraits) et
  * PROPOSE des valeurs pour la grille — jamais plus. Chaque proposition :
  *  - porte sur un champ que la grille connaît (liste fermée, transmise au
  *    fournisseur sous forme de schéma JSON) ;
@@ -36,7 +36,7 @@ function readable(mimeType: string): boolean {
   return (AI_READABLE_TYPES as readonly string[]).includes(mimeType);
 }
 
-/** Pièce conservable au dossier : lisible par l'IA, ou classeur Excel (converti en texte pour l'IA). */
+/** Pièce conservable au dossier : lisible par l'OCR intelligent, ou classeur Excel (converti en texte pour l'OCR intelligent). */
 function storable(mimeType: string): boolean {
   return readable(mimeType) || mimeType === XLSX_MIME;
 }
@@ -50,7 +50,7 @@ function documentType(name: string, type: string): string {
   )[ext ?? ""] ?? "application/octet-stream";
 }
 
-/** Pièce transmise à l'IA : un classeur Excel est converti en texte tabulé. */
+/** Pièce transmise à l'OCR intelligent : un classeur Excel est converti en texte tabulé. */
 function toAiDocument(d: { fileName: string; mimeType: string; content: Uint8Array }): AiDocument {
   if (d.mimeType === XLSX_MIME) {
     let text: string;
@@ -204,7 +204,7 @@ export async function generateProposals(
   input: { documentIds: string[]; notes?: string }
 ): Promise<GeneratedProposals> {
   const c = await draftCase(db, caseId);
-  if (c.status !== "DRAFT") throw new CaseError(409, "Les propositions de l'IA s'appliquent à un brouillon.");
+  if (c.status !== "DRAFT") throw new CaseError(409, "Les propositions de l'OCR intelligent s'appliquent à un brouillon.");
   const model = await getScoringModel(c.modelId);
   if (!model) throw new CaseError(500, "Version de modèle du dossier indisponible.");
   const notes = (input.notes ?? "").trim().slice(0, MAX_NOTES);
@@ -309,9 +309,9 @@ export async function decideProposal(db: PrismaClient, identity: Identity, propo
   return { field: p.field, value: p.value };
 }
 
-// --- Bilan : lecture par l'IA et import du gabarit Excel ----------------------------------
+// --- Bilan : lecture par l'OCR intelligent et import du gabarit Excel ----------------------------------
 //
-// L'IA lit les POSTES du bilan et du CPC dans le gabarit de la banque, jamais
+// L'OCR intelligent lit les POSTES du bilan et du CPC dans le gabarit de la banque, jamais
 // les ratios : ceux-ci sont calculés par formule (src/financials/compute.ts).
 // Le résultat n'est pas enregistré ici : il remplit le tableau à l'écran, où
 // l'analyste relit chaque valeur (les moins sûres sont signalées) puis
@@ -518,7 +518,7 @@ export async function importFinancialsTemplate(
   if (!parsed) {
     throw new CaseError(
       422,
-      "Ce classeur n'est pas le gabarit de la banque : ajoutez-le aux pièces du dossier et utilisez « Lire le bilan avec l'IA », ou téléchargez le gabarit."
+      "Ce classeur n'est pas le gabarit de la banque : ajoutez-le aux pièces du dossier et utilisez « Lire le bilan avec l'OCR intelligent », ou téléchargez le gabarit."
     );
   }
   if (parsed.recognized === 0) throw new CaseError(422, "Gabarit vide : aucun montant renseigné.");

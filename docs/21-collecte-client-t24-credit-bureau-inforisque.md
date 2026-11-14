@@ -62,7 +62,7 @@ Consultation obligatoire avant tout octroi (circulaire 1/G/2010). Deux crédit b
 1. **Rafraîchissement** dans l'outil du crédit bureau, hors de l'outil de notation. Un rafraîchissement automatique par API est un projet distinct.
 2. **Récupération**, de deux façons :
    - **par API** : base des rapports interrogée par l'ICE du client ;
-   - **par lecture de l'IA** : PDF ou image chargé. L'IA restitue le contenu sans rien inventer.
+   - **par lecture de l'IA** : PDF ou image chargé. L'OCR intelligent restitue le contenu sans rien inventer.
 
    Dans les deux cas, le rapport s'affiche **à vérifier** avant enregistrement. La saisie manuelle reste possible.
 3. **Date de mise à jour.** C'est elle qui fait foi, pas la date de chargement. Au-delà de l'ancienneté paramétrée (30 jours proposés), l'écran affiche systématiquement : « Attention : rapport mis à jour il y a N jours. Rafraîchissez-le dans l'outil du crédit bureau, puis récupérez-le à nouveau. »
@@ -87,13 +87,13 @@ Consultation obligatoire avant tout octroi (circulaire 1/G/2010). Deux crédit b
 
 6. **À la soumission** d'un dossier, un rapport absent ou ancien donne un **avertissement** tracé au journal (par défaut) ou **bloque** la soumission (paramétrable).
 
-**À vérifier avec le crédit bureau :** l'existence et le format d'une API « entreprise » pour la banque. La recherche publique n'en documente pas ; la lecture par l'IA est donc la voie disponible dès maintenant. Un rapport anonymisé permettra de caler la lecture sur son format réel.
+**À vérifier avec le crédit bureau :** l'existence et le format d'une API « entreprise » pour la banque. La recherche publique n'en documente pas ; la lecture par l'OCR intelligent est donc la voie disponible dès maintenant. Un rapport anonymisé permettra de caler la lecture sur son format réel.
 
 ## 4. Fiche juridique : InfoRisque
 
 InfoRisque (Inforisk, charika.ma, membre du réseau Dun & Bradstreet) couvre les entreprises marocaines : identité, représentants légaux, actionnaires, bénéficiaires effectifs, comptes déposés sur plusieurs exercices, score de défaillance, appartenance à un groupe, annonces légales. Le contenu dépend du rapport commandé (Express, Gold, Platinium, Ultimate) : une rubrique absente reste vide.
 
-**Lecture.** Le rapport PDF ou image est lu par l'IA, puis affiché à vérifier (identité modifiable), puis enregistré dans la fiche juridique du client, datée et journalisée. Pour une fiche en saisie minimale, les champs vides de la fiche client (ICE, RC, forme juridique, identifiant fiscal, ville) sont complétés ; une fiche T24 n'est pas modifiée.
+**Lecture.** Le rapport PDF ou image est lu par l'OCR intelligent, puis affiché à vérifier (identité modifiable), puis enregistré dans la fiche juridique du client, datée et journalisée. Pour une fiche en saisie minimale, les champs vides de la fiche client (ICE, RC, forme juridique, identifiant fiscal, ville) sont complétés ; une fiche T24 n'est pas modifiée.
 
 **Exploitation dans l'outil :**
 
@@ -122,7 +122,7 @@ Sur le dossier, le chargé d'affaires voit :
 - les critères BAM proposés par le bilan, le crédit bureau et InfoRisque ;
 - la liste « à faire » de la saisie : champs repris à confirmer, champs à saisir, anomalies.
 
-Toute pièce lue par l'IA est vérifiée avant enregistrement, et toute opération est journalisée.
+Toute pièce lue par l'OCR intelligent est vérifiée avant enregistrement, et toute opération est journalisée.
 
 ## 6. Suites proposées
 

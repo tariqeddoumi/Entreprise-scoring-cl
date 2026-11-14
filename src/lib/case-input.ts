@@ -31,7 +31,7 @@ import {
 
 /**
  * Saisie d'un dossier de notation — module PUR, partagé par l'écran (aperçu et
- * enregistrement), le serveur (soumission) et l'IA (propositions).
+ * enregistrement), le serveur (soumission) et l'OCR intelligent (propositions).
  *
  * Le brouillon garde la saisie telle que l'analyste la voit (chaînes, cases,
  * montants dans la devise de la contrepartie). La conversion en requête de
@@ -415,7 +415,7 @@ export function draftToRequest(
   };
 }
 
-// --- Champs que l'IA peut proposer -------------------------------------------
+// --- Champs que l'OCR intelligent peut proposer -------------------------------------------
 //
 // Une proposition porte sur une clé de cette liste et une valeur texte ; elle
 // est revérifiée contre la grille avant d'être présentée, et appliquée
@@ -427,7 +427,7 @@ export interface ProposableField {
   key: string;
   kind: FieldKind;
   labelFr: string;
-  /** Aide transmise à l'IA : définition, barème ou repères. */
+  /** Aide transmise à l'OCR intelligent : définition, barème ou repères. */
   guideFr: string;
 }
 
@@ -452,7 +452,7 @@ export function proposableFields(
   const links = opts.includeBalanceSheetRatios ? {} : gridLinks(model.modelId);
   for (const c of model.criteria) {
     const head = `${c.code} — ${c.labelFr}`;
-    // Ratio calculé depuis le bilan : l'IA lit les postes du bilan (lecture
+    // Ratio calculé depuis le bilan : l'OCR intelligent lit les postes du bilan (lecture
     // dédiée), elle ne propose pas le ratio lui-même.
     if (links[c.code]) continue;
     if (c.type === "QUANTITATIVE") {

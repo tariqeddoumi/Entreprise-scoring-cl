@@ -132,10 +132,16 @@ describe("Rapport de solvabilité : ancienneté, contenu, signaux", () => {
     expect(old.messageFr).toMatch(/Rafraîchissez-le dans l'outil du crédit bureau/);
   });
 
-  it("contrôles : date requise, pas dans le futur, établissement requis, montants positifs", () => {
+  it("contrôles : date requise, pas dans le futur, confrère anonymisé admis, montants positifs", () => {
     expect(checkReport("", report, "2026-11-07").join(" ")).toMatch(/Date de mise à jour/);
     expect(checkReport("2026-12-01", report, "2026-11-07").join(" ")).toMatch(/future/);
-    expect(checkReport("2026-11-01", normalizeReport({ lines: [{ institution: "", outstanding: -1 }] }), "2026-11-07")).toHaveLength(2);
+    // Les rapports de crédit bureau anonymisent les confrères : pas de nom exigé.
+    const anon = normalizeReport({ lines: [{ institution: "", outstanding: "(1 000)" }] });
+    expect(anon.lines[0].institution).not.toBe("");
+    expect(anon.lines[0].outstanding).toBe(1000);
+    expect(checkReport("2026-11-01", anon, "2026-11-07")).toEqual([]);
+    const neg = { ...anon, lines: [{ ...anon.lines[0], outstanding: -1 }] };
+    expect(checkReport("2026-11-01", neg, "2026-11-07")).toHaveLength(1);
     expect(checkReport("2026-11-01", report, "2026-11-07")).toEqual([]);
   });
 });

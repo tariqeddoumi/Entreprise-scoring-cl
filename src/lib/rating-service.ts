@@ -1,3 +1,4 @@
+import { exposureOfInput } from "@/reference/exposure";
 import { createHash } from "node:crypto";
 import { computeRating } from "@/core/engine";
 import type { EngineOptions } from "@/core/engine";
@@ -136,6 +137,9 @@ export async function executeRatingRun(
           finalGrade: result.finalGrade,
           inputSnapshot: stableStringify(input),
           resultSnapshot: stableStringify(result),
+          // Engagement global déclaré (devise de base) ; un dossier en devise
+          // le remplace par le montant converti au cours appliqué.
+          exposureBase: exposureOfInput(input),
           requestedBy: identity.name,
           origin,
           idempotencyKey,
@@ -273,3 +277,5 @@ function isUniqueViolation(e: unknown): boolean {
     (e as { code: unknown }).code === "P2002"
   );
 }
+
+export { exposureOfInput };

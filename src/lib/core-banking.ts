@@ -1,3 +1,6 @@
+import { applyReconciliation, compareWithT24, parseManualEntry, RECONCILE_LABELS, type FieldComparison, type ManualEntryRecord } from "@/reference/reconciliation";
+import { canonText } from "@/reference/entry-lists";
+import { loadEntryLists } from "./entry-lists";
 import type { PrismaClient } from "@/generated/prisma";
 import type { Identity } from "./auth";
 import { auditWithin } from "./audit";
@@ -12,6 +15,7 @@ import {
   normalizeT24Code,
   parseFieldMap,
   type CoreBankingCustomer,
+  type CounterpartyFromT24,
   type FieldChange,
   type T24CodeRule,
 } from "@/reference/core-banking";
@@ -175,6 +179,9 @@ export async function syncFromT24(
   const cp = await db.counterparty.findUnique({ where: { id: counterpartyId } });
   if (!cp) throw new CoreBankingError("INTROUVABLE", "Client introuvable.");
   if (!canWrite(perimeter, cp.entityId)) throw new OutOfScopeError("Client hors de votre périmètre d'écriture.");
+  // Une fiche saisie se rattache par le rapprochement (comparaison champ par
+  // champ, saisie d'origine conservée), jamais par écrasement direct.
+  if (cp.dataSource !== "T24") throw new CoreBankingError("CONFLIT", "Fiche saisie : comparez-la d'abord à T24 (rapprochement), puis validez.");
   const code = normalizeT24Code(rawCode ?? cp.coreBankingId ?? "");
   // Une fiche rapatriée garde son code ; une saisie minimale peut porter un code
   // non vérifié (T24 indisponible à la création), corrigé au rattachement.
@@ -183,9 +190,18 @@ export async function syncFromT24(
   await assertCodeFree(db, code, cp.id);
   const customer = await fetchT24Customer(db, code, opts);
   const fields = counterpartyFieldsFromT24(customer);
-  const changes = diffWithT24(cp, fields);
+  // Valeurs saisies gardées au rapprochement (avec motif) : l'actualisation ne
+  // les écrase pas ; si T24 rejoint la valeur gardée, l'écart disparaît.
+  const manual = parseManualEntry(cp.manualEntry);
+  const kept = { ...(manual?.kept ?? {}) };
+  for (const f of Object.keys(kept) as Array<keyof CounterpartyFromT24>) {
+    const k = kept[f];
+    if (k && canonText(fields[f]) === canonText(k.value)) delete kept[f];
+  }
+  const changes = diffWithT24(cp, fields).filter((c) => !kept[c.field]);
   const update: Record<string, string | null> = {};
   for (const c of changes) update[c.field] = c.after;
+  if (manual && Object.keys(kept).length !== Object.keys(manual.kept).length) update.manualEntry = JSON.stringify({ ...manual, kept });
   const economicGroupId = cp.economicGroupId ?? (await groupId(db, cp.entityId, customer.economicGroupCode));
   await db.$transaction(async (tx) => {
     await tx.counterparty.update({
@@ -210,6 +226,97 @@ export async function syncFromT24(
     });
   });
   return { changes, code };
+}
+
+export interface T24Preview {
+  code: string;
+  name: string;
+  rows: FieldComparison[];
+  /** Valeurs déjà gardées à la place de T24 (fiche rattachée). */
+  kept: ManualEntryRecord["kept"];
+}
+
+/**
+ * Comparaison de la fiche (saisie) avec T24, sans rien enregistrer : base du
+ * rapprochement, champ par champ.
+ */
+export async function previewT24Reconciliation(db: PrismaClient, perimeter: Perimeter, counterpartyId: string, rawCode?: string): Promise<T24Preview> {
+  const cp = await db.counterparty.findUnique({ where: { id: counterpartyId } });
+  if (!cp) throw new CoreBankingError("INTROUVABLE", "Client introuvable.");
+  if (!canWrite(perimeter, cp.entityId)) throw new OutOfScopeError("Client hors de votre périmètre d'écriture.");
+  const code = normalizeT24Code(rawCode ?? cp.coreBankingId ?? "");
+  if (cp.dataSource === "T24" && cp.coreBankingId && rawCode && normalizeT24Code(rawCode) !== cp.coreBankingId)
+    throw new CoreBankingError("CONFLIT", `Fiche déjà rattachée au client T24 ${cp.coreBankingId}.`);
+  await assertCodeFree(db, code, cp.id);
+  const customer = await fetchT24Customer(db, code);
+  const rows = compareWithT24(cp, counterpartyFieldsFromT24(customer), await loadEntryLists(db));
+  return { code, name: customer.name || customer.shortName, rows, kept: parseManualEntry(cp.manualEntry)?.kept ?? {} };
+}
+
+/**
+ * Rapprochement validé : T24 est relu (jamais les valeurs du navigateur), les
+ * choix s'appliquent champ par champ, la saisie d'origine est conservée, la
+ * fiche devient « T24 ». Garder une valeur saisie différente de T24 exige un motif.
+ */
+export async function reconcileWithT24(
+  db: PrismaClient,
+  perimeter: Perimeter,
+  identity: Identity,
+  counterpartyId: string,
+  rawCode: string | undefined,
+  decisions: Partial<Record<keyof CounterpartyFromT24, "T24" | "SAISIE">>,
+  reasons: Partial<Record<keyof CounterpartyFromT24, string>>
+): Promise<{ code: string; updated: string[]; kept: string[] }> {
+  const cp = await db.counterparty.findUnique({ where: { id: counterpartyId } });
+  if (!cp) throw new CoreBankingError("INTROUVABLE", "Client introuvable.");
+  if (!canWrite(perimeter, cp.entityId)) throw new OutOfScopeError("Client hors de votre périmètre d'écriture.");
+  const code = normalizeT24Code(rawCode ?? cp.coreBankingId ?? "");
+  if (cp.dataSource === "T24" && cp.coreBankingId && rawCode && normalizeT24Code(rawCode) !== cp.coreBankingId)
+    throw new CoreBankingError("CONFLIT", `Fiche déjà rattachée au client T24 ${cp.coreBankingId}.`);
+  await assertCodeFree(db, code, cp.id);
+  const customer = await fetchT24Customer(db, code);
+  const rows = compareWithT24(cp, counterpartyFieldsFromT24(customer), await loadEntryLists(db));
+  const at = new Date().toISOString();
+  const r = applyReconciliation(rows, decisions, reasons, { by: identity.name, at });
+  if (r.issues.length) throw new CoreBankingError("INVALIDE", r.issues.join(" "));
+  const previous = parseManualEntry(cp.manualEntry);
+  const snapshot = Object.fromEntries((Object.keys(RECONCILE_LABELS) as Array<keyof CounterpartyFromT24>).map((k) => [k, cp[k] ?? null]));
+  const record: ManualEntryRecord = {
+    // La première saisie d'origine fait foi : un nouveau rapprochement ne l'efface pas.
+    snapshot: previous?.snapshot ?? snapshot,
+    snapshotAt: previous?.snapshotAt ?? at,
+    snapshotBy: previous?.snapshotBy ?? identity.name,
+    kept: r.kept,
+  };
+  const economicGroupId = cp.economicGroupId ?? (await groupId(db, cp.entityId, customer.economicGroupCode));
+  await db.$transaction(async (tx) => {
+    await tx.counterparty.update({
+      where: { id: cp.id },
+      data: {
+        ...r.update,
+        manualEntry: JSON.stringify(record),
+        coreBankingId: code,
+        dataSource: "T24",
+        coreBankingSyncedAt: new Date(),
+        coreBankingData: t24Payload(customer),
+        ...(economicGroupId ? { economicGroupId } : {}),
+      },
+    });
+    await auditWithin(tx, {
+      actor: identity.name,
+      actorRole: identity.role,
+      action: "COUNTERPARTY_RECONCILED_WITH_T24",
+      resourceType: "Counterparty",
+      resourceId: cp.id,
+      entityId: cp.entityId,
+      detail: {
+        code,
+        repris: Object.entries(r.update).map(([f, v]) => ({ champ: RECONCILE_LABELS[f as keyof CounterpartyFromT24], saisie: cp[f as keyof CounterpartyFromT24] ?? null, t24: v })),
+        gardes: Object.entries(r.kept).map(([f, k]) => ({ champ: RECONCILE_LABELS[f as keyof CounterpartyFromT24], saisie: k!.value, t24: k!.t24, motif: k!.reason })),
+      },
+    });
+  });
+  return { code, updated: Object.keys(r.update), kept: Object.keys(r.kept) };
 }
 
 export function parseT24Data(raw: string | null | undefined): (CoreBankingCustomer & { fetchedAt?: string }) | null {
