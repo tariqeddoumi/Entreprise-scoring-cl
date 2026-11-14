@@ -235,6 +235,25 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/17-rapprochement-saisie-t24.
 
 Ajoute `counterparties.manualEntry` (saisie d'origine et valeurs gardées au rattachement à T24) et les colonnes de rapprochement des lignes d'engagement (`reconciliation`, `matchedReference`, `reconciledBy`, `reconciledAt`). Purement additive, idempotente (docs/32).
 
+**Migrations 16 et 17 appliquées en production le 14 novembre 2026.**
+
+### Jeu de démonstration complet
+
+En complément du seed de base (entités, 10 clients notés par le moteur, dérogations), le jeu complet fait vivre tous les écrans :
+- 2 centres d'affaires et 60 clients fictifs, saisis par les listes ;
+- 24 mois d'historique de notes (surveillance) et la watch list ;
+- lignes d'engagement T24 et saisies, dont des cas de rapprochement ;
+- bilans, dossiers décidés, un groupe d'affaires et des cours de change.
+
+```bash
+# Accès direct à la base :
+npx tsx scripts/seed-complet.mts
+# Console SQL (Supabase) : même algorithme, mêmes données
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/18-seed-complet-demonstration.sql
+```
+
+Rejouable (identifiants `demo_`, aucune suppression). Les deux versions produisent des données identiques : vérifié table par table. **Appliqué en production le 14 novembre 2026** : 70 clients, 148 notations, 168 lignes d'engagement, 60 bilans, 24 décisions de comité, 120 dossiers, 3 cours de change. Les comptes utilisateurs ne sont pas touchés.
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son
