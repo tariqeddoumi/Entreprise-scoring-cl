@@ -1,7 +1,7 @@
 {
  "titre": "Guide utilisateur",
  "sousTitre": "Outil de notation interne des entreprises — TPE, PME et grandes entreprises",
- "date": "Novembre 2026 — version 3",
+ "date": "Novembre 2026 — version 4",
  "profils": [
   [
    "P1 — Saisie (chargé d'affaires, analyste crédit)",
@@ -41,7 +41,7 @@
   ],
   [
    "3",
-   "Préparation : pièces requises, bilan, IA",
+   "Préparation : pièces requises, bilan, OCR intelligent",
    "Chargé d'affaires"
   ],
   [
@@ -73,6 +73,48 @@
    "9",
    "Levée de critère, dérogation, watch list (si besoin)",
    "Comités, contre-étude, surveillance"
+  ]
+ ],
+ "nouveautes": [
+  [
+   "« Mon travail »",
+   "Le tableau de bord liste vos dossiers à traiter, vos brouillons, vos rejets à reprendre et les notes à renouveler ; recherche directe par nom, ICE ou code T24.",
+   "1"
+  ],
+  [
+   "Saisie minimale par listes",
+   "Cinq champs suffisent pour créer un client hors T24 ; forme juridique, secteur, ville et garanties se choisissent dans des listes paramétrables.",
+   "2"
+  ],
+  [
+   "Rapprochement de la fiche avec T24",
+   "Au rattachement, chaque champ saisi est comparé à T24 ; garder une valeur saisie exige un motif ; la saisie d'origine reste consultable.",
+   "2"
+  ],
+  [
+   "Rapprochement des engagements",
+   "Les lignes saisies sont appariées aux lignes T24 (proposition automatique) : rapprochées, gardées ou écartées, sans double comptage.",
+   "2"
+  ],
+  [
+   "Corrections motivées",
+   "Rapport de solvabilité, fiche InfoRisque et bilan : la valeur lue reste visible, la correction s'y ajoute avec motif et justificatif.",
+   "2, 4"
+  ],
+  [
+   "Sommaire du dossier",
+   "Les parties du dossier et leur état (complet, à saisir) en un coup d'œil.",
+   "3"
+  ],
+  [
+   "Éléments au jour de la décision",
+   "Le dossier soumis est figé : fiche, rapports, engagements, bilan et corrections tels que soumis.",
+   "5"
+  ],
+  [
+   "Listes de saisie",
+   "L'administrateur paramètre les listes avec les codes de T24.",
+   "10"
   ]
  ],
  "sections": [
@@ -113,13 +155,14 @@
     },
     {
      "img": "02-tableau-de-bord",
-     "titre": "Lire le tableau de bord",
+     "titre": "Le tableau de bord et « Mon travail »",
      "actions": [
-      "Les compteurs : clients, notations validées, dossiers à valider.",
-      "La distribution des classes (échelle 1 à 10) : la dernière note validée de chaque client.",
-      "Les dernières notations, avec la mention « proposée, non validée » le cas échéant."
+      "En tête, « Mon travail » : vos dossiers à traiter (avis ou décision attendus, brouillons, dossiers rejetés à reprendre) et les notes à renouveler (plus de 12 mois).",
+      "Cliquer sur un client ouvre directement son dossier ; la recherche (nom, ICE, code T24) mène à la fiche.",
+      "Les compteurs sont cliquables : clients, notations validées, dossiers à valider.",
+      "La distribution des classes (échelle 1 à 10) reprend la dernière note validée de chaque client."
      ],
-     "aSavoir": "Seule une notation validée compte dans la distribution : une notation soumise n'est qu'une proposition."
+     "aSavoir": "« Mon travail » dépend de votre profil : un analyste voit ses brouillons et ses rejets, un valideur les dossiers qui attendent son avis ou sa décision. Seule une notation validée compte dans la distribution."
     }
    ]
   },
@@ -132,7 +175,7 @@
      "titre": "La liste des clients",
      "actions": [
       "Menu « Clients ».",
-      "Rechercher par nom, ICE ou entité ; filtrer par segment.",
+      "Rechercher par nom, ICE, code T24 ou gestionnaire : la recherche porte sur tout le portefeuille, pas seulement sur la page affichée ; filtrer par segment.",
       "La note affichée : classe 1 à 10 de la dernière notation validée ; « Noter » ouvre la fiche sur le formulaire de notation.",
       "« Exporter CSV » produit la liste filtrée pour Excel."
      ],
@@ -140,7 +183,7 @@
     },
     {
      "img": "05-contrepartie-ia",
-     "titre": "Créer un client avec l'IA",
+     "titre": "Créer un client avec l'OCR intelligent",
      "actions": [
       "Cliquer sur « + Nouveau client ».",
       "Coller un texte (extrait RC, attestation ICE) ou joindre la pièce.",
@@ -175,19 +218,32 @@
      "titre": "Saisie minimale (client hors T24 ou T24 indisponible)",
      "actions": [
       "Choisir « Pas encore dans T24 » (ou « Passer à la saisie minimale » si T24 ne répond pas).",
-      "Saisir la raison sociale, l'ICE ou le RC, la forme juridique, le secteur et le segment commercial.",
-      "Enregistrer : la fiche est marquée « en attente de T24 »."
+      "Cinq champs suffisent : raison sociale, ICE ou RC, puis forme juridique, secteur d'activité et segment commercial choisis dans des listes déroulantes.",
+      "Au besoin, ouvrir « Compléments facultatifs » : registre de commerce, ville (liste), identifiant fiscal, code client T24, gestionnaire.",
+      "Enregistrer : la fiche est marquée « Saisie minimale, en attente de T24 »."
      ],
-     "aSavoir": "Dès que le client existe dans T24, rattachez la fiche depuis sa page (« Rattacher à T24 et rapatrier ») : les données T24 remplacent la saisie, chaque écart est journalisé."
+     "aSavoir": "Les listes (formes juridiques, secteurs NMAE, villes, tribunaux, garanties) sont paramétrées par l'administrateur, avec les codes de T24 : les valeurs saisies sont figées et se comparent ensuite automatiquement à celles de T24."
     },
     {
      "img": "62-fiche-t24",
-     "titre": "La fiche T24 et son actualisation",
+     "titre": "La fiche rattachée à T24 et la saisie d'origine",
      "actions": [
-      "Sur la fiche du client, le bloc « Référentiel T24 » montre le code, le segment commercial, le gestionnaire et la date de la dernière synchronisation.",
-      "« Actualiser depuis T24 » relit la fiche ; les changements sont affichés et tracés."
+      "Le bloc « Référentiel T24 » montre le code, le segment commercial, le gestionnaire et la date de la dernière synchronisation.",
+      "« Saisie d'origine » conserve ce qui avait été saisi à la main avant le rattachement, avec les valeurs gardées à la place de T24 et leur motif.",
+      "« Actualiser depuis T24 » relit la fiche ; « Revoir le rapprochement » compare de nouveau la fiche à T24."
      ],
-     "aSavoir": "À l'ouverture de chaque dossier, la fiche et les engagements d'un client T24 sont actualisés automatiquement ; si T24 ne répond pas, le dossier s'ouvre quand même, avec un avertissement daté."
+     "aSavoir": "Une valeur gardée avec motif n'est pas écrasée par les actualisations suivantes tant qu'elle diffère de T24. À l'ouverture de chaque dossier, la fiche et les engagements d'un client T24 sont actualisés automatiquement."
+    },
+    {
+     "img": "82-rapprochement-t24",
+     "titre": "Rattacher une fiche saisie à T24 : le rapprochement",
+     "actions": [
+      "Sur la fiche saisie, renseigner le code client T24 et cliquer sur « Comparer la saisie avec T24 ».",
+      "Le tableau compare chaque champ : identique, écart, complété par T24, absent de T24.",
+      "Pour chaque écart, T24 est retenu par défaut ; pour garder la valeur saisie, choisir « Saisie » et donner un motif (10 caractères au moins).",
+      "Cliquer sur « Valider le rapprochement » : la fiche est rattachée et les données T24 sont reprises."
+     ],
+     "aSavoir": "Rien n'est écrit avant votre validation. Les équivalences sont reconnues (« Société anonyme » = SA, accents et majuscules ignorés). Chaque valeur reprise ou gardée est journalisée."
     },
     {
      "img": "65-engagements",
@@ -195,19 +251,31 @@
      "actions": [
       "Bloc « Engagements chez la banque » de la fiche client.",
       "« Rapatrier depuis T24 » charge les lignes (autorisé, encours, impayés, échéance, garanties).",
+      "La colonne « Source » indique T24, saisie, saisie rapprochée d'une ligne T24 ou saisie gardée.",
       "L'outil calcule l'engagement global et signale les dépassements, les impayés et les critères BAM à vérifier."
      ],
-     "aSavoir": "L'engagement global des lignes est repris dans le dossier (« Reprendre ce montant ») : c'est lui qui oriente la segmentation et le niveau de décision."
+     "aSavoir": "L'engagement global ne compte jamais deux fois la même ligne : une ligne saisie rapprochée d'une ligne T24 sort des totaux, une ligne gardée s'y ajoute. Il est repris dans le dossier (« Reprendre ce montant ») et oriente la segmentation et le niveau de décision."
     },
     {
      "img": "67-engagements-saisie",
      "titre": "Saisir les lignes d'engagement",
      "actions": [
       "« Saisir les lignes » quand T24 n'est pas raccordé ou pour un engagement absent de T24 (caution, ligne d'une autre entité).",
-      "Pour chaque ligne : type, référence, autorisé, encours, impayé et ancienneté, échéance, garanties.",
+      "Pour chaque ligne : type, référence, autorisé, encours, impayé et ancienneté, échéance ; la garantie se choisit dans la liste paramétrée.",
       "Indiquer la date de la position, puis « Enregistrer les lignes »."
      ],
-     "aSavoir": "Les lignes saisies s'ajoutent aux lignes T24 sans les remplacer. Une position de plus de 31 jours est signalée « à actualiser »."
+     "aSavoir": "Tant que T24 n'a fourni aucune ligne, les lignes saisies font l'engagement global. Une position de plus de 31 jours est signalée « à actualiser »."
+    },
+    {
+     "img": "83-rapprochement-engagements",
+     "titre": "Rapprocher les lignes saisies des lignes T24",
+     "actions": [
+      "Après « Rapatrier depuis T24 », le cadre « Rapprochement des lignes saisies avec T24 » s'affiche.",
+      "L'outil propose pour chaque ligne saisie la ligne T24 correspondante (même référence, même type, montants et échéance proches) et en donne les raisons.",
+      "Pour chaque ligne, décider : « Rapprocher de la ligne T24 », « Garder (absente de T24) » ou « Écarter ».",
+      "Cliquer sur « Valider le rapprochement »."
+     ],
+     "aSavoir": "Tant qu'une ligne saisie n'est pas rapprochée, gardée ou écartée, elle est « à rapprocher » et ne compte pas dans les totaux : jamais de double comptage. Les lignes saisies restent consultables."
     },
     {
      "img": "63-credit-bureau",
@@ -215,9 +283,20 @@
      "actions": [
       "Rafraîchir d'abord le rapport dans l'outil du crédit bureau.",
       "Puis, sur la fiche : « Récupérer le rapport » (API) ou charger le PDF / l'image et « Lire le rapport » (OCR intelligent), ou « Saisir manuellement ».",
-      "Vérifier le rapport proposé, puis « Enregistrer le rapport vérifié »."
+      "L'outil lit toutes les lignes déclarées et vérifie que les totaux concordent avec le rapport (« Lecture complète »).",
+      "Comparer la signalétique du rapport (ICE, RC, IF, forme juridique, ville) à la fiche ; cocher les rubriques à reprendre puis « Mettre à jour la fiche client »."
      ],
-     "aSavoir": "L'outil contrôle la date de mise à jour du rapport : au-delà de la limite d'ancienneté, une alerte demande de le rafraîchir dans l'outil du crédit bureau. Les incidents proposent des critères BAM à vérifier."
+     "aSavoir": "Au-delà de la limite d'ancienneté, une alerte demande de rafraîchir le rapport dans l'outil du crédit bureau. Le rapport lu reste tel quel : une information erronée se corrige par une correction motivée. Les incidents proposent des critères BAM à vérifier."
+    },
+    {
+     "img": "84-correction-motivee",
+     "titre": "Corriger une information par une correction motivée",
+     "actions": [
+      "Cliquer sur « Corriger une information (motif et justificatif) ».",
+      "Choisir l'information (ex. « Ligne 2 — Impayé »), saisir la nouvelle valeur et le motif (10 caractères au moins).",
+      "Joindre au besoin le justificatif (attestation, mainlevée, courrier), puis « Enregistrer la correction »."
+     ],
+     "aSavoir": "La valeur lue est conservée et reste visible ; la correction s'y ajoute, datée et attribuée, et c'est elle qui est retenue. Même principe pour la fiche InfoRisque et pour le bilan. Le valideur voit chaque correction."
     },
     {
      "img": "64-inforisque",
@@ -225,9 +304,10 @@
      "actions": [
       "Charger le rapport InfoRisque (PDF ou image) dans le bloc « Fiche juridique ».",
       "« Lire le rapport InfoRisque » : l'OCR intelligent extrait l'identité légale, les dirigeants, les actionnaires, les comptes déposés et les événements.",
-      "Vérifier, puis « Enregistrer la fiche vérifiée »."
+      "Vérifier, puis « Enregistrer la fiche vérifiée » ; reprendre au besoin la signalétique dans la fiche client.",
+      "Un événement qui n'a plus cours (dirigeant remplacé, nantissement levé) se déclare « levé » par une correction motivée."
      ],
-     "aSavoir": "L'outil rapproche les comptes déposés au greffe du bilan saisi (écart de plus de 5 % signalé) et signale les événements juridiques (procédure, nantissement, changement de dirigeant)."
+     "aSavoir": "L'outil rapproche les comptes déposés au greffe du bilan saisi (écart de plus de 5 % signalé) et signale les événements juridiques. Un événement levé reste visible, sans effet sur les contrôles."
     },
     {
      "img": "66-portefeuille",
@@ -287,6 +367,16 @@
      "aSavoir": "La barre de progression indique les critères renseignés et signale en rouge les données critiques manquantes (cinq sur la grille standard)."
     },
     {
+     "img": "85-sommaire-dossier",
+     "titre": "Se repérer avec le sommaire du dossier",
+     "actions": [
+      "Le sommaire, à droite, liste les parties du dossier : cadrage, pièces, bilan, critères par domaine (D1 à D7), critères BAM.",
+      "Chaque partie indique son état : « complet » ou le nombre de données « à saisir ».",
+      "Cliquer sur une partie pour y aller ; la barre du bas garde « Enregistrer le brouillon », « Aperçu du calcul » et « Soumettre à validation » toujours visibles."
+     ],
+     "aSavoir": "Les parties encore à compléter sont signalées en couleur : le sommaire montre d'un coup d'œil ce qui reste avant la soumission."
+    },
+    {
      "img": "68-dossier-ouverture",
      "titre": "Les données T24 à l'ouverture",
      "actions": [
@@ -337,7 +427,7 @@
     },
     {
      "img": "11-analyse-ia",
-     "titre": "Demander des propositions à l'IA",
+     "titre": "Demander des propositions à l'OCR intelligent",
      "actions": [
       "Cocher les pièces à faire lire.",
       "Ajouter au besoin des éléments : compte rendu de visite, faits récents.",
@@ -441,7 +531,7 @@
     },
     {
      "img": "47-bilan-lu-ia",
-     "titre": "Lire le bilan avec l'IA",
+     "titre": "Lire le bilan avec l'OCR intelligent",
      "actions": [
       "Ajouter le bilan aux pièces : PDF, photo ou Excel.",
       "Cocher la pièce dans « Lire le bilan avec l'OCR intelligent », puis cliquer sur « Lire le bilan ».",
@@ -469,6 +559,16 @@
       "« À vérifier » : à examiner (modèle simplifié au-delà de 10 MDH, CA différent du cadrage)."
      ],
      "aSavoir": "Des comptes clos depuis plus de 18 mois sont périmés : les ratios du bilan sont transmis « périmés » et un exercice plus récent doit être chargé."
+    },
+    {
+     "img": "86-bilan-valeur-corrigee",
+     "titre": "Corriger un montant lu par l'OCR intelligent",
+     "actions": [
+      "Une cellule lue par l'OCR intelligent montre sa source au survol.",
+      "Modifier le montant : la cellule passe « corrigé · lu … » et un champ « Motif de la correction » apparaît.",
+      "Saisir le motif (ex. erreur de lecture, page de la liasse), puis enregistrer le brouillon."
+     ],
+     "aSavoir": "La valeur lue reste conservée à côté de la valeur retenue. Les montants corrigés figurent dans les éléments au jour de la décision, sous les yeux du valideur."
     },
     {
      "img": "50-bilan-ratios",
@@ -515,6 +615,16 @@
       "Vérifier les ratios corrigés et leur motif avant de décider."
      ],
      "aSavoir": "Un ratio corrigé apparaît en orange avec le motif de l'analyste. Les contrôles du bilan et le bilan complet se déplient sous le tableau."
+    },
+    {
+     "img": "87-elements-decision",
+     "titre": "Les éléments au jour de la décision",
+     "actions": [
+      "Sur un dossier soumis, le cadre « Éléments au jour de la décision » reprend la fiche client, le rapport de solvabilité, la fiche juridique, les engagements et le bilan tels qu'ils étaient à la soumission.",
+      "Chaque correction motivée y figure : valeur lue, valeur retenue, motif, auteur, justificatif.",
+      "Les PDF des rapports sont conservés et s'ouvrent depuis ce cadre."
+     ],
+     "aSavoir": "Ces éléments sont figés à la soumission : la fiche client peut évoluer ensuite, la décision se prend sur ce qui a été soumis."
     },
     {
      "img": "59-circuit-dossier",
@@ -850,6 +960,16 @@
      "aSavoir": "Chaque modification est journalisée. Les grilles de notation ne se paramètrent pas ici : elles relèvent du comité modèles."
     },
     {
+     "img": "88-admin-listes-saisie",
+     "titre": "Paramétrer les listes de saisie",
+     "actions": [
+      "Administration › Paramétrage, rubrique « Listes de saisie ».",
+      "Cinq listes : formes juridiques, secteurs d'activité (sections NMAE par défaut), villes, tribunaux de commerce, types de garantie.",
+      "Pour chaque valeur : code et libellé ; « + Ajouter », décocher « Actif » pour retirer une valeur du choix, puis « Enregistrer »."
+     ],
+     "aSavoir": "Alignez les codes sur ceux de T24 : c'est ce qui permet le rapprochement automatique. Une valeur déjà utilisée se désactive au lieu d'être supprimée ; les fiches qui la portent restent valides."
+    },
+    {
      "img": "54-admin-echelle",
      "titre": "Paramétrer l'échelle de notation 1 à 10",
      "actions": [
@@ -874,7 +994,7 @@
     },
     {
      "img": "37-admin-ia",
-     "titre": "Paramétrer l'IA",
+     "titre": "Paramétrer l'OCR intelligent",
      "actions": [
       "Cocher « Activée ».",
       "Choisir le fournisseur et le modèle ; l'adresse si l'API est interne.",
@@ -947,7 +1067,9 @@
  ],
  "regles": [
   "Au démarrage, les API (T24, crédit bureau, OCR intelligent) sont désactivées : tout se saisit. Une API ne s'active qu'après un test de connexion réussi.",
-  "Un client se crée depuis son code T24 ; à défaut, en saisie minimale, à rattacher à T24 ensuite.",
+  "Un client se crée depuis son code T24 ; à défaut, en saisie minimale par listes, à rattacher à T24 ensuite par un rapprochement.",
+  "Au rattachement, T24 fait foi : garder une valeur saisie différente exige un motif ; la saisie d'origine reste consultable.",
+  "Un engagement n'est jamais compté deux fois : une ligne saisie est rapprochée, gardée ou écartée face aux lignes T24.",
   "Une seule échelle de notation pour toutes les grilles : classe 1 (meilleur risque) à 10, défaut hors échelle.",
   "La note devient officielle au terme du circuit : avis du directeur du centre, puis décision de la contre-étude au niveau requis.",
   "Celui qui a contribué au dossier ne le valide pas.",
@@ -958,6 +1080,7 @@
   "Sans les données critiques (grille standard), aucune note n'est produite ; une donnée manquante vaut 0.",
   "Sur une grille standard, pas de soumission sans bilan N et N−1 conforme ; les ratios ne se corrigent qu'avec un motif.",
   "L'OCR intelligent propose ; l'analyste décide, et chaque décision est tracée.",
+  "Une information lue (rapport, fiche juridique, bilan) ne s'écrase pas : elle se corrige avec un motif, et la valeur lue reste visible.",
   "Une dérogation est limitée à deux crans et exige une seconde validation.",
   "Une renotation par lot produit une note de surveillance : seule la validation d'un dossier change la note officielle.",
   "Toute opération est tracée dans le journal d'audit."
