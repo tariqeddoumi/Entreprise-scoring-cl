@@ -72,7 +72,7 @@ export function CircuitProgress({ steps }: { steps: CircuitStepView[] }) {
     TODO: { sym: "○", color: "var(--muted)", label: "à venir" },
     REJECTED: { sym: "✕", color: "var(--bad)", label: "rejet" },
     FAVORABLE: { sym: "✓", color: "var(--good)", label: "avis favorable" },
-    DEFAVORABLE: { sym: "!", color: "var(--bcp-orange)", label: "avis défavorable" },
+    DEFAVORABLE: { sym: "!", color: "var(--warn)", label: "avis défavorable" },
     OPEN: { sym: "○", color: "var(--warn)", label: "avis attendu, non bloquant" },
     SKIPPED: { sym: "–", color: "var(--muted)", label: "avis non rendu" },
   };

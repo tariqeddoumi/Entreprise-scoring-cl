@@ -394,6 +394,7 @@ export async function submitCase(db: PrismaClient, identity: Identity, caseId: s
   try {
     return await executeRatingRun(db, identity, input, c.counterparty.id, undefined, undefined, async (tx, runId) => {
       const frozen = await freezePieces(tx, caseId, c.counterparty.id, evidence);
+      if (fx?.amounts.globalBankExposure) await tx.ratingRun.update({ where: { id: runId }, data: { exposureBase: fx.amounts.globalBankExposure.base } });
       const updated = await tx.ratingCase.updateMany({
         where: { id: caseId, status: "DRAFT" },
         data: {

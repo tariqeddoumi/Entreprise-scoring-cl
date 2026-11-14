@@ -876,6 +876,16 @@ Diagnostic des représentations du système deux à deux : base de production et
 
 *À confirmer :* rapport réel anonymisé pour calibrer la lecture ; durée de conservation des pièces sources.
 
+## D-70 — Tableau de bord « Mon travail », sommaire du dossier, base optimisée pour le volume bancaire — **ADOPTÉE**
+
+*Décision :*
+- **Tableau de bord « Mon travail ».** Il s'ouvre sur ce qui attend l'utilisateur : dossiers à décider, brouillons, rejetés, notes à renouveler, recherche de client.
+- **Sommaire du dossier.** Il donne l'état de chaque section et un accès direct.
+- **Recherche de clients.** Elle porte sur toute la base au-delà de 1 000 clients.
+- **Base de données.** L'engagement global est enregistré avec la notation, la note courante a une requête dédiée, le journal a un index, les clés étrangères signalées sont indexées. Migration 16 (docs/31).
+
+*À confirmer :* politique de conservation du journal d'audit ; restriction de la surveillance à la période analysée.
+
 ---
 
 # 3. Ce qui reste à décider par la banque

@@ -87,6 +87,7 @@ Le moteur de notation et la simulation fonctionnent **sans base de données** : 
 | OCR intelligent : OpenAI, Gemini, Azure OpenAI ou Claude, une clé par fournisseur, comparaison sans redéploiement (docs/28) | Livré ; clés à déposer sur Vercel |
 | Guide méthodologique complet (Word) : de l'ancien modèle au modèle expert, du modèle expert au statistique (docs/29) | Livré ; à valider en comité modèles |
 | Rapport brut intact et corrections motivées (solvabilité, InfoRisque, bilan) ; lecture complète des rapports à plusieurs crédits ; signalétique comparée à la fiche ; dossier figé à la soumission (docs/30) | Livré ; migration 15 en production ; rapport réel anonymisé attendu pour calibrer la lecture |
+| Diagnostic complet : tableau de bord « Mon travail », sommaire du dossier, recherche de clients dans toute la base ; base optimisée au volume bancaire (surveillance 7,3 s → 2,1 s, journal 1,3 s → 0,1 s) (docs/31) | Livré ; migration 16 |
 | Reprise du stock : clients, notes historiques validées, bilans, watch list, par classeur Excel contrôlé à blanc (docs/25) | Livrée ; extraction et correspondance des notes à fournir |
 | Surveillance du portefeuille : KRI/KPI, évolution, matrice de migration, concentration, alertes, export (docs/20) | Livrée ; seuils à arrêter en COPIL ; flux d'encours à raccorder |
 | Multi-banques et filiales, multi-devise, cloisonnement par entité | Opérationnel |

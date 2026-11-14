@@ -293,7 +293,7 @@ export function Corrected({ value, read, corrected }: { value: string; read: str
   if (!corrected) return <>{value}</>;
   return (
     <span title={`Valeur lue : ${read}`} style={{ fontWeight: 600, color: "var(--bcp-brown, #462016)" }}>
-      {value} <span style={{ fontSize: 11, color: "var(--bcp-orange)" }}>(corrigé, lu {read})</span>
+      {value} <span style={{ fontSize: 11, color: "var(--warn)" }}>(corrigé, lu {read})</span>
     </span>
   );
 }

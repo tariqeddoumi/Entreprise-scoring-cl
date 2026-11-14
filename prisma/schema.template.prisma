@@ -63,6 +63,7 @@ model Entity {
   counterparties Counterparty[]
   economicGroups EconomicGroup[]
 
+  @@index([parentId])
   @@index([path])
   @@map("entities")
 }
@@ -211,6 +212,9 @@ model RatingRun {
   // Snapshots immuables (reproductibilité) — JSON sérialisé de façon stable.
   inputSnapshot  String @db.Text
   resultSnapshot String @db.Text
+  // Engagement global en devise de base au moment de la notation : lu par la
+  // surveillance sans relire les instantanés (plusieurs dizaines de Ko par run).
+  exposureBase   Decimal? @db.Decimal(20, 2)
 
   requestedBy    String // identité dérivée du jeton, jamais du corps de requête
   // Origine : API | CASE (dossier) | BATCH (renotation par lot). Une notation
@@ -224,7 +228,11 @@ model RatingRun {
   renotationItem RenotationItem?
 
   @@index([counterpartyId, createdAt])
+  // Note courante : dernier arrêté, la plus récente à arrêté égal.
+  @@index([counterpartyId, asOfDate(sort: Desc), createdAt(sort: Desc)])
   @@index([modelId, asOfDate])
+  // Dernières notations (tableau de bord).
+  @@index([createdAt])
   @@map("rating_runs")
 }
 
@@ -329,6 +337,7 @@ model AuditEvent {
   createdAt     DateTime @default(now())
 
   @@index([resourceType, resourceId])
+  @@index([action, createdAt])
   @@index([entityId, createdAt])
   @@index([createdAt])
   @@map("audit_events")
@@ -375,6 +384,7 @@ model User {
 
   sessions UserSession[]
 
+  @@index([entityId])
   @@map("users")
 }
 
@@ -542,6 +552,7 @@ model RenotationBatch {
 
   items RenotationItem[]
 
+  @@index([scheduleId])
   @@index([status])
   @@index([createdAt])
   @@map("renotation_batches")
@@ -572,6 +583,7 @@ model RenotationItem {
   processedAt    DateTime?
 
   @@unique([batchId, counterpartyId])
+  @@index([counterpartyId])
   @@index([batchId, status])
   @@map("renotation_items")
 }
@@ -602,7 +614,6 @@ model FinancialStatement {
   updatedAt      DateTime     @updatedAt
 
   @@unique([counterpartyId, closingDate])
-  @@index([counterpartyId])
   @@map("financial_statements")
 }
 

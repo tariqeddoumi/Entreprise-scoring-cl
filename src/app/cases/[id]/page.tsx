@@ -18,6 +18,7 @@ import { DEFAULT_CLASSIFICATION, type WatchlistCap } from "@/reference/classific
 import { LiftPanel } from "@/app/committee/CommitteePanels";
 import { CreditReportPanel } from "@/app/counterparties/[id]/ExternalPanels";
 import { EvidencePanel } from "./EvidencePanel";
+import { CaseToc } from "./CaseToc";
 import { parseEvidence } from "@/lib/case-evidence";
 import { creditReportSettings, latestCreditReport, legalProfileStatus } from "@/lib/external-data";
 import { FacilitiesPanel } from "@/app/counterparties/[id]/FacilitiesPanel";
@@ -254,6 +255,8 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
         </p>
       </div>
 
+      {!editable && <CaseToc />}
+
       {data.fromBatch && c.status === "DRAFT" && (
         <div className="card" role="status" style={{ padding: 12, borderLeft: "4px solid var(--warn)", fontSize: 14 }}>
           <strong>Dossier de revue</strong> ouvert par la renotation «{" "}
@@ -399,7 +402,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
       )}
 
       {prep && prep.items.length > 0 && (
-        <section id="preparation" className="card" style={{ padding: 16, display: "grid", gap: 8, minWidth: 0 }}>
+        <section id="preparation" data-toc="Préparation du dossier" className="card" style={{ padding: 16, display: "grid", gap: 8, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
             <h2 style={{ fontWeight: 600 }}>Préparation du dossier</h2>
             <span style={{ fontSize: 13, fontWeight: 600, color: prep.missing.length ? "var(--warn)" : "var(--good)" }}>

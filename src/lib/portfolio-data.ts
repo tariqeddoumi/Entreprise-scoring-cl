@@ -1,9 +1,8 @@
+import { officialRunHistory } from "./current-ratings";
 import type { PrismaClient } from "@/generated/prisma";
-import { OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { loadWatchlistLevels } from "@/lib/classification-store";
 import { descendants, loadTree, type EntityNode } from "@/lib/scope";
 import { settingInt } from "@/lib/settings";
-import type { FxConversion } from "@/lib/fx";
 import type { GradeScaleConfig } from "@/core/types";
 import { hasRole, type Role } from "@/lib/auth";
 import { loadCircuit } from "@/lib/workflow";
@@ -74,19 +73,6 @@ export interface PortfolioData {
 
 const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
 
-function exposureFrom(fxDetail: string | null | undefined, inputSnapshot: string): number | null {
-  try {
-    if (fxDetail) {
-      const fx = JSON.parse(fxDetail) as FxConversion;
-      if (fx.amounts.globalBankExposure) return fx.amounts.globalBankExposure.base;
-    }
-    const v = (JSON.parse(inputSnapshot) as { segmentationData?: { globalBankExposure?: unknown } }).segmentationData?.globalBankExposure;
-    const n = Number(v);
-    return v !== undefined && v !== null && Number.isFinite(n) ? n : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function loadSurveillanceSettings(db: PrismaClient): Promise<SurveillanceSettings> {
   try {
@@ -103,22 +89,10 @@ export async function loadPortfolio(db: PrismaClient, filters: PortfolioFilters)
     ...(entityIds ? { entityId: { in: entityIds } } : {}),
     ...(filters.sector ? { sectorCode: filters.sector === "_" ? null : filters.sector } : {}),
   };
-  const [counterparties, runs, wlRows, caseRows, settings, levels, validityMonths, facilityRows, facTypes, facSettings] = await Promise.all([
-    db.counterparty.findMany({ where: cpWhere, select: { id: true, name: true, entityId: true, segment: true, sectorCode: true, createdAt: true, isActive: true } }),
-    db.ratingRun.findMany({
-      where: { AND: [OFFICIAL_RUN_WHERE, { counterparty: cpWhere }] },
-      select: {
-        counterpartyId: true,
-        asOfDate: true,
-        segment: true,
-        finalGrade: true,
-        cappedGrade: true,
-        createdAt: true,
-        inputSnapshot: true,
-        ratingCase: { select: { decidedAt: true, fxDetail: true } },
-      },
-      orderBy: [{ counterpartyId: "asc" }, { createdAt: "asc" }],
-    }),
+  const counterparties = await db.counterparty.findMany({ where: cpWhere, select: { id: true, name: true, entityId: true, segment: true, sectorCode: true, createdAt: true, isActive: true } });
+  const [runs, wlRows, caseRows, settings, levels, validityMonths, facilityRows, facTypes, facSettings] = await Promise.all([
+    // Clients lus par le client cloisonné : l'historique ne porte que sur eux.
+    officialRunHistory(db, counterparties.map((c) => c.id)),
     db.committeeDecision.findMany({
       where: { kind: { in: ["WL_ENTREE", "WL_SORTIE"] }, status: "EFFECTIVE", counterparty: cpWhere },
       select: { counterpartyId: true, kind: true, effectiveDate: true, level: true },
@@ -156,10 +130,10 @@ export async function loadPortfolio(db: PrismaClient, filters: PortfolioFilters)
       segment: segmentOf(c.id),
       sectorCode: c.sectorCode,
       asOfDate: r.asOfDate,
-      effectiveDate: day(r.ratingCase?.decidedAt) ?? day(r.createdAt)!,
+      effectiveDate: day(r.decidedAt) ?? day(r.createdAt)!,
       grade: r.finalGrade,
       modelGrade: r.cappedGrade,
-      exposure: exposureFrom(r.ratingCase?.fxDetail, r.inputSnapshot),
+      exposure: r.exposureBase,
     });
   }
   const population: PopulationMember[] = counterparties

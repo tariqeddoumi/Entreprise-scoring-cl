@@ -598,7 +598,7 @@ export function CreditReportPanel({
     },
   };
   return (
-    <section id="solvabilite" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="solvabilite" data-toc="Rapport de solvabilité" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Rapport de solvabilité (crédit bureau)</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
@@ -901,7 +901,7 @@ export function LegalProfilePanel({
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
   return (
-    <section id="juridique" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="juridique" data-toc="Fiche juridique (InfoRisque)" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Fiche juridique (InfoRisque)</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>

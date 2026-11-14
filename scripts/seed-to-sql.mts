@@ -12,6 +12,7 @@
  * Usage : npx tsx scripts/seed-to-sql.mts > prisma/sql/02-seed-demonstration.sql
  */
 import { computeRating } from "../src/core/engine.js";
+import { exposureOfInput } from "../src/reference/exposure.js";
 import type { RatingInput } from "../src/core/types.js";
 import { gradeRank } from "../src/core/grades.js";
 import { getModel } from "../src/models/index.js";
@@ -115,7 +116,7 @@ for (const r of RUNS) {
 
   w(`-- ${r.purposeFr}`);
   w(
-    `INSERT INTO ${SCHEMA}.rating_runs (id, "counterpartyId", "modelId", "modelVersion", "engineVersion", "asOfDate", segment, outcome, "rawScore", "confidenceScore", "engineGrade", "cappedGrade", "finalGrade", "inputSnapshot", "resultSnapshot", "requestedBy", "idempotencyKey", "createdAt") VALUES (` +
+    `INSERT INTO ${SCHEMA}.rating_runs (id, "counterpartyId", "modelId", "modelVersion", "engineVersion", "asOfDate", segment, outcome, "rawScore", "confidenceScore", "engineGrade", "cappedGrade", "finalGrade", "inputSnapshot", "resultSnapshot", "exposureBase", "requestedBy", "idempotencyKey", "createdAt") VALUES (` +
       [
         lit(id),
         lit(counterpartyId),
@@ -134,6 +135,7 @@ for (const r of RUNS) {
         lit(result.finalGrade),
         lit(stable(input)),
         lit(stable(result)),
+        lit(exposureOfInput(input)),
         lit(r.requestedBy),
         lit(`seed:${r.counterpartyKey}:${r.asOfDate}`),
       ].join(", ") +

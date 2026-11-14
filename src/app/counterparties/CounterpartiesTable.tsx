@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { GradeBadge } from "../ui-helpers";
 import { csvLine } from "@/lib/csv";
 
@@ -61,8 +62,24 @@ function downloadCsv(rows: CounterpartyRow[]) {
   URL.revokeObjectURL(url);
 }
 
-export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
-  const [query, setQuery] = useState("");
+export function CounterpartiesTable({
+  items,
+  serverQuery = "",
+  truncated = false,
+  total,
+}: {
+  items: CounterpartyRow[];
+  /** Recherche déjà appliquée en base (paramètre « q » de l'adresse). */
+  serverQuery?: string;
+  /** Liste limitée : la recherche doit interroger toute la base. */
+  truncated?: boolean;
+  total?: number;
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState(serverQuery);
+  // Filtre instantané sur la liste chargée ; si elle est tronquée (ou issue
+  // d'une recherche), Entrée relance la recherche dans toute la base.
+  const searchServer = truncated || !!serverQuery;
   const [segment, setSegment] = useState<string>("");
   const [showInactive, setShowInactive] = useState(false);
   const inactiveCount = items.filter((c) => !c.isActive).length;
@@ -85,15 +102,37 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      {truncated && (
+        <p role="status" className="muted" style={{ fontSize: 13 }}>
+          {items.length} premiers clients affichés{total ? ` sur ${total}` : ""} : saisissez un nom, un ICE ou un code T24 puis « Rechercher » pour
+          interroger tout le périmètre.
+        </p>
+      )}
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          type="search"
-          placeholder="Rechercher par nom, code T24, ICE, gestionnaire ou entité…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          style={{ maxWidth: 280 }}
-          aria-label="Rechercher un client"
-        />
+        <form
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!searchServer) return;
+            const q = query.trim();
+            router.push(q ? `/counterparties?q=${encodeURIComponent(q)}` : "/counterparties");
+          }}
+          style={{ display: "flex", gap: 6, alignItems: "center" }}
+        >
+          <input
+            type="search"
+            placeholder="Rechercher par nom, code T24, ICE, gestionnaire ou entité…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ maxWidth: 280 }}
+            aria-label="Rechercher un client"
+          />
+          {searchServer && (
+            <button type="submit" className="btn-ghost">
+              Rechercher
+            </button>
+          )}
+        </form>
         <select
           value={segment}
           onChange={(e) => setSegment(e.target.value)}
@@ -115,7 +154,13 @@ export function CounterpartiesTable({ items }: { items: CounterpartyRow[] }) {
         )}
         <span className="muted" style={{ fontSize: 13 }}>
           {filtered.length} / {items.length} client(s)
+          {serverQuery ? ` pour « ${serverQuery} »` : ""}
         </span>
+        {serverQuery && (
+          <Link href="/counterparties" style={{ fontSize: 13, color: "var(--brand)" }}>
+            Effacer la recherche
+          </Link>
+        )}
         <button
           type="button"
           onClick={() => downloadCsv(filtered)}

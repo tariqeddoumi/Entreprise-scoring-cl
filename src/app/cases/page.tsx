@@ -1,8 +1,9 @@
+import { currentRatings } from "@/lib/current-ratings";
 import Link from "next/link";
 import type { Prisma } from "@/generated/prisma";
 import { hasRole } from "@/lib/auth";
-import { caseWorkflow, CASE_STATUSES, OFFICIAL_RUN_WHERE } from "@/lib/cases";
-import { pendingStepIndex, stepConcerns } from "@/reference/workflow";
+import { CASE_STATUSES } from "@/lib/cases";
+import { pendingSteps, todoWhere } from "@/lib/my-work";
 import { settingInt } from "@/lib/settings";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
@@ -30,16 +31,10 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   const identity = await requireSession();
   const { tab: tabParam } = await searchParams;
   const tab = TABS.some((t) => t.key === tabParam) ? (tabParam as (typeof TABS)[number]["key"]) : "todo";
-  const decider = hasRole(identity.role, "ANALYST");
 
   let where: Prisma.RatingCaseWhereInput = {};
   if (tab === "todo") {
-    where = {
-      OR: [
-        { status: { in: ["DRAFT", "REJECTED"] }, createdBy: identity.name },
-        ...(decider ? [{ status: "SUBMITTED", submittedBy: { not: identity.name } }] : []),
-      ],
-    };
+    where = todoWhere(identity);
   } else if ((CASE_STATUSES as readonly string[]).includes(tab)) {
     where = { status: tab };
   }
@@ -61,16 +56,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
       const entities = await db.entity.findMany({ select: { id: true, code: true } });
       // Étape en attente de chaque dossier soumis ; « À traiter » ne garde que
       // les dossiers dont l'étape revient à l'utilisateur.
-      const actor = { name: identity.name, role: identity.role, jobFunction: identity.jobFunction ?? null };
-      const stepOf = new Map<string, string>();
-      const mine = new Set<string>();
-      for (const c of cases) {
-        if (c.status !== "SUBMITTED") continue;
-        const w = await caseWorkflow(c);
-        const i = pendingStepIndex(w);
-        if (i !== null) stepOf.set(c.id, `${w.steps[i].labelFr} (${i + 1}/${w.steps.length})`);
-        if (stepConcerns(w, actor)) mine.add(c.id);
-      }
+      const { stepOf, mine } = await pendingSteps(cases, identity);
       const shown = tab === "todo" ? cases.filter((c) => c.status !== "SUBMITTED" || mine.has(c.id)) : cases;
       return { cases: shown, counts, entityCode: new Map(entities.map((e) => [e.id, e.code])), stepOf };
     },
@@ -86,14 +72,11 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
   const cutoffIso = cutoff.toISOString().slice(0, 10);
   const { data: renewals } = await safeQuery(
     async (db) => {
-      const latest = await db.ratingRun.findMany({
-        where: OFFICIAL_RUN_WHERE,
-        distinct: ["counterpartyId"],
-        orderBy: [{ counterpartyId: "asc" }, { asOfDate: "desc" }, { createdAt: "desc" }],
-        select: { asOfDate: true, finalGrade: true, counterparty: { select: { id: true, name: true, isActive: true } } },
-      });
+      const active = await db.counterparty.findMany({ where: { isActive: true }, select: { id: true, name: true, isActive: true } });
+      const byId = new Map(active.map((c) => [c.id, c]));
+      const latest = (await currentRatings(db, active.map((c) => c.id))).map((r) => ({ asOfDate: r.asOfDate, finalGrade: r.finalGrade, counterparty: byId.get(r.counterpartyId)! }));
       return latest
-        .filter((r) => r.counterparty.isActive && r.asOfDate < cutoffIso)
+        .filter((r) => r.asOfDate < cutoffIso)
         .sort((a, b) => a.asOfDate.localeCompare(b.asOfDate))
         .slice(0, 50);
     },
@@ -137,7 +120,7 @@ export default async function CasesPage({ searchParams }: { searchParams: Promis
       </nav>
 
       {tab === "todo" && renewals.length > 0 && (
-        <section className="card" style={{ padding: 16 }}>
+        <section id="renouvellements" className="card" style={{ padding: 16 }}>
           <h2 style={{ fontWeight: 600, marginBottom: 4 }}>Notes à renouveler ({renewals.length})</h2>
           <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
             Dernière notation validée arrêtée avant le {cutoffIso} (validité de {validityMonths} mois, Paramétrage › Workflow).

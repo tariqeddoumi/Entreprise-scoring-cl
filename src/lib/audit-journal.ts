@@ -4,6 +4,7 @@
  * un administrateur d'entité aux événements de son périmètre.
  */
 import type { Prisma, PrismaClient } from "@/generated/prisma";
+import { AUDIT_ACTION_LABELS, AUDIT_RESOURCE_LABELS } from "./audit-labels";
 
 export interface JournalFilters {
   resourceType: string;
@@ -82,7 +83,11 @@ export function summarizeDetail(detail: string | null, max = 240): string {
 
 export async function loadJournal(db: PrismaClient, f: JournalFilters) {
   const where = journalWhere(f);
-  const [total, rows, actions, types] = await Promise.all([
+  // Listes des filtres : le catalogue des libellés, pas un parcours de toute
+  // la table (coûteux au-delà de quelques centaines de milliers d'événements).
+  const actions = [...new Set([...Object.keys(AUDIT_ACTION_LABELS), ...(f.action ? [f.action] : [])])].sort();
+  const types = [...new Set([...Object.keys(AUDIT_RESOURCE_LABELS), ...(f.resourceType ? [f.resourceType] : [])])].sort();
+  const [total, rows] = await Promise.all([
     db.auditEvent.count({ where }),
     db.auditEvent.findMany({
       where,
@@ -91,8 +96,6 @@ export async function loadJournal(db: PrismaClient, f: JournalFilters) {
       take: JOURNAL_PAGE_SIZE,
       select: { id: true, createdAt: true, actor: true, actorRole: true, action: true, resourceType: true, resourceId: true, detail: true },
     }),
-    db.auditEvent.findMany({ distinct: ["action"], select: { action: true }, orderBy: { action: "asc" } }),
-    db.auditEvent.findMany({ distinct: ["resourceType"], select: { resourceType: true }, orderBy: { resourceType: "asc" } }),
   ]);
-  return { total, rows, actions: actions.map((a) => a.action), types: types.map((t) => t.resourceType) };
+  return { total, rows, actions, types };
 }

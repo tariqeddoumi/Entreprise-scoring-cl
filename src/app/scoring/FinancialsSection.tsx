@@ -128,7 +128,7 @@ export function FinancialsSection({ model, draft, onChange, readOnly = false, cu
   const alerts = fin.controls.filter((c) => c.status === "ALERTE").length;
 
   return (
-    <section id="bilan" className="card" style={{ padding: 16, display: "grid", gap: 14, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="bilan" data-toc="Bilan et CPC" data-toc-flag={!filled ? "à charger" : ko > 0 ? `${ko} bloquant(s)` : "chargé"} data-toc-level={!filled ? "warn" : ko > 0 ? "bad" : "good"} className="card" style={{ padding: 16, display: "grid", gap: 14, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Bilan et compte de produits et charges</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
@@ -466,7 +466,7 @@ function SectionRows({
                 )}
                 {cor && (
                   <div style={{ fontSize: 11, marginTop: 2, display: "grid", gap: 2 }}>
-                    <span style={{ color: "var(--bcp-orange)" }}>corrigé · lu {cor.read || "vide"}</span>
+                    <span style={{ color: "var(--warn)" }}>corrigé · lu {cor.read || "vide"}</span>
                     {editable && onReason ? (
                       <input
                         aria-label={`Motif de la correction — ${p.labelFr}, exercice ${YEAR_LABELS[i]}`}

@@ -1,3 +1,7 @@
+import { currentRatings } from "@/lib/current-ratings";
+import { myWork, type WorkItem } from "@/lib/my-work";
+import { hasRole } from "@/lib/auth";
+import { settingInt } from "@/lib/settings";
 import Link from "next/link";
 import { listModels } from "@/models";
 import { gradeRank } from "@/core/grades";
@@ -7,7 +11,7 @@ import { effectiveScale } from "@/lib/rating-scale";
 import { isOfficialRun, OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
 import { requireSession } from "@/lib/session";
-import { CodeLabel, GradeBadge, MODEL_STATUS_LABELS, OutcomeLabel } from "./ui-helpers";
+import { GradeBadge, OutcomeLabel } from "./ui-helpers";
 
 /**
  * Rang d'un grade DANS L'ÉCHELLE DE SON MODÈLE.
@@ -40,12 +44,16 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   // Toute page porteuse de données exige une session authentifiée.
-  await requireSession();
+  const identity = await requireSession();
+  const validityMonths = await settingInt("RATING_VALIDITY_MONTHS");
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - validityMonths);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
   const scale = toGradeScaleConfig(await effectiveScale());
 
   const { data: stats, dbAvailable } = await safeQuery(async (db) => {
-      const [counterparties, runs, recent, latest, toValidate] = await Promise.all([
-        db.counterparty.count(),
+      const clients = await db.counterparty.findMany({ select: { id: true, isActive: true } });
+      const [runs, recent, latest, toValidate, work] = await Promise.all([
         db.ratingRun.count({ where: OFFICIAL_RUN_WHERE }),
         // Champs affichés seulement : les instantanés d'entrée et de résultat
         // pèsent plusieurs dizaines de kilo-octets par run. Les notations de
@@ -72,14 +80,15 @@ export default async function DashboardPage() {
         // notes successives — ce ne serait plus la distribution du portefeuille.
         // Seules les notations qui font foi : validées, ou antérieures au
         // workflow. Une notation soumise et non validée n'est qu'une proposition.
-        db.ratingRun.findMany({
-          where: OFFICIAL_RUN_WHERE,
-          distinct: ["counterpartyId"],
-          orderBy: [{ counterpartyId: "asc" }, { asOfDate: "desc" }, { createdAt: "desc" }],
-          select: { modelId: true, finalGrade: true },
-        }),
+        currentRatings(db, clients.map((c) => c.id)),
         db.ratingCase.count({ where: { status: "SUBMITTED" } }),
+        myWork(db, identity, 50),
       ]);
+      const counterparties = clients.length;
+      // Notes à renouveler : clients actifs dont la note courante dépasse la
+      // durée de validité (même règle que l'onglet « À traiter » des dossiers).
+      const active = new Set(clients.filter((c) => c.isActive).map((c) => c.id));
+      const renewals = latest.filter((r) => active.has(r.counterpartyId) && r.asOfDate < cutoffIso).length;
       // Groupé PAR MODÈLE : deux modèles portent deux échelles que rien ne
       // déclare comparables (constat C03). Les additionner dans une seule
       // distribution reviendrait à traiter un STD-P3 et un TPE-B3 comme le
@@ -101,9 +110,11 @@ export default async function DashboardPage() {
         finalGrade: r.finalGrade,
         _count: { _all: r.n },
       }));
-      return { counterparties, runs, recent, gradeRows, ungraded, toValidate };
+      return { counterparties, runs, recent, gradeRows, ungraded, toValidate, work, renewals };
     },
-    { counterparties: 0, runs: 0, recent: [], gradeRows: [], ungraded: 0, toValidate: 0 } as {
+    { counterparties: 0, runs: 0, recent: [], gradeRows: [], ungraded: 0, toValidate: 0, work: [], renewals: 0 } as {
+      work: WorkItem[];
+      renewals: number;
       counterparties: number;
       runs: number;
       toValidate: number;
@@ -158,11 +169,13 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {dbAvailable && <MyWorkPanel work={stats.work} renewals={stats.renewals} validityMonths={validityMonths} canRate={hasRole(identity.role, "ANALYST")} />}
+
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12 }}>
-        <StatCard label="Clients" value={stats.counterparties} />
+        <StatCard label="Clients" value={stats.counterparties} href="/counterparties" />
         <StatCard label="Notations validées" value={stats.runs} />
-        <StatCard label="Dossiers à valider" value={stats.toValidate} hint="Soumis, en attente d'une seconde personne" />
-        <StatCard label="Modèles disponibles" value={models.length} />
+        <StatCard label="Dossiers à valider" value={stats.toValidate} hint="Soumis, en attente d'une seconde personne" href="/cases?tab=SUBMITTED" />
+        <StatCard label="Modèles disponibles" value={models.length} hint="Grilles, critères, calibration" href="/models" />
         <StatCard
           label="Calibration PD"
           value={
@@ -332,47 +345,6 @@ export default async function DashboardPage() {
         )}
       </section>
 
-      <section className="card" style={{ padding: 16 }}>
-        <h2 style={{ fontWeight: 600, marginBottom: 10 }}>Modèles disponibles</h2>
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Identifiant</th>
-              <th>Libellé</th>
-              <th>Version</th>
-              <th>Statut</th>
-              <th>Segments</th>
-              <th>Critères</th>
-              <th>Calibration</th>
-            </tr>
-          </thead>
-          <tbody>
-            {models.map((m) => (
-              <tr key={m.modelId}>
-                <td>
-                  <Link href={`/models/${m.modelId}`} style={{ color: "var(--brand)" }}>
-                    {m.modelId}
-                  </Link>
-                </td>
-                <td>{m.labelFr}</td>
-                <td>{m.version}</td>
-                <td className="muted">
-                  <CodeLabel code={m.status} labels={MODEL_STATUS_LABELS} />
-                </td>
-                <td>{m.segments.join(", ")}</td>
-                <td>{m.criteria.length}</td>
-                <td className="muted" style={{ fontSize: 12 }}>
-                  {m.calibration
-                    ? m.calibration.dataSource === "SYNTHETIC"
-                      ? "simulée"
-                      : "défauts observés"
-                    : "non calibrée"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
     </div>
   );
 }
@@ -382,14 +354,16 @@ function StatCard({
   value,
   small,
   hint,
+  href,
 }: {
   label: string;
   value: string | number;
   small?: boolean;
   hint?: string;
+  href?: string;
 }) {
-  return (
-    <div className="card" style={{ padding: 16 }}>
+  const body = (
+    <div className="card" style={{ padding: 16, height: "100%" }}>
       <div className="muted" style={{ fontSize: 12, textTransform: "uppercase" }}>
         {label}
       </div>
@@ -402,6 +376,103 @@ function StatCard({
         </div>
       )}
     </div>
+  );
+  return href ? (
+    <Link href={href} className="stat-link" aria-label={`${label} : ${value}`}>
+      {body}
+    </Link>
+  ) : (
+    body
+  );
+}
+
+const WORK_STATUS: Record<string, { label: string; color: string }> = {
+  DRAFT: { label: "Brouillon à compléter", color: "var(--warn)" },
+  REJECTED: { label: "Rejeté, à reprendre", color: "var(--bad)" },
+  SUBMITTED: { label: "Votre avis ou décision", color: "var(--brand)" },
+};
+
+/** Ce qui attend l'utilisateur, en tête de session : dossiers, notes à renouveler, raccourcis. */
+function MyWorkPanel({ work, renewals, validityMonths, canRate }: { work: WorkItem[]; renewals: number; validityMonths: number; canRate: boolean }) {
+  const count = (s: string) => work.filter((w) => w.status === s).length;
+  return (
+    <section className="card" style={{ padding: 16, display: "grid", gap: 12 }} aria-labelledby="mon-travail">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <h2 id="mon-travail" style={{ fontWeight: 600 }}>
+          Mon travail
+        </h2>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <form action="/counterparties" method="get" role="search" style={{ display: "flex", gap: 6 }}>
+            <input type="search" name="q" placeholder="Client : nom, ICE, code T24…" aria-label="Rechercher un client" style={{ width: 230 }} />
+            <button type="submit" className="btn-ghost">
+              Rechercher
+            </button>
+          </form>
+          {canRate && (
+            <Link href="/scoring" className="btn-primary" style={{ textDecoration: "none" }}>
+              Nouvelle notation
+            </Link>
+          )}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13 }}>
+        <span>
+          <strong>{count("SUBMITTED")}</strong> dossier(s) attendent votre avis ou décision
+        </span>
+        <span>
+          <strong>{count("DRAFT")}</strong> brouillon(s)
+        </span>
+        <span>
+          <strong>{count("REJECTED")}</strong> rejeté(s) à reprendre
+        </span>
+        {renewals > 0 ? (
+          <Link href="/cases#renouvellements" style={{ color: "var(--brand)" }}>
+            <strong>{renewals}</strong> note(s) à renouveler (plus de {validityMonths} mois)
+          </Link>
+        ) : (
+          <span className="muted">Aucune note à renouveler</span>
+        )}
+      </div>
+      {work.length === 0 ? (
+        <p className="muted" style={{ fontSize: 13 }}>
+          Aucun dossier en attente de votre part.
+        </p>
+      ) : (
+        <div className="table-scroll">
+          <table className="data" style={{ minWidth: 560 }}>
+            <thead>
+              <tr>
+                <th scope="col">Client</th>
+                <th scope="col">À faire</th>
+                <th scope="col">Étape</th>
+                <th scope="col">Mis à jour</th>
+              </tr>
+            </thead>
+            <tbody>
+              {work.slice(0, 8).map((w) => (
+                <tr key={w.id}>
+                  <td>
+                    <Link href={`/cases/${w.id}`} style={{ color: "var(--brand)" }}>
+                      {w.counterpartyName}
+                    </Link>
+                  </td>
+                  <td style={{ color: WORK_STATUS[w.status]?.color, fontWeight: 600 }}>{WORK_STATUS[w.status]?.label ?? w.status}</td>
+                  <td className="muted">{w.step ?? "—"}</td>
+                  <td className="muted" style={{ whiteSpace: "nowrap" }}>
+                    {w.updatedAt.toISOString().slice(0, 10)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {work.length > 8 && (
+        <Link href="/cases?tab=todo" style={{ color: "var(--brand)", fontSize: 13 }}>
+          Voir les {work.length} dossiers à traiter →
+        </Link>
+      )}
+    </section>
   );
 }
 

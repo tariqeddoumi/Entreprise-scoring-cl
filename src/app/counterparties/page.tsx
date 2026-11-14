@@ -1,6 +1,6 @@
+import { currentRatings } from "@/lib/current-ratings";
 import Link from "next/link";
 import { aiStatus } from "@/lib/ai";
-import { OFFICIAL_RUN_WHERE } from "@/lib/cases";
 import { safeQuery } from "@/lib/safe-db";
 import { watchlistedIds } from "@/lib/committee";
 import { canWrite, loadTree, sortTree, writableEntities } from "@/lib/scope";
@@ -17,7 +17,11 @@ import { DEFAULT_COMMERCIAL_SEGMENTS } from "@/reference/case-purposes";
 
 export const dynamic = "force-dynamic";
 
-export default async function CounterpartiesPage() {
+/** Au-delà, la liste se charge par recherche côté base (nom, ICE, code T24, gestionnaire). */
+const LIST_LIMIT = 1000;
+
+export default async function CounterpartiesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const q = ((await searchParams).q ?? "").trim().slice(0, 100);
   // Toute page porteuse de données exige une session authentifiée.
   const identity = await requireSession();
   // La création exige le rôle ANALYST : le formulaire ne s'affiche donc que
@@ -33,8 +37,18 @@ export default async function CounterpartiesPage() {
       // la lecture des notations échoue (ancien instantané, colonne absente).
       const [rows, tree] = await Promise.all([
         db.counterparty.findMany({
+          where: q
+            ? {
+                OR: [
+                  { name: { contains: q, mode: "insensitive" } },
+                  { ice: { contains: q } },
+                  { coreBankingId: { contains: q } },
+                  { accountOfficer: { contains: q, mode: "insensitive" } },
+                ],
+              }
+            : undefined,
           orderBy: [{ isActive: "desc" }, { name: "asc" }],
-          take: 1000,
+          take: LIST_LIMIT,
           select: {
             id: true,
             name: true,
@@ -60,11 +74,7 @@ export default async function CounterpartiesPage() {
           // Note courante : la dernière notation qui fait foi (validée, ou
           // antérieure au workflow), au dernier arrêté, la plus récente à
           // arrêté égal. Une notation soumise n'est qu'une proposition.
-          db.ratingRun.findMany({
-            where: { counterpartyId: { in: ids }, ...OFFICIAL_RUN_WHERE },
-            orderBy: [{ asOfDate: "desc" }, { createdAt: "desc" }],
-            select: { counterpartyId: true, finalGrade: true, rawScore: true, asOfDate: true },
-          }),
+          currentRatings(db, ids),
           db.ratingCase.findMany({
             where: { counterpartyId: { in: ids }, status: { in: ["DRAFT", "SUBMITTED"] } },
             select: { counterpartyId: true, status: true },
@@ -72,7 +82,7 @@ export default async function CounterpartiesPage() {
         ]);
         for (const r of runs) {
           if (!lastRun.has(r.counterpartyId)) {
-            const rawScore = r.rawScore === null ? null : Number(r.rawScore);
+            const rawScore = r.rawScore;
             // Note d'une échelle antérieure (STD-P…) : classe équivalente sur
             // l'échelle 1 à 10 en vigueur, affichée à côté, jamais enregistrée.
             const legacy = r.finalGrade ? legacyScaleForGrade(r.finalGrade) : undefined;
@@ -110,9 +120,11 @@ export default async function CounterpartiesPage() {
         country: e.country,
         currency: e.currency,
       }));
-      return { items, writable };
+      // Liste tronquée : le total du périmètre dit à l'utilisateur de chercher.
+      const total = rows.length >= LIST_LIMIT ? await db.counterparty.count() : rows.length;
+      return { items, writable, total };
     },
-    { items: [] as CounterpartyRow[], writable: [] as WritableEntity[] }
+    { items: [] as CounterpartyRow[], writable: [] as WritableEntity[], total: 0 }
   );
   const ai = await aiStatus();
   const t24 = await t24Config();
@@ -157,10 +169,10 @@ export default async function CounterpartiesPage() {
       )}
 
       <section className="card" style={{ padding: 16 }}>
-        {data.items.length === 0 ? (
+        {data.items.length === 0 && !q ? (
           <p className="muted">Aucun client enregistré.</p>
         ) : (
-          <CounterpartiesTable items={data.items} />
+          <CounterpartiesTable items={data.items} serverQuery={q} truncated={data.items.length >= LIST_LIMIT} total={data.total} />
         )}
       </section>
 

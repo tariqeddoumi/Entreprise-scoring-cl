@@ -1,5 +1,6 @@
 "use client";
 
+import { CaseToc } from "./CaseToc";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import type { ModelConfig, RatingResult } from "@/core/types";
@@ -198,6 +199,7 @@ export function CaseWorkspace({ caseId, model, initialDraft, currency, editable,
         )}
       </div>
       <aside className="side-panel no-print">
+        <CaseToc />
         <AiPanel
           caseId={caseId}
           model={model}

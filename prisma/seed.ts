@@ -10,6 +10,7 @@
  * Usage : npm run db:seed  [--reset]
  */
 import { computeRating } from "../src/core/engine";
+import { exposureOfInput } from "../src/reference/exposure";
 import type { RatingInput } from "../src/core/types";
 import { getModel } from "../src/models";
 import { PrismaClient } from "../src/generated/prisma";
@@ -162,6 +163,7 @@ async function main() {
       finalGrade: result.finalGrade,
       inputSnapshot: stableStringify(input),
       resultSnapshot: stableStringify(result),
+      exposureBase: exposureOfInput(input),
       requestedBy: r.requestedBy,
       idempotencyKey,
     };

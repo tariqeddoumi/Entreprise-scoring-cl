@@ -81,7 +81,7 @@ export function EvidencePanel({ caseId, evidence }: { caseId: string; evidence: 
   const IDENT_LABELS: Record<string, string> = { ice: "ICE", rc: "RC", commercialCourt: "Tribunal de commerce", fiscalId: "IF", cnss: "CNSS", patente: "Patente", legalForm: "Forme juridique", city: "Ville" };
 
   return (
-    <section id="elements-decision" className="card" style={{ padding: 16, display: "grid", gap: 12, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="elements-decision" data-toc="Éléments au jour de la décision" className="card" style={{ padding: 16, display: "grid", gap: 12, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Éléments au jour de la décision</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>

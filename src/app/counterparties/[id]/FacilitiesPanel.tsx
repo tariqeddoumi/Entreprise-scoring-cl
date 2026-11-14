@@ -124,7 +124,7 @@ export function FacilitiesPanel({
     });
 
   return (
-    <section id="engagements" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
+    <section id="engagements" data-toc="Engagements chez la banque" className="card" style={{ padding: 16, display: "grid", gap: 10, minWidth: 0, gridTemplateColumns: "minmax(0, 1fr)" }}>
       <div>
         <h2 style={{ fontWeight: 600 }}>Engagements chez la banque</h2>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>

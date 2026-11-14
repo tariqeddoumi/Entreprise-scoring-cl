@@ -223,6 +223,12 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/15-dossier-fige-ocr-correcti
 
 Ajoute les éléments au jour de la décision (`rating_cases.evidence`), les corrections motivées des rapports (`credit_reports.corrections`), les rapports InfoRisque historisés (`legal_reports`), les pièces sources du client (`counterparty_documents`, protégées par RLS) et le tribunal de commerce, la CNSS et la patente de la fiche client. Idempotent. **Appliquée en production le 9 novembre 2026** (docs/30).
 
+```bash
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/sql/16-optimisation-performances.sql
+```
+
+Ajoute `rating_runs.exposureBase` (engagement global en devise de base, repris de l'existant), les index de la note courante, des dernières notations et du filtre du journal, ceux des quatre clés étrangères signalées par Supabase, et supprime un index redondant. Idempotent (docs/31).
+
 **Base neuve.** `npm run db:push` crée les tables puis, via
 `scripts/db-indexes.mts`, l'index unique partiel que Prisma ne sait pas
 déclarer ; `npm run db:indexes` le crée seul et `npm run db:check` signale son
